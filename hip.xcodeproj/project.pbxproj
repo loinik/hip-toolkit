@@ -6,19 +6,165 @@
 	objectVersion = 77;
 	objects = {
 
+/* Begin PBXBuildFile section */
+		EE6186C52F829A4600EB6D27 /* stb_vorbis.c in Sources */ = {isa = PBXBuildFile; fileRef = EE6186BD2F829A4600EB6D27 /* stb_vorbis.c */; };
+		EE6187172F829A8100EB6D27 /* ldebug.c in Sources */ = {isa = PBXBuildFile; fileRef = EE6186EA2F829A8100EB6D27 /* ldebug.c */; };
+		EE6187182F829A8100EB6D27 /* loadlib.c in Sources */ = {isa = PBXBuildFile; fileRef = EE6186FA2F829A8100EB6D27 /* loadlib.c */; };
+		EE6187192F829A8100EB6D27 /* lfunc.c in Sources */ = {isa = PBXBuildFile; fileRef = EE6186EF2F829A8100EB6D27 /* lfunc.c */; };
+		EE61871A2F829A8100EB6D27 /* ldblib.c in Sources */ = {isa = PBXBuildFile; fileRef = EE6186E82F829A8100EB6D27 /* ldblib.c */; };
+		EE61871B2F829A8100EB6D27 /* lcode.c in Sources */ = {isa = PBXBuildFile; fileRef = EE6186E72F829A8100EB6D27 /* lcode.c */; };
+		EE61871C2F829A8100EB6D27 /* Makefile in Sources */ = {isa = PBXBuildFile; fileRef = EE6187152F829A8100EB6D27 /* Makefile */; };
+		EE61871D2F829A8100EB6D27 /* lzio.c in Sources */ = {isa = PBXBuildFile; fileRef = EE6187142F829A8100EB6D27 /* lzio.c */; };
+		EE61871E2F829A8100EB6D27 /* linit.c in Sources */ = {isa = PBXBuildFile; fileRef = EE6186F22F829A8100EB6D27 /* linit.c */; };
+		EE61871F2F829A8100EB6D27 /* ldump.c in Sources */ = {isa = PBXBuildFile; fileRef = EE6186ED2F829A8100EB6D27 /* ldump.c */; };
+		EE6187202F829A8100EB6D27 /* lgc.c in Sources */ = {isa = PBXBuildFile; fileRef = EE6186F12F829A8100EB6D27 /* lgc.c */; };
+		EE6187212F829A8100EB6D27 /* ltablib.c in Sources */ = {isa = PBXBuildFile; fileRef = EE6187092F829A8100EB6D27 /* ltablib.c */; };
+		EE6187222F829A8100EB6D27 /* lopcodes.c in Sources */ = {isa = PBXBuildFile; fileRef = EE6186FE2F829A8100EB6D27 /* lopcodes.c */; };
+		EE6187232F829A8100EB6D27 /* lmem.c in Sources */ = {isa = PBXBuildFile; fileRef = EE6186F92F829A8100EB6D27 /* lmem.c */; };
+		EE6187242F829A8100EB6D27 /* liolib.c in Sources */ = {isa = PBXBuildFile; fileRef = EE6186F32F829A8100EB6D27 /* liolib.c */; };
+		EE6187252F829A8100EB6D27 /* lapi.c in Sources */ = {isa = PBXBuildFile; fileRef = EE6186E22F829A8100EB6D27 /* lapi.c */; };
+		EE6187262F829A8100EB6D27 /* lstring.c in Sources */ = {isa = PBXBuildFile; fileRef = EE6187052F829A8100EB6D27 /* lstring.c */; };
+		EE6187272F829A8100EB6D27 /* loslib.c in Sources */ = {isa = PBXBuildFile; fileRef = EE6186FF2F829A8100EB6D27 /* loslib.c */; };
+		EE6187282F829A8100EB6D27 /* lundump.c in Sources */ = {isa = PBXBuildFile; fileRef = EE6187102F829A8100EB6D27 /* lundump.c */; };
+		EE6187292F829A8100EB6D27 /* ltm.c in Sources */ = {isa = PBXBuildFile; fileRef = EE61870B2F829A8100EB6D27 /* ltm.c */; };
+		EE61872A2F829A8100EB6D27 /* ldo.c in Sources */ = {isa = PBXBuildFile; fileRef = EE6186EC2F829A8100EB6D27 /* ldo.c */; };
+		EE61872B2F829A8100EB6D27 /* print.c in Sources */ = {isa = PBXBuildFile; fileRef = EE6187162F829A8100EB6D27 /* print.c */; };
+		EE61872C2F829A8100EB6D27 /* lobject.c in Sources */ = {isa = PBXBuildFile; fileRef = EE6186FC2F829A8100EB6D27 /* lobject.c */; };
+		EE61872D2F829A8100EB6D27 /* lmathlib.c in Sources */ = {isa = PBXBuildFile; fileRef = EE6186F72F829A8100EB6D27 /* lmathlib.c */; };
+		EE61872E2F829A8100EB6D27 /* llex.c in Sources */ = {isa = PBXBuildFile; fileRef = EE6186F52F829A8100EB6D27 /* llex.c */; };
+		EE61872F2F829A8100EB6D27 /* lauxlib.c in Sources */ = {isa = PBXBuildFile; fileRef = EE6186E42F829A8100EB6D27 /* lauxlib.c */; };
+		EE6187302F829A8100EB6D27 /* lstrlib.c in Sources */ = {isa = PBXBuildFile; fileRef = EE6187062F829A8100EB6D27 /* lstrlib.c */; };
+		EE6187312F829A8100EB6D27 /* lvm.c in Sources */ = {isa = PBXBuildFile; fileRef = EE6187122F829A8100EB6D27 /* lvm.c */; };
+		EE6187322F829A8100EB6D27 /* lbaselib.c in Sources */ = {isa = PBXBuildFile; fileRef = EE6186E52F829A8100EB6D27 /* lbaselib.c */; };
+		EE6187332F829A8100EB6D27 /* lparser.c in Sources */ = {isa = PBXBuildFile; fileRef = EE6187012F829A8100EB6D27 /* lparser.c */; };
+		EE6187342F829A8100EB6D27 /* ltable.c in Sources */ = {isa = PBXBuildFile; fileRef = EE6187082F829A8100EB6D27 /* ltable.c */; };
+		EE6187352F829A8100EB6D27 /* lstate.c in Sources */ = {isa = PBXBuildFile; fileRef = EE6187032F829A8100EB6D27 /* lstate.c */; };
+		EE6187372F82A42800EB6D27 /* luadec in Resources */ = {isa = PBXBuildFile; fileRef = EE6187362F82A42800EB6D27 /* luadec */; };
+		EE61873F2F82B9D100EB6D27 /* Quartz.framework in Frameworks */ = {isa = PBXBuildFile; fileRef = EE61873E2F82B9D100EB6D27 /* Quartz.framework */; };
+		EE61874B2F82B9D100EB6D27 /* HIPQuickLook.appex in Embed Foundation Extensions */ = {isa = PBXBuildFile; fileRef = EE61873C2F82B9D100EB6D27 /* HIPQuickLook.appex */; settings = {ATTRIBUTES = (RemoveHeadersOnCopy, ); }; };
+/* End PBXBuildFile section */
+
+/* Begin PBXContainerItemProxy section */
+		EE6187492F82B9D100EB6D27 /* PBXContainerItemProxy */ = {
+			isa = PBXContainerItemProxy;
+			containerPortal = EE6F8A1F2F7A4C38005E4E41 /* Project object */;
+			proxyType = 1;
+			remoteGlobalIDString = EE61873B2F82B9D100EB6D27;
+			remoteInfo = HIPQuickLook;
+		};
+/* End PBXContainerItemProxy section */
+
+/* Begin PBXCopyFilesBuildPhase section */
+		EE6187502F82B9D100EB6D27 /* Embed Foundation Extensions */ = {
+			isa = PBXCopyFilesBuildPhase;
+			buildActionMask = 2147483647;
+			dstPath = "";
+			dstSubfolderSpec = 13;
+			files = (
+				EE61874B2F82B9D100EB6D27 /* HIPQuickLook.appex in Embed Foundation Extensions */,
+			);
+			name = "Embed Foundation Extensions";
+			runOnlyForDeploymentPostprocessing = 0;
+		};
+/* End PBXCopyFilesBuildPhase section */
+
 /* Begin PBXFileReference section */
+		EE6186BD2F829A4600EB6D27 /* stb_vorbis.c */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.c; path = stb_vorbis.c; sourceTree = "<group>"; };
+		EE6186E12F829A8100EB6D27 /* lapi.h */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.h; path = lapi.h; sourceTree = "<group>"; };
+		EE6186E22F829A8100EB6D27 /* lapi.c */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.c; path = lapi.c; sourceTree = "<group>"; };
+		EE6186E32F829A8100EB6D27 /* lauxlib.h */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.h; path = lauxlib.h; sourceTree = "<group>"; };
+		EE6186E42F829A8100EB6D27 /* lauxlib.c */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.c; path = lauxlib.c; sourceTree = "<group>"; };
+		EE6186E52F829A8100EB6D27 /* lbaselib.c */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.c; path = lbaselib.c; sourceTree = "<group>"; };
+		EE6186E62F829A8100EB6D27 /* lcode.h */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.h; path = lcode.h; sourceTree = "<group>"; };
+		EE6186E72F829A8100EB6D27 /* lcode.c */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.c; path = lcode.c; sourceTree = "<group>"; };
+		EE6186E82F829A8100EB6D27 /* ldblib.c */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.c; path = ldblib.c; sourceTree = "<group>"; };
+		EE6186E92F829A8100EB6D27 /* ldebug.h */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.h; path = ldebug.h; sourceTree = "<group>"; };
+		EE6186EA2F829A8100EB6D27 /* ldebug.c */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.c; path = ldebug.c; sourceTree = "<group>"; };
+		EE6186EB2F829A8100EB6D27 /* ldo.h */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.h; path = ldo.h; sourceTree = "<group>"; };
+		EE6186EC2F829A8100EB6D27 /* ldo.c */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.c; path = ldo.c; sourceTree = "<group>"; };
+		EE6186ED2F829A8100EB6D27 /* ldump.c */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.c; path = ldump.c; sourceTree = "<group>"; };
+		EE6186EE2F829A8100EB6D27 /* lfunc.h */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.h; path = lfunc.h; sourceTree = "<group>"; };
+		EE6186EF2F829A8100EB6D27 /* lfunc.c */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.c; path = lfunc.c; sourceTree = "<group>"; };
+		EE6186F02F829A8100EB6D27 /* lgc.h */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.h; path = lgc.h; sourceTree = "<group>"; };
+		EE6186F12F829A8100EB6D27 /* lgc.c */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.c; path = lgc.c; sourceTree = "<group>"; };
+		EE6186F22F829A8100EB6D27 /* linit.c */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.c; path = linit.c; sourceTree = "<group>"; };
+		EE6186F32F829A8100EB6D27 /* liolib.c */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.c; path = liolib.c; sourceTree = "<group>"; };
+		EE6186F42F829A8100EB6D27 /* llex.h */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.h; path = llex.h; sourceTree = "<group>"; };
+		EE6186F52F829A8100EB6D27 /* llex.c */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.c; path = llex.c; sourceTree = "<group>"; };
+		EE6186F62F829A8100EB6D27 /* llimits.h */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.h; path = llimits.h; sourceTree = "<group>"; };
+		EE6186F72F829A8100EB6D27 /* lmathlib.c */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.c; path = lmathlib.c; sourceTree = "<group>"; };
+		EE6186F82F829A8100EB6D27 /* lmem.h */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.h; path = lmem.h; sourceTree = "<group>"; };
+		EE6186F92F829A8100EB6D27 /* lmem.c */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.c; path = lmem.c; sourceTree = "<group>"; };
+		EE6186FA2F829A8100EB6D27 /* loadlib.c */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.c; path = loadlib.c; sourceTree = "<group>"; };
+		EE6186FB2F829A8100EB6D27 /* lobject.h */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.h; path = lobject.h; sourceTree = "<group>"; };
+		EE6186FC2F829A8100EB6D27 /* lobject.c */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.c; path = lobject.c; sourceTree = "<group>"; };
+		EE6186FD2F829A8100EB6D27 /* lopcodes.h */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.h; path = lopcodes.h; sourceTree = "<group>"; };
+		EE6186FE2F829A8100EB6D27 /* lopcodes.c */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.c; path = lopcodes.c; sourceTree = "<group>"; };
+		EE6186FF2F829A8100EB6D27 /* loslib.c */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.c; path = loslib.c; sourceTree = "<group>"; };
+		EE6187002F829A8100EB6D27 /* lparser.h */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.h; path = lparser.h; sourceTree = "<group>"; };
+		EE6187012F829A8100EB6D27 /* lparser.c */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.c; path = lparser.c; sourceTree = "<group>"; };
+		EE6187022F829A8100EB6D27 /* lstate.h */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.h; path = lstate.h; sourceTree = "<group>"; };
+		EE6187032F829A8100EB6D27 /* lstate.c */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.c; path = lstate.c; sourceTree = "<group>"; };
+		EE6187042F829A8100EB6D27 /* lstring.h */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.h; path = lstring.h; sourceTree = "<group>"; };
+		EE6187052F829A8100EB6D27 /* lstring.c */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.c; path = lstring.c; sourceTree = "<group>"; };
+		EE6187062F829A8100EB6D27 /* lstrlib.c */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.c; path = lstrlib.c; sourceTree = "<group>"; };
+		EE6187072F829A8100EB6D27 /* ltable.h */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.h; path = ltable.h; sourceTree = "<group>"; };
+		EE6187082F829A8100EB6D27 /* ltable.c */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.c; path = ltable.c; sourceTree = "<group>"; };
+		EE6187092F829A8100EB6D27 /* ltablib.c */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.c; path = ltablib.c; sourceTree = "<group>"; };
+		EE61870A2F829A8100EB6D27 /* ltm.h */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.h; path = ltm.h; sourceTree = "<group>"; };
+		EE61870B2F829A8100EB6D27 /* ltm.c */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.c; path = ltm.c; sourceTree = "<group>"; };
+		EE61870C2F829A8100EB6D27 /* lua.h */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.h; path = lua.h; sourceTree = "<group>"; };
+		EE61870D2F829A8100EB6D27 /* luaconf.h */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.h; path = luaconf.h; sourceTree = "<group>"; };
+		EE61870E2F829A8100EB6D27 /* lualib.h */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.h; path = lualib.h; sourceTree = "<group>"; };
+		EE61870F2F829A8100EB6D27 /* lundump.h */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.h; path = lundump.h; sourceTree = "<group>"; };
+		EE6187102F829A8100EB6D27 /* lundump.c */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.c; path = lundump.c; sourceTree = "<group>"; };
+		EE6187112F829A8100EB6D27 /* lvm.h */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.h; path = lvm.h; sourceTree = "<group>"; };
+		EE6187122F829A8100EB6D27 /* lvm.c */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.c; path = lvm.c; sourceTree = "<group>"; };
+		EE6187132F829A8100EB6D27 /* lzio.h */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.h; path = lzio.h; sourceTree = "<group>"; };
+		EE6187142F829A8100EB6D27 /* lzio.c */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.c; path = lzio.c; sourceTree = "<group>"; };
+		EE6187152F829A8100EB6D27 /* Makefile */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.make; path = Makefile; sourceTree = "<group>"; };
+		EE6187162F829A8100EB6D27 /* print.c */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.c; path = print.c; sourceTree = "<group>"; };
+		EE6187362F82A42800EB6D27 /* luadec */ = {isa = PBXFileReference; lastKnownFileType = "compiled.mach-o.executable"; path = luadec; sourceTree = "<group>"; };
+		EE61873C2F82B9D100EB6D27 /* HIPQuickLook.appex */ = {isa = PBXFileReference; explicitFileType = "wrapper.app-extension"; includeInIndex = 0; path = HIPQuickLook.appex; sourceTree = BUILT_PRODUCTS_DIR; };
+		EE61873E2F82B9D100EB6D27 /* Quartz.framework */ = {isa = PBXFileReference; lastKnownFileType = wrapper.framework; name = Quartz.framework; path = System/Library/Frameworks/Quartz.framework; sourceTree = SDKROOT; };
 		EE6F8A272F7A4C38005E4E41 /* hip.app */ = {isa = PBXFileReference; explicitFileType = wrapper.application; includeInIndex = 0; path = hip.app; sourceTree = BUILT_PRODUCTS_DIR; };
 /* End PBXFileReference section */
 
+/* Begin PBXFileSystemSynchronizedBuildFileExceptionSet section */
+		EE6187542F82C8BA00EB6D27 /* Exceptions for "hip" folder in "hip" target */ = {
+			isa = PBXFileSystemSynchronizedBuildFileExceptionSet;
+			membershipExceptions = (
+				Info.plist,
+			);
+			target = EE6F8A262F7A4C38005E4E41 /* hip */;
+		};
+/* End PBXFileSystemSynchronizedBuildFileExceptionSet section */
+
 /* Begin PBXFileSystemSynchronizedRootGroup section */
+		EE6187402F82B9D100EB6D27 /* HIPQuickLook */ = {
+			isa = PBXFileSystemSynchronizedRootGroup;
+			path = HIPQuickLook;
+			sourceTree = "<group>";
+		};
 		EE6F8A292F7A4C38005E4E41 /* hip */ = {
 			isa = PBXFileSystemSynchronizedRootGroup;
+			exceptions = (
+				EE6187542F82C8BA00EB6D27 /* Exceptions for "hip" folder in "hip" target */,
+			);
 			path = hip;
 			sourceTree = "<group>";
 		};
 /* End PBXFileSystemSynchronizedRootGroup section */
 
 /* Begin PBXFrameworksBuildPhase section */
+		EE6187392F82B9D100EB6D27 /* Frameworks */ = {
+			isa = PBXFrameworksBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+				EE61873F2F82B9D100EB6D27 /* Quartz.framework in Frameworks */,
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
 		EE6F8A242F7A4C38005E4E41 /* Frameworks */ = {
 			isa = PBXFrameworksBuildPhase;
 			buildActionMask = 2147483647;
@@ -29,10 +175,92 @@
 /* End PBXFrameworksBuildPhase section */
 
 /* Begin PBXGroup section */
+		EE6186BC2F829A4600EB6D27 /* lua */ = {
+			isa = PBXGroup;
+			children = (
+				EE6186E12F829A8100EB6D27 /* lapi.h */,
+				EE6186E22F829A8100EB6D27 /* lapi.c */,
+				EE6186E32F829A8100EB6D27 /* lauxlib.h */,
+				EE6186E42F829A8100EB6D27 /* lauxlib.c */,
+				EE6186E52F829A8100EB6D27 /* lbaselib.c */,
+				EE6186E62F829A8100EB6D27 /* lcode.h */,
+				EE6186E72F829A8100EB6D27 /* lcode.c */,
+				EE6186E82F829A8100EB6D27 /* ldblib.c */,
+				EE6186E92F829A8100EB6D27 /* ldebug.h */,
+				EE6186EA2F829A8100EB6D27 /* ldebug.c */,
+				EE6186EB2F829A8100EB6D27 /* ldo.h */,
+				EE6186EC2F829A8100EB6D27 /* ldo.c */,
+				EE6186ED2F829A8100EB6D27 /* ldump.c */,
+				EE6186EE2F829A8100EB6D27 /* lfunc.h */,
+				EE6186EF2F829A8100EB6D27 /* lfunc.c */,
+				EE6186F02F829A8100EB6D27 /* lgc.h */,
+				EE6186F12F829A8100EB6D27 /* lgc.c */,
+				EE6186F22F829A8100EB6D27 /* linit.c */,
+				EE6186F32F829A8100EB6D27 /* liolib.c */,
+				EE6186F42F829A8100EB6D27 /* llex.h */,
+				EE6186F52F829A8100EB6D27 /* llex.c */,
+				EE6186F62F829A8100EB6D27 /* llimits.h */,
+				EE6186F72F829A8100EB6D27 /* lmathlib.c */,
+				EE6186F82F829A8100EB6D27 /* lmem.h */,
+				EE6186F92F829A8100EB6D27 /* lmem.c */,
+				EE6186FA2F829A8100EB6D27 /* loadlib.c */,
+				EE6186FB2F829A8100EB6D27 /* lobject.h */,
+				EE6186FC2F829A8100EB6D27 /* lobject.c */,
+				EE6186FD2F829A8100EB6D27 /* lopcodes.h */,
+				EE6186FE2F829A8100EB6D27 /* lopcodes.c */,
+				EE6186FF2F829A8100EB6D27 /* loslib.c */,
+				EE6187002F829A8100EB6D27 /* lparser.h */,
+				EE6187012F829A8100EB6D27 /* lparser.c */,
+				EE6187022F829A8100EB6D27 /* lstate.h */,
+				EE6187032F829A8100EB6D27 /* lstate.c */,
+				EE6187042F829A8100EB6D27 /* lstring.h */,
+				EE6187052F829A8100EB6D27 /* lstring.c */,
+				EE6187062F829A8100EB6D27 /* lstrlib.c */,
+				EE6187072F829A8100EB6D27 /* ltable.h */,
+				EE6187082F829A8100EB6D27 /* ltable.c */,
+				EE6187092F829A8100EB6D27 /* ltablib.c */,
+				EE61870A2F829A8100EB6D27 /* ltm.h */,
+				EE61870B2F829A8100EB6D27 /* ltm.c */,
+				EE61870C2F829A8100EB6D27 /* lua.h */,
+				EE61870D2F829A8100EB6D27 /* luaconf.h */,
+				EE61870E2F829A8100EB6D27 /* lualib.h */,
+				EE61870F2F829A8100EB6D27 /* lundump.h */,
+				EE6187102F829A8100EB6D27 /* lundump.c */,
+				EE6187112F829A8100EB6D27 /* lvm.h */,
+				EE6187122F829A8100EB6D27 /* lvm.c */,
+				EE6187132F829A8100EB6D27 /* lzio.h */,
+				EE6187142F829A8100EB6D27 /* lzio.c */,
+				EE6187152F829A8100EB6D27 /* Makefile */,
+				EE6187162F829A8100EB6D27 /* print.c */,
+			);
+			path = lua;
+			sourceTree = "<group>";
+		};
+		EE6186BE2F829A4600EB6D27 /* Vendor */ = {
+			isa = PBXGroup;
+			children = (
+				EE6186BC2F829A4600EB6D27 /* lua */,
+				EE6186BD2F829A4600EB6D27 /* stb_vorbis.c */,
+				EE6187362F82A42800EB6D27 /* luadec */,
+			);
+			path = Vendor;
+			sourceTree = "<group>";
+		};
+		EE61873D2F82B9D100EB6D27 /* Frameworks */ = {
+			isa = PBXGroup;
+			children = (
+				EE61873E2F82B9D100EB6D27 /* Quartz.framework */,
+			);
+			name = Frameworks;
+			sourceTree = "<group>";
+		};
 		EE6F8A1E2F7A4C38005E4E41 = {
 			isa = PBXGroup;
 			children = (
+				EE6186BE2F829A4600EB6D27 /* Vendor */,
 				EE6F8A292F7A4C38005E4E41 /* hip */,
+				EE6187402F82B9D100EB6D27 /* HIPQuickLook */,
+				EE61873D2F82B9D100EB6D27 /* Frameworks */,
 				EE6F8A282F7A4C38005E4E41 /* Products */,
 			);
 			sourceTree = "<group>";
@@ -41,6 +269,7 @@
 			isa = PBXGroup;
 			children = (
 				EE6F8A272F7A4C38005E4E41 /* hip.app */,
+				EE61873C2F82B9D100EB6D27 /* HIPQuickLook.appex */,
 			);
 			name = Products;
 			sourceTree = "<group>";
@@ -48,6 +277,28 @@
 /* End PBXGroup section */
 
 /* Begin PBXNativeTarget section */
+		EE61873B2F82B9D100EB6D27 /* HIPQuickLook */ = {
+			isa = PBXNativeTarget;
+			buildConfigurationList = EE61874D2F82B9D100EB6D27 /* Build configuration list for PBXNativeTarget "HIPQuickLook" */;
+			buildPhases = (
+				EE6187382F82B9D100EB6D27 /* Sources */,
+				EE6187392F82B9D100EB6D27 /* Frameworks */,
+				EE61873A2F82B9D100EB6D27 /* Resources */,
+			);
+			buildRules = (
+			);
+			dependencies = (
+			);
+			fileSystemSynchronizedGroups = (
+				EE6187402F82B9D100EB6D27 /* HIPQuickLook */,
+			);
+			name = HIPQuickLook;
+			packageProductDependencies = (
+			);
+			productName = HIPQuickLook;
+			productReference = EE61873C2F82B9D100EB6D27 /* HIPQuickLook.appex */;
+			productType = "com.apple.product-type.app-extension";
+		};
 		EE6F8A262F7A4C38005E4E41 /* hip */ = {
 			isa = PBXNativeTarget;
 			buildConfigurationList = EE6F8A322F7A4C3A005E4E41 /* Build configuration list for PBXNativeTarget "hip" */;
@@ -55,10 +306,12 @@
 				EE6F8A232F7A4C38005E4E41 /* Sources */,
 				EE6F8A242F7A4C38005E4E41 /* Frameworks */,
 				EE6F8A252F7A4C38005E4E41 /* Resources */,
+				EE6187502F82B9D100EB6D27 /* Embed Foundation Extensions */,
 			);
 			buildRules = (
 			);
 			dependencies = (
+				EE61874A2F82B9D100EB6D27 /* PBXTargetDependency */,
 			);
 			fileSystemSynchronizedGroups = (
 				EE6F8A292F7A4C38005E4E41 /* hip */,
@@ -80,6 +333,9 @@
 				LastSwiftUpdateCheck = 2640;
 				LastUpgradeCheck = 2640;
 				TargetAttributes = {
+					EE61873B2F82B9D100EB6D27 = {
+						CreatedOnToolsVersion = 26.4;
+					};
 					EE6F8A262F7A4C38005E4E41 = {
 						CreatedOnToolsVersion = 26.4;
 						LastSwiftMigration = 2640;
@@ -101,31 +357,147 @@
 			projectRoot = "";
 			targets = (
 				EE6F8A262F7A4C38005E4E41 /* hip */,
+				EE61873B2F82B9D100EB6D27 /* HIPQuickLook */,
 			);
 		};
 /* End PBXProject section */
 
 /* Begin PBXResourcesBuildPhase section */
-		EE6F8A252F7A4C38005E4E41 /* Resources */ = {
+		EE61873A2F82B9D100EB6D27 /* Resources */ = {
 			isa = PBXResourcesBuildPhase;
 			buildActionMask = 2147483647;
 			files = (
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
+		EE6F8A252F7A4C38005E4E41 /* Resources */ = {
+			isa = PBXResourcesBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+				EE6187372F82A42800EB6D27 /* luadec in Resources */,
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
 /* End PBXResourcesBuildPhase section */
 
 /* Begin PBXSourcesBuildPhase section */
-		EE6F8A232F7A4C38005E4E41 /* Sources */ = {
+		EE6187382F82B9D100EB6D27 /* Sources */ = {
 			isa = PBXSourcesBuildPhase;
 			buildActionMask = 2147483647;
 			files = (
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
+		EE6F8A232F7A4C38005E4E41 /* Sources */ = {
+			isa = PBXSourcesBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+				EE6186C52F829A4600EB6D27 /* stb_vorbis.c in Sources */,
+				EE6187172F829A8100EB6D27 /* ldebug.c in Sources */,
+				EE6187182F829A8100EB6D27 /* loadlib.c in Sources */,
+				EE6187192F829A8100EB6D27 /* lfunc.c in Sources */,
+				EE61871A2F829A8100EB6D27 /* ldblib.c in Sources */,
+				EE61871B2F829A8100EB6D27 /* lcode.c in Sources */,
+				EE61871C2F829A8100EB6D27 /* Makefile in Sources */,
+				EE61871D2F829A8100EB6D27 /* lzio.c in Sources */,
+				EE61871E2F829A8100EB6D27 /* linit.c in Sources */,
+				EE61871F2F829A8100EB6D27 /* ldump.c in Sources */,
+				EE6187202F829A8100EB6D27 /* lgc.c in Sources */,
+				EE6187212F829A8100EB6D27 /* ltablib.c in Sources */,
+				EE6187222F829A8100EB6D27 /* lopcodes.c in Sources */,
+				EE6187232F829A8100EB6D27 /* lmem.c in Sources */,
+				EE6187242F829A8100EB6D27 /* liolib.c in Sources */,
+				EE6187252F829A8100EB6D27 /* lapi.c in Sources */,
+				EE6187262F829A8100EB6D27 /* lstring.c in Sources */,
+				EE6187272F829A8100EB6D27 /* loslib.c in Sources */,
+				EE6187282F829A8100EB6D27 /* lundump.c in Sources */,
+				EE6187292F829A8100EB6D27 /* ltm.c in Sources */,
+				EE61872A2F829A8100EB6D27 /* ldo.c in Sources */,
+				EE61872B2F829A8100EB6D27 /* print.c in Sources */,
+				EE61872C2F829A8100EB6D27 /* lobject.c in Sources */,
+				EE61872D2F829A8100EB6D27 /* lmathlib.c in Sources */,
+				EE61872E2F829A8100EB6D27 /* llex.c in Sources */,
+				EE61872F2F829A8100EB6D27 /* lauxlib.c in Sources */,
+				EE6187302F829A8100EB6D27 /* lstrlib.c in Sources */,
+				EE6187312F829A8100EB6D27 /* lvm.c in Sources */,
+				EE6187322F829A8100EB6D27 /* lbaselib.c in Sources */,
+				EE6187332F829A8100EB6D27 /* lparser.c in Sources */,
+				EE6187342F829A8100EB6D27 /* ltable.c in Sources */,
+				EE6187352F829A8100EB6D27 /* lstate.c in Sources */,
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
 /* End PBXSourcesBuildPhase section */
 
+/* Begin PBXTargetDependency section */
+		EE61874A2F82B9D100EB6D27 /* PBXTargetDependency */ = {
+			isa = PBXTargetDependency;
+			target = EE61873B2F82B9D100EB6D27 /* HIPQuickLook */;
+			targetProxy = EE6187492F82B9D100EB6D27 /* PBXContainerItemProxy */;
+		};
+/* End PBXTargetDependency section */
+
 /* Begin XCBuildConfiguration section */
+		EE61874E2F82B9D100EB6D27 /* Debug */ = {
+			isa = XCBuildConfiguration;
+			buildSettings = {
+				CODE_SIGN_STYLE = Automatic;
+				CURRENT_PROJECT_VERSION = 1;
+				DEVELOPMENT_TEAM = 3L864KU2J8;
+				ENABLE_APP_SANDBOX = YES;
+				ENABLE_HARDENED_RUNTIME = YES;
+				ENABLE_USER_SELECTED_FILES = readonly;
+				GENERATE_INFOPLIST_FILE = YES;
+				INFOPLIST_FILE = HIPQuickLook/Info.plist;
+				INFOPLIST_KEY_CFBundleDisplayName = HIPQuickLook;
+				INFOPLIST_KEY_NSHumanReadableCopyright = "";
+				LD_RUNPATH_SEARCH_PATHS = (
+					"$(inherited)",
+					"@executable_path/../Frameworks",
+					"@executable_path/../../../../Frameworks",
+				);
+				MARKETING_VERSION = 1.0;
+				PRODUCT_BUNDLE_IDENTIFIER = loinik.hip.HIPQuickLook;
+				PRODUCT_NAME = "$(TARGET_NAME)";
+				SKIP_INSTALL = YES;
+				STRING_CATALOG_GENERATE_SYMBOLS = YES;
+				SWIFT_APPROACHABLE_CONCURRENCY = YES;
+				SWIFT_EMIT_LOC_STRINGS = YES;
+				SWIFT_UPCOMING_FEATURE_MEMBER_IMPORT_VISIBILITY = YES;
+				SWIFT_VERSION = 5.0;
+			};
+			name = Debug;
+		};
+		EE61874F2F82B9D100EB6D27 /* Release */ = {
+			isa = XCBuildConfiguration;
+			buildSettings = {
+				CODE_SIGN_STYLE = Automatic;
+				CURRENT_PROJECT_VERSION = 1;
+				DEVELOPMENT_TEAM = 3L864KU2J8;
+				ENABLE_APP_SANDBOX = YES;
+				ENABLE_HARDENED_RUNTIME = YES;
+				ENABLE_USER_SELECTED_FILES = readonly;
+				GENERATE_INFOPLIST_FILE = YES;
+				INFOPLIST_FILE = HIPQuickLook/Info.plist;
+				INFOPLIST_KEY_CFBundleDisplayName = HIPQuickLook;
+				INFOPLIST_KEY_NSHumanReadableCopyright = "";
+				LD_RUNPATH_SEARCH_PATHS = (
+					"$(inherited)",
+					"@executable_path/../Frameworks",
+					"@executable_path/../../../../Frameworks",
+				);
+				MARKETING_VERSION = 1.0;
+				PRODUCT_BUNDLE_IDENTIFIER = loinik.hip.HIPQuickLook;
+				PRODUCT_NAME = "$(TARGET_NAME)";
+				SKIP_INSTALL = YES;
+				STRING_CATALOG_GENERATE_SYMBOLS = YES;
+				SWIFT_APPROACHABLE_CONCURRENCY = YES;
+				SWIFT_EMIT_LOC_STRINGS = YES;
+				SWIFT_UPCOMING_FEATURE_MEMBER_IMPORT_VISIBILITY = YES;
+				SWIFT_VERSION = 5.0;
+			};
+			name = Release;
+		};
 		EE6F8A302F7A4C3A005E4E41 /* Debug */ = {
 			isa = XCBuildConfiguration;
 			buildSettings = {
@@ -275,12 +647,14 @@
 				ENABLE_RESOURCE_ACCESS_USB = NO;
 				ENABLE_USER_SELECTED_FILES = readwrite;
 				GENERATE_INFOPLIST_FILE = YES;
+				INFOPLIST_FILE = hip/Info.plist;
 				INFOPLIST_KEY_LSApplicationCategoryType = "public.app-category.developer-tools";
 				INFOPLIST_KEY_NSHumanReadableCopyright = "";
 				LD_RUNPATH_SEARCH_PATHS = (
 					"$(inherited)",
 					"@executable_path/../Frameworks",
 				);
+				MACOSX_DEPLOYMENT_TARGET = 26.0;
 				MARKETING_VERSION = 1.0;
 				PRODUCT_BUNDLE_IDENTIFIER = loinik.hip;
 				PRODUCT_NAME = "$(TARGET_NAME)";
@@ -325,12 +699,14 @@
 				ENABLE_RESOURCE_ACCESS_USB = NO;
 				ENABLE_USER_SELECTED_FILES = readwrite;
 				GENERATE_INFOPLIST_FILE = YES;
+				INFOPLIST_FILE = hip/Info.plist;
 				INFOPLIST_KEY_LSApplicationCategoryType = "public.app-category.developer-tools";
 				INFOPLIST_KEY_NSHumanReadableCopyright = "";
 				LD_RUNPATH_SEARCH_PATHS = (
 					"$(inherited)",
 					"@executable_path/../Frameworks",
 				);
+				MACOSX_DEPLOYMENT_TARGET = 26.0;
 				MARKETING_VERSION = 1.0;
 				PRODUCT_BUNDLE_IDENTIFIER = loinik.hip;
 				PRODUCT_NAME = "$(TARGET_NAME)";
@@ -348,6 +724,15 @@
 /* End XCBuildConfiguration section */
 
 /* Begin XCConfigurationList section */
+		EE61874D2F82B9D100EB6D27 /* Build configuration list for PBXNativeTarget "HIPQuickLook" */ = {
+			isa = XCConfigurationList;
+			buildConfigurations = (
+				EE61874E2F82B9D100EB6D27 /* Debug */,
+				EE61874F2F82B9D100EB6D27 /* Release */,
+			);
+			defaultConfigurationIsVisible = 0;
+			defaultConfigurationName = Release;
+		};
 		EE6F8A222F7A4C38005E4E41 /* Build configuration list for PBXProject "hip" */ = {
 			isa = XCConfigurationList;
 			buildConfigurations = (

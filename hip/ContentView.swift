@@ -4,7 +4,31 @@ import SwiftUI
 import Combine
 import UniformTypeIdentifiers
 
-// MARK: - Model
+// MARK: - App state
+
+enum AppCategory: String, CaseIterable, Identifiable {
+    case cif      = "CIF"
+    case ciftree  = "Ciftree"
+    case his      = "HIS"
+    var id: Self { self }
+}
+
+enum AppDirection: String, Identifiable {
+    case forward  = "▶"
+    case backward = "◀"
+    var id: Self { self }
+}
+
+enum AppMode {
+    case cifEncode
+    case cifDecode
+    case ciftreePack
+    case ciftreeUnpack
+    case hisEncode
+    case hisDecode
+}
+
+// MARK: - Result model
 
 struct ConversionResult: Identifiable {
     let id      = UUID()
@@ -14,25 +38,30 @@ struct ConversionResult: Identifiable {
     let detail: String
 }
 
+// MARK: - ViewModel
+
 @MainActor
 final class AppViewModel: ObservableObject {
 
-    enum Mode: String, CaseIterable, Identifiable {
-        case encode  = "File → CIF"
-        case decode  = "CIF → File"
-        case pack    = "Pack .dat"
-        case unpack  = "Unpack .dat"
-        var id: Self { self }
-    }
-
-    @Published var mode: Mode = .encode
-    @Published var results: [ConversionResult] = []
+    @Published var category:    AppCategory  = .cif
+    @Published var direction:   AppDirection = .forward
+    @Published var results:     [ConversionResult] = []
     @Published var isProcessing = false
     @Published var isDragging   = false
+    @Published var compileLua   = true    // Lua → CIF: compile before packing
+    @Published var decompileLua = false   // CIF/Ciftree decode: auto-decompile bytecode (opt-in)
 
     func clearResults() { withAnimation { results = [] } }
 
-    // MARK: Entry point
+    var mode: AppMode {
+        switch category {
+        case .cif:     return direction == .forward ? .cifEncode     : .cifDecode
+        case .ciftree: return direction == .forward ? .ciftreePack   : .ciftreeUnpack
+        case .his:     return direction == .forward ? .hisEncode     : .hisDecode
+        }
+    }
+
+    // ── Entry point ──────────────────────────────────────────────────────
 
     func processURLs(_ urls: [URL]) {
         isProcessing = true
@@ -40,10 +69,12 @@ final class AppViewModel: ObservableObject {
             var batch: [ConversionResult] = []
             for url in urls {
                 switch mode {
-                case .encode:  batch.append(encodeCIF(url))
-                case .decode:  batch.append(decodeCIF(url))
-                case .pack:    batch.append(contentsOf: packCiftree(url))
-                case .unpack:  batch.append(contentsOf: unpackCiftree(url))
+                case .cifEncode:     batch.append(encodeCIF(url))
+                case .cifDecode:     batch.append(contentsOf: decodeCIF(url))
+                case .ciftreePack:   batch.append(contentsOf: packCiftree(url))
+                case .ciftreeUnpack: batch.append(contentsOf: unpackCiftree(url))
+                case .hisEncode:     batch.append(encodeHIS(url))
+                case .hisDecode:     batch.append(decodeHIS(url))
                 }
             }
             results = batch + results
@@ -51,91 +82,175 @@ final class AppViewModel: ObservableObject {
         }
     }
 
-    // MARK: File → CIF
+    // ── CIF encode ───────────────────────────────────────────────────────
 
     private func encodeCIF(_ url: URL) -> ConversionResult {
         let name = url.lastPathComponent
         let ext  = url.pathExtension.lowercased()
         do {
             let data: Data
-            if ext == "png" {
+            switch ext {
+            case "png", "jpg", "jpeg":
                 data = try HIPWrapper.encodePNG(atPath: url.path) as Data
-            } else if ext == "lua" {
-                data = try HIPWrapper.encodeLua(atPath: url.path) as Data
-            } else {
-                return fail(name, "Unsupported format: .\(ext)")
+            case "lua":
+                data = try HIPWrapper.encodeLua(atPath: url.path,
+                                                compileLua: compileLua) as Data
+            default:
+                return fail(name, "Unsupported: .\(ext)  (accepted: png jpg jpeg lua)")
             }
             let out = url.deletingPathExtension().appendingPathExtension("cif")
             try data.write(to: out)
             var detail = sizeStr(data.count)
-            if ext == "png", let info = try? HIPWrapper.readHeader(atPath: url.path) {
-                detail = "\(info.width)x\(info.height) · " + detail
+            if ["png","jpg","jpeg"].contains(ext),
+               let info = try? HIPWrapper.readHeader(atPath: url.path) {
+                detail = "\(info.width)×\(info.height) · " + detail
+            }
+            if ext == "lua" {
+                let wasCompiled = HIPWrapper.isCompiledLua(atPath: url.path)
+                detail += wasCompiled ? " · pre-compiled" : " · source"
             }
             return ok(name, detail)
         } catch { return fail(name, error.localizedDescription) }
     }
 
-    // MARK: CIF → File
+    // ── CIF decode ───────────────────────────────────────────────────────
 
-    private func decodeCIF(_ url: URL) -> ConversionResult {
+    private func decodeCIF(_ url: URL) -> [ConversionResult] {
         let name = url.lastPathComponent
         guard url.pathExtension.lowercased() == "cif" else {
-            return fail(name, "Expected .cif file")
+            return [fail(name, "Expected .cif")]
         }
         do {
-            let info   = try HIPWrapper.readHeader(atPath: url.path)
-            let data   = try HIPWrapper.decode(atPath: url.path) as Data
-            let outExt = info.isPNG ? "png" : (info.isLua ? "lua" : "bin")
-            try data.write(to: url.deletingPathExtension().appendingPathExtension(outExt))
+            let info = try HIPWrapper.readHeader(atPath: url.path)
+            let data = try HIPWrapper.decode(atPath: url.path) as Data
+
+            let outExt: String
+            switch info.type {
+            case 2:  outExt = "png"
+            case 3:  outExt = "lua"
+            case 6:  outExt = "xsheet"
+            default: outExt = "bin"
+            }
+
+            let outURL = url.deletingPathExtension().appendingPathExtension(outExt)
+
+            // ── Lua ──────────────────────────────────────────────────────
+            if info.isLua {
+                try data.write(to: outURL)
+
+                // Detect compiled bytecode (\x1BLua)
+                let isCompiled = data.count >= 4
+                    && data[0] == 0x1B && data[1] == 0x4C
+                    && data[2] == 0x75 && data[3] == 0x61
+
+                guard isCompiled else {
+                    return [ok(name, "→ .lua  \(sizeStr(data.count)) · source")]
+                }
+                guard decompileLua else {
+                    return [ok(name, "→ .lua  \(sizeStr(data.count)) · bytecode")]
+                }
+
+                do {
+                    let source = try HIPWrapper.decompileLua(atPath: outURL.path)
+                    guard !source.isEmpty else {
+                        return [
+                            ok(name,   "→ .lua  \(sizeStr(data.count)) · bytecode saved"),
+                            warn(name, "Decompilation failed: unknown error")
+                        ]
+                    }
+
+                    try source.write(to: outURL, atomically: true, encoding: String.Encoding.utf8)
+                    return [ok(name, "→ .lua  \(sizeStr(source.utf8.count)) · decompiled")]
+                } catch {
+                    return [
+                        ok(name,   "→ .lua  \(sizeStr(data.count)) · bytecode saved"),
+                        warn(name, "Decompilation failed: \(error.localizedDescription)")
+                    ]
+                }
+            }
+
+            // ── PNG / XSheet / other ─────────────────────────────────────
+            try data.write(to: outURL)
             var detail = sizeStr(data.count)
-            if info.isPNG { detail = "\(info.width)x\(info.height) · " + detail }
-            return ok(name, detail)
-        } catch { return fail(name, error.localizedDescription) }
+            if info.isPNG    { detail = "\(info.width)×\(info.height) · " + detail }
+            if info.isXSheet { detail = "XSheet · " + detail }
+            return [ok(name, "→ .\(outExt)  " + detail)]
+
+        } catch { return [fail(name, error.localizedDescription)] }
     }
 
-    // MARK: Pack Ciftree
+    // ── Ciftree pack ─────────────────────────────────────────────────────
 
     private func packCiftree(_ url: URL) -> [ConversionResult] {
-        var cifPaths: [URL]
-
-        if url.hasDirectoryPath {
-            cifPaths = (try? FileManager.default.contentsOfDirectory(
-                at: url, includingPropertiesForKeys: nil
-            ).filter { $0.pathExtension.lowercased() == "cif" }) ?? []
-        } else if url.pathExtension.lowercased() == "cif" {
-            cifPaths = [url]
-        } else {
-            return [fail(url.lastPathComponent, "Expected a folder or .cif files")]
+        guard url.hasDirectoryPath else {
+            return [fail(url.lastPathComponent, "Expected a folder")]
+        }
+        let fm = FileManager.default
+        guard let contents = try? fm.contentsOfDirectory(
+            at: url, includingPropertiesForKeys: nil) else {
+            return [fail(url.lastPathComponent, "Cannot read folder")]
         }
 
-        guard !cifPaths.isEmpty else {
-            return [fail(url.lastPathComponent, "No .cif files found")]
+        var cifEntries: [(name: String, data: Data)] = []
+        var warnings:   [ConversionResult] = []
+
+        for file in contents.sorted(by: { $0.lastPathComponent < $1.lastPathComponent }) {
+            let ext  = file.pathExtension.lowercased()
+            let stem = file.deletingPathExtension().lastPathComponent
+            do {
+                switch ext {
+                case "cif":
+                    cifEntries.append((stem, try Data(contentsOf: file)))
+                case "png", "jpg", "jpeg":
+                    cifEntries.append((stem, try HIPWrapper.encodePNG(atPath: file.path) as Data))
+                case "lua":
+                    cifEntries.append((stem, try HIPWrapper.encodeLua(
+                        atPath: file.path, compileLua: compileLua) as Data))
+                default:
+                    warnings.append(ConversionResult(
+                        icon: "exclamationmark.triangle", tint: .orange,
+                        title: file.lastPathComponent, detail: "Skipped (unsupported format)"))
+                }
+            } catch {
+                warnings.append(fail(file.lastPathComponent, error.localizedDescription))
+            }
         }
 
-        cifPaths.sort { $0.lastPathComponent < $1.lastPathComponent }
+        guard !cifEntries.isEmpty else {
+            return [fail(url.lastPathComponent, "No supported files found in folder")]
+        }
 
         do {
-            let data = try HIPWrapper.packCiftree(fromPaths: cifPaths.map(\.path)) as Data
+            let tmpDir = URL(fileURLWithPath: NSTemporaryDirectory())
+                .appendingPathComponent(UUID().uuidString)
+            try fm.createDirectory(at: tmpDir, withIntermediateDirectories: true)
+            defer { try? fm.removeItem(at: tmpDir) }
 
-            let base = url.hasDirectoryPath ? url : url.deletingLastPathComponent()
-            let suggestedName = url.hasDirectoryPath ? url.deletingPathExtension().lastPathComponent : "Ciftree"
-            let panel = NSSavePanel()
-            panel.nameFieldStringValue = suggestedName + ".dat"
-            panel.directoryURL         = base
+            var tmpPaths: [String] = []
+            for entry in cifEntries {
+                let f = tmpDir.appendingPathComponent(entry.name + ".cif")
+                try entry.data.write(to: f)
+                tmpPaths.append(f.path)
+            }
 
+            let packed = try HIPWrapper.packCiftree(fromPaths: tmpPaths) as Data
+            let panel  = NSSavePanel()
+            panel.nameFieldStringValue = url.deletingPathExtension().lastPathComponent + ".dat"
+            panel.directoryURL         = url.deletingLastPathComponent()
             guard panel.runModal() == .OK, let dest = panel.url else {
                 return [fail(url.lastPathComponent, "Save cancelled")]
             }
-            try data.write(to: dest)
+            try packed.write(to: dest)
 
-            return cifPaths.map { p in
+            return cifEntries.map {
                 ConversionResult(icon: "archivebox.fill", tint: .blue,
-                                 title: p.lastPathComponent, detail: "packed")
-            }
+                                 title: $0.name + ".cif",
+                                 detail: sizeStr($0.data.count) + " packed")
+            } + warnings
         } catch { return [fail(url.lastPathComponent, error.localizedDescription)] }
     }
 
-    // MARK: Unpack Ciftree
+    // ── Ciftree unpack ───────────────────────────────────────────────────
 
     private func unpackCiftree(_ url: URL) -> [ConversionResult] {
         guard url.pathExtension.lowercased() == "dat" else {
@@ -144,73 +259,144 @@ final class AppViewModel: ObservableObject {
         do {
             let entries = try HIPWrapper.unpackCiftree(atPath: url.path)
             let outDir  = url.deletingPathExtension()
-            try FileManager.default.createDirectory(at: outDir, withIntermediateDirectories: true)
-
-            return try entries.map { entry in
-                let outURL = outDir.appendingPathComponent(entry.name).appendingPathExtension("cif")
+            try FileManager.default.createDirectory(at: outDir,
+                                                    withIntermediateDirectories: true)
+            var rows: [ConversionResult] = []
+            for entry in entries {
+                let outURL = outDir.appendingPathComponent(entry.name + ".cif")
                 try entry.cifData.write(to: outURL)
-                return ConversionResult(icon: "doc.fill", tint: .green,
-                                        title: entry.name + ".cif",
-                                        detail: sizeStr(entry.cifData.count))
+
+                if decompileLua {
+                    // Decode + possibly decompile each CIF right away
+                    rows.append(contentsOf: decodeCIF(outURL))
+                } else {
+                    rows.append(ConversionResult(
+                        icon: "doc.fill", tint: .green,
+                        title: entry.name + ".cif",
+                        detail: sizeStr(entry.cifData.count)))
+                }
             }
+            return rows
         } catch { return [fail(url.lastPathComponent, error.localizedDescription)] }
     }
 
-    // MARK: Helpers
+    // ── HIS encode ───────────────────────────────────────────────────────
 
-    private func ok(_ t: String, _ d: String)   -> ConversionResult {
-        ConversionResult(icon: "checkmark.circle.fill", tint: .green, title: t, detail: d)
+    private func encodeHIS(_ url: URL) -> ConversionResult {
+        let name = url.lastPathComponent
+        guard url.pathExtension.lowercased() == "ogg" else {
+            return fail(name, "Expected .ogg (OGG Vorbis)")
+        }
+        do {
+            let data = try HIPWrapper.encodeHISFromOGG(atPath: url.path) as Data
+            let out  = url.deletingPathExtension().appendingPathExtension("his")
+            try data.write(to: out)
+            return ok(name, "→ .his  " + sizeStr(data.count))
+        } catch { return fail(name, error.localizedDescription) }
+    }
+
+    // ── HIS decode ───────────────────────────────────────────────────────
+
+    private func decodeHIS(_ url: URL) -> ConversionResult {
+        let name = url.lastPathComponent
+        guard url.pathExtension.lowercased() == "his" else {
+            return fail(name, "Expected .his")
+        }
+        do {
+            let data = try HIPWrapper.decodeHIS(atPath: url.path) as Data
+            let out  = url.deletingPathExtension().appendingPathExtension("ogg")
+            try data.write(to: out)
+            return ok(name, "→ .ogg  " + sizeStr(data.count))
+        } catch { return fail(name, error.localizedDescription) }
+    }
+
+    // ── Helpers ──────────────────────────────────────────────────────────
+
+    private func ok(_ t: String, _ d: String) -> ConversionResult {
+        ConversionResult(icon: "checkmark.circle.fill",         tint: .green,  title: t, detail: d)
     }
     private func fail(_ t: String, _ d: String) -> ConversionResult {
-        ConversionResult(icon: "xmark.circle.fill",     tint: .red,   title: t, detail: d)
+        ConversionResult(icon: "xmark.circle.fill",             tint: .red,    title: t, detail: d)
+    }
+    private func warn(_ t: String, _ d: String) -> ConversionResult {
+        ConversionResult(icon: "exclamationmark.triangle.fill", tint: .yellow, title: t, detail: d)
     }
     private func sizeStr(_ bytes: Int) -> String {
         ByteCountFormatter.string(fromByteCount: Int64(bytes), countStyle: .file)
     }
 }
 
-// MARK: - Main Screen
+// MARK: - Main view
 
 struct ContentView: View {
     @StateObject private var vm = AppViewModel()
 
     var body: some View {
-        VStack(spacing: 12) {
+        VStack(spacing: 10) {
             dropZone
+            settingsBar
             if !vm.results.isEmpty { resultsPanel }
         }
         .padding(16)
-        .frame(minWidth: 600, minHeight: 400)
-        .toolbar {
-            ToolbarItem(placement: .principal) {
-                Picker("Mode", selection: $vm.mode) {
-                    ForEach(AppViewModel.Mode.allCases) { m in
-                        Text(m.rawValue).tag(m)
-                    }
-                }
-                .pickerStyle(.segmented)
-                .frame(minWidth: 360)
-            }
-            ToolbarSpacer(.flexible, placement: .automatic)
-            ToolbarItem(placement: .primaryAction) {
-                Button(chooseLabel, action: openPanel)
-                    .buttonStyle(.glass)
-                    .tint(.accentColor)
-                    .buttonBorderShape(.capsule)
-            }
-        }
+        .frame(minWidth: 580, minHeight: 420)
+        .toolbar { toolbarContent }
         .toolbar(removing: .title)
     }
 
-    private var chooseLabel: String {
-        switch vm.mode {
-        case .encode, .decode: return "Choose Files…"
-        case .pack:            return "Choose Folder…"
-        case .unpack:          return "Choose Archive…"
+    // MARK: Toolbar — mode only
+
+    @ToolbarContentBuilder
+    private var toolbarContent: some ToolbarContent {
+        ToolbarItem(placement: .principal) {
+            Picker("", selection: $vm.category) {
+                ForEach(AppCategory.allCases) { c in Text(c.rawValue).tag(c) }
+            }
+            .pickerStyle(.segmented)
         }
     }
 
-    // MARK: Drop zone
+    // MARK: Settings bar — direction + per-mode options
+
+    private var settingsBar: some View {
+        HStack(spacing: 14) {
+
+            Picker("", selection: $vm.direction) {
+                Text(dirForwardLabel).tag(AppDirection.forward)
+                Text(dirBackwardLabel).tag(AppDirection.backward)
+            }
+            .pickerStyle(.segmented)
+            .fixedSize()
+
+            switch vm.mode {
+            case .cifEncode:
+                Divider().frame(height: 18)
+                Toggle("Compile Lua", isOn: $vm.compileLua)
+                    .toggleStyle(.checkbox)
+                    .help("Compile .lua source to bytecode before packing")
+
+            case .cifDecode, .ciftreeUnpack:
+                Divider().frame(height: 18)
+                Toggle(isOn: $vm.decompileLua) {
+                    HStack(spacing: 4) {
+                        Text("Decompile Lua")
+                        Text("ß")
+                            .foregroundStyle(.secondary)
+                    }
+                }
+                    .toggleStyle(.checkbox)
+                    .help("Run luadec on extracted Lua bytecode (requires bundled luadec)")
+
+            default:
+                EmptyView()
+            }
+
+            Spacer()
+        }
+        .padding(.horizontal, 2)
+        .animation(.easeInOut(duration: 0.15), value: vm.mode)
+    }
+
+    // MARK: Drop zone — clickable
 
     private var dropZone: some View {
         ZStack {
@@ -218,9 +404,9 @@ struct ContentView: View {
                 .strokeBorder(
                     vm.isDragging ? Color.accentColor.opacity(0.7)
                                   : Color.secondary.opacity(0.2),
-                    style: StrokeStyle(lineWidth: 1.5, dash: [6])
-                )
+                    style: StrokeStyle(lineWidth: 1.5, dash: [6]))
                 .animation(.easeInOut(duration: 0.15), value: vm.isDragging)
+
             if vm.isProcessing {
                 ProgressView("Processing…").controlSize(.large)
             } else {
@@ -228,6 +414,8 @@ struct ContentView: View {
             }
         }
         .frame(maxWidth: .infinity, maxHeight: .infinity)
+        .contentShape(Rectangle())
+        .onTapGesture { openPanel() }
         .onDrop(of: [.fileURL], isTargeted: $vm.isDragging) { handleDrop($0) }
     }
 
@@ -237,36 +425,21 @@ struct ContentView: View {
                 .font(.system(size: 38, weight: .regular))
                 .foregroundStyle(.secondary)
                 .symbolEffect(.bounce, value: vm.isDragging)
+
             Text(dropTitle).font(.headline)
-            Text(dropSubtitle).font(.subheadline).foregroundStyle(.secondary)
+
+            Text(dropSubtitle)
+                .font(.subheadline).foregroundStyle(.secondary)
                 .multilineTextAlignment(.center)
+
+            // Decorative "Choose" button — same style as Clear
+            Button(chooseLabel, action: openPanel)
+                .buttonStyle(.glass)
+                .buttonBorderShape(.capsule)
+                .controlSize(.small)
+                .padding(.top, 2)
         }
         .padding()
-    }
-
-    private var dropIcon: String {
-        switch vm.mode {
-        case .encode:  return "arrow.down.doc"
-        case .decode:  return "arrow.up.doc"
-        case .pack:    return "archivebox"
-        case .unpack:  return "archivebox.fill"
-        }
-    }
-    private var dropTitle: String {
-        switch vm.mode {
-        case .encode:  return "Drag PNG or Lua files"
-        case .decode:  return "Drag .cif files"
-        case .pack:    return "Drag a folder of .cif files"
-        case .unpack:  return "Drag a Ciftree.dat archive"
-        }
-    }
-    private var dropSubtitle: String {
-        switch vm.mode {
-        case .encode:  return "Each file is converted to .cif next to the original"
-        case .decode:  return "CIF header is stripped, original file saved alongside"
-        case .pack:    return "All .cif files in the folder are packed into one .dat"
-        case .unpack:  return "Each embedded .cif is extracted to a folder next to the archive"
-        }
     }
 
     // MARK: Results panel
@@ -302,19 +475,94 @@ struct ContentView: View {
         }
     }
 
-    // MARK: Helpers
+    // MARK: Label helpers
+
+    private var dirForwardLabel: String {
+        switch vm.category {
+        case .cif:     return "File → CIF"
+        case .ciftree: return "Pack"
+        case .his:     return "OGG → HIS"
+        }
+    }
+    private var dirBackwardLabel: String {
+        switch vm.category {
+        case .cif:     return "CIF → File"
+        case .ciftree: return "Unpack"
+        case .his:     return "HIS → OGG"
+        }
+    }
+    private var chooseLabel: String {
+        switch vm.mode {
+        case .ciftreePack:   return "Choose Folder…"
+        case .ciftreeUnpack: return "Choose Archive…"
+        default:             return "Choose Files…"
+        }
+    }
+    private var dropIcon: String {
+        switch vm.mode {
+        case .cifEncode:     return "arrow.down.doc"
+        case .cifDecode:     return "arrow.up.doc"
+        case .ciftreePack:   return "archivebox"
+        case .ciftreeUnpack: return "archivebox.fill"
+        case .hisEncode:     return "waveform.badge.plus"
+        case .hisDecode:     return "waveform.badge.minus"
+        }
+    }
+    private var dropTitle: String {
+        switch vm.mode {
+        case .cifEncode:     return "Drag PNG, JPEG or Lua files"
+        case .cifDecode:     return "Drag .cif files"
+        case .ciftreePack:   return "Drag a folder"
+        case .ciftreeUnpack: return "Drag a Ciftree .dat archive"
+        case .hisEncode:     return "Drag .ogg files"
+        case .hisDecode:     return "Drag .his files"
+        }
+    }
+    private var dropSubtitle: String {
+        switch vm.mode {
+        case .cifEncode:
+            return "PNG/JPEG → CIF image · Lua → CIF script"
+        case .cifDecode:
+            return "CIF → PNG / .lua / .xsheet — saved next to original"
+        case .ciftreePack:
+            return "All supported files in the folder are converted and packed into .dat"
+        case .ciftreeUnpack:
+            return "Each embedded .cif is extracted to a folder next to the archive"
+        case .hisEncode:
+            return "OGG Vorbis → HIS (HeR Interactive Sound)"
+        case .hisDecode:
+            return "HIS → OGG Vorbis — saved next to original"
+        }
+    }
+
+    // MARK: Panel / drop helpers
 
     private func openPanel() {
         let panel = NSOpenPanel()
-        panel.allowsMultipleSelection = (vm.mode == .encode || vm.mode == .decode)
-        panel.canChooseFiles          = vm.mode != .pack
-        panel.canChooseDirectories    = vm.mode == .pack
+        panel.canChooseDirectories    = vm.mode == .ciftreePack
+        panel.canChooseFiles          = vm.mode != .ciftreePack
+        panel.allowsMultipleSelection = vm.mode != .ciftreePack && vm.mode != .ciftreeUnpack
+
         switch vm.mode {
-        case .encode: panel.allowedContentTypes = [.png, UTType(filenameExtension: "lua") ?? .data]
-        case .decode: panel.allowedContentTypes = [UTType(filenameExtension: "cif") ?? .data]
-        case .pack:   panel.allowedContentTypes = []
-        case .unpack: panel.allowedContentTypes = [UTType(filenameExtension: "dat") ?? .data]
+        case .cifEncode:
+            panel.allowedContentTypes = [
+                .png,
+                UTType(filenameExtension: "jpg")  ?? .data,
+                UTType(filenameExtension: "jpeg") ?? .data,
+                UTType(filenameExtension: "lua")  ?? .data,
+            ]
+        case .cifDecode:
+            panel.allowedContentTypes = [UTType(filenameExtension: "cif") ?? .data]
+        case .ciftreePack:
+            panel.allowedContentTypes = []
+        case .ciftreeUnpack:
+            panel.allowedContentTypes = [UTType(filenameExtension: "dat") ?? .data]
+        case .hisEncode:
+            panel.allowedContentTypes = [UTType(filenameExtension: "ogg") ?? .data]
+        case .hisDecode:
+            panel.allowedContentTypes = [UTType(filenameExtension: "his") ?? .data]
         }
+
         if panel.runModal() == .OK { vm.processURLs(panel.urls) }
     }
 
@@ -330,9 +578,7 @@ struct ContentView: View {
                 urls.append(u)
             }
         }
-        group.notify(queue: .main) {
-            if !urls.isEmpty { vm.processURLs(urls) }
-        }
+        group.notify(queue: .main) { if !urls.isEmpty { vm.processURLs(urls) } }
         return true
     }
 }
@@ -345,14 +591,12 @@ struct ResultRow: View {
         HStack(spacing: 12) {
             Image(systemName: result.icon)
                 .foregroundStyle(result.tint)
-                .font(.system(size: 20))
-                .frame(width: 28)
+                .font(.system(size: 17, weight: .medium))
+                .frame(width: 28, height: 28, alignment: .center)
+
             VStack(alignment: .leading, spacing: 2) {
-                Text(result.title)
-                    .font(.system(.body, design: .monospaced))
-                    .lineLimit(1)
-                Text(result.detail)
-                    .font(.caption).foregroundStyle(.secondary)
+                Text(result.title).font(.system(.body, design: .monospaced)).lineLimit(1)
+                Text(result.detail).font(.caption).foregroundStyle(.secondary)
             }
             Spacer()
         }
