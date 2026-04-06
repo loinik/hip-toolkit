@@ -99,19 +99,19 @@ static int luaBytecodeWriter(lua_State *L, const void *p, size_t size, void *u) 
         std::filesystem::path fsp(path.fileSystemRepresentation);
         auto body = CIF::readFile(fsp);
 
-        // Проверяем, нужно ли компилировать
+        // Check if compilation is needed
         if (!CIF::isCompiledLua(body) && compileLua) {
             lua_State *L = luaL_newstate();
             
-            // Пытаемся загрузить скрипт (это его парсит и компилирует в памяти)
+            // Load script (parses and compiles to memory)
             if (luaL_loadfile(L, path.fileSystemRepresentation) == 0) {
                 NSMutableData *bytecodeData = [NSMutableData data];
                 
-                // Дампим скомпилированный байткод
+                // Dump compiled bytecode
                 lua_dump(L, luaBytecodeWriter, (__bridge void *)bytecodeData);
                 
-                // Поскольку функция CIF::encodeLua ждёт путь к файлу,
-                // сохраняем байткод во временный файл
+                // CIF::encodeLua expects a file path,
+                // save bytecode to temporary file
                 NSString *tmpOut = [NSTemporaryDirectory() stringByAppendingPathComponent:
                                     [[[NSUUID UUID] UUIDString] stringByAppendingPathExtension:@"luac"]];
                 
@@ -119,13 +119,13 @@ static int luaBytecodeWriter(lua_State *L, const void *p, size_t size, void *u) 
                     fsp = std::filesystem::path(tmpOut.fileSystemRepresentation);
                 }
             } else {
-                // Если произошла синтаксическая ошибка
+                // If a syntax error occurred
                 const char *errMsg = lua_tostring(L, -1);
                 NSLog(@"Lua compilation failed for %@: %s", path, errMsg);
-                // Если нужно, чтобы при ошибке процесс падал, можно вернуть error:
+                // To make the process fail on error, return error instead:
                 // if (error) *error = hipError([NSString stringWithUTF8String:errMsg]);
                 // return nil;
-                // Иначе просто проваливаемся дальше и упаковываем исходник как есть.
+                // Otherwise, continue and package the source as-is.
             }
             
             lua_close(L);
@@ -145,7 +145,7 @@ static int luaBytecodeWriter(lua_State *L, const void *p, size_t size, void *u) 
         if (error) {
             *error = [NSError errorWithDomain:@"HIPErrorDomain"
                                          code:1
-                                     userInfo:@{NSLocalizedDescriptionKey: @"Бинарный файл luadec не найден в ресурсах приложения."}];
+                                     userInfo:@{NSLocalizedDescriptionKey: @"Luadec binary not found in application resources."}];
         }
         return nil;
     }
@@ -175,7 +175,7 @@ static int luaBytecodeWriter(lua_State *L, const void *p, size_t size, void *u) 
         if (error) {
             *error = [NSError errorWithDomain:@"HIPErrorDomain"
                                          code:2
-                                     userInfo:@{NSLocalizedDescriptionKey: [NSString stringWithFormat:@"Ошибка запуска NSTask: %@", exception.reason]}];
+                                     userInfo:@{NSLocalizedDescriptionKey: [NSString stringWithFormat:@"Error launching NSTask: %@", exception.reason]}];
         }
         return nil;
     }
@@ -188,7 +188,7 @@ static int luaBytecodeWriter(lua_State *L, const void *p, size_t size, void *u) 
         NSString *errorString = [[NSString alloc] initWithData:errorData encoding:NSUTF8StringEncoding];
 
         if (error) {
-            NSString *failMsg = [NSString stringWithFormat:@"Ошибка декомпиляции (Код %d): %@", task.terminationStatus, errorString];
+            NSString *failMsg = [NSString stringWithFormat:@"Decompilation error (Code %d): %@", task.terminationStatus, errorString];
             *error = [NSError errorWithDomain:@"HIPErrorDomain" code:3 userInfo:@{NSLocalizedDescriptionKey: failMsg}];
         }
         return nil;
@@ -203,7 +203,7 @@ static int luaBytecodeWriter(lua_State *L, const void *p, size_t size, void *u) 
     NSFileManager *fm = [NSFileManager defaultManager];
     NSDirectoryEnumerator *enumerator = [fm enumeratorAtPath:directoryPath];
     
-    // Магическая сигнатура скомпилированного Lua 5.1
+    // Lua 5.1 compiled bytecode magic signature
     const char luaMagic[] = "\x1BLua";
     NSData *magicData = [NSData dataWithBytes:luaMagic length:4];
     
@@ -214,34 +214,34 @@ static int luaBytecodeWriter(lua_State *L, const void *p, size_t size, void *u) 
         [fm fileExistsAtPath:fullPath isDirectory:&isDir];
         if (isDir) continue;
         
-        // Ищем только файлы _SC (или .luac, если они так сохраняются)
+        // Look for _SC files (or .luac if saved that way)
         if ([file hasSuffix:@"_SC"] || [file.pathExtension isEqualToString:@"luac"]) {
             
             NSData *fileData = [NSData dataWithContentsOfFile:fullPath];
             if (!fileData || fileData.length < 4) continue;
             
-            // Ищем начало настоящего байткода Lua, пропуская любые CIF-заголовки
+            // Find the start of actual Lua bytecode, skipping any CIF headers
             NSRange magicRange = [fileData rangeOfData:magicData
                                                options:0
                                                  range:NSMakeRange(0, fileData.length)];
             
             if (magicRange.location != NSNotFound) {
-                // Отрезаем проприетарный заголовок
+                // Remove proprietary header
                 NSData *cleanBytecode = [fileData subdataWithRange:NSMakeRange(magicRange.location, fileData.length - magicRange.location)];
                 
-                // Сохраняем чистый байткод во временный файл
+                // Save clean bytecode to temporary file
                 NSString *tempPath = [NSTemporaryDirectory() stringByAppendingPathComponent:[[NSUUID UUID] UUIDString]];
                 [cleanBytecode writeToFile:tempPath atomically:YES];
                 
-                // Вызываем наш NSTask-метод из предыдущего шага
+                // Call the NSTask decompilation method
                 NSError *decError = nil;
                 NSString *decompiledCode = [self decompileLuaAtPath:tempPath error:&decError];
                 
-                // Удаляем временный файл
+                // Remove temporary file
                 [fm removeItemAtPath:tempPath error:nil];
                 
                 if (decompiledCode) {
-                    // Формируем новое имя: заменяем "_SC" на ".lua"
+                    // Create new name: replace "_SC" with ".lua"
                     NSString *newPath = fullPath;
                     if ([fullPath hasSuffix:@"_SC"]) {
                         newPath = [[fullPath substringToIndex:fullPath.length - 3] stringByAppendingPathExtension:@"lua"];
@@ -249,20 +249,20 @@ static int luaBytecodeWriter(lua_State *L, const void *p, size_t size, void *u) 
                         newPath = [[fullPath stringByDeletingPathExtension] stringByAppendingPathExtension:@"lua"];
                     }
                     
-                    // Сохраняем декомпилированный текст
+                    // Save decompiled source code
                     [decompiledCode writeToFile:newPath atomically:YES encoding:NSUTF8StringEncoding error:nil];
                     
-                    // Опционально: Удаляем исходный бинарник _SC, оставляя только чистый .lua
+                    // Optional: Remove original binary _SC file, keep only clean .lua
                     if (![newPath isEqualToString:fullPath]) {
                         [fm removeItemAtPath:fullPath error:nil];
                     }
                     
-                    NSLog(@"✅ Успешно декомпилирован: %@", file);
+                    NSLog(@"Decompiled successfully: %@", file);
                 } else {
-                    NSLog(@"❌ Ошибка декомпиляции %@: %@", file, decError.localizedDescription);
+                    NSLog(@"Decompilation error for %@: %@", file, decError.localizedDescription);
                 }
             } else {
-                NSLog(@"⚠️ Файл %@ не содержит байткода Lua.", file);
+                NSLog(@"File %@ does not contain Lua bytecode.", file);
             }
         }
     }

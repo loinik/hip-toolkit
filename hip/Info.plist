@@ -35,6 +35,10 @@
 			<string>Viewer</string>
 			<key>LSHandlerRank</key>
 			<string>Default</string>
+			<key>LSItemContentTypes</key>
+			<array>
+				<string>com.herinteractive.his</string>
+			</array>
 		</dict>
 	</array>
 	<key>UTExportedTypeDeclarations</key>
