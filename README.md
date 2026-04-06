@@ -134,8 +134,22 @@ Offset  Size  Field
 ### Lua Integration
 
 - **Compilation:** Uses bundled Lua 5.1.5 source to compile scripts
-- **Decompilation:** Uses `luadec` to recover source from bytecode
+- **Decompilation:** Uses bundled `luadec` in test mode (beta)
 - **Detection:** Recognizes both source and compiled formats automatically
+
+### Decompilation Status (Beta)
+
+The built-in Lua decompilation pipeline is currently experimental.
+
+Known limitations:
+- Function names are often reconstructed as generic placeholders.
+- Local/global variable names may be lost or replaced.
+- Parameter names and some control-flow structure labels may differ from the original source.
+
+This behavior is expected for bytecode decompilation when original debug symbols are missing.
+
+For higher-quality output and more stable symbol reconstruction, it is recommended to use:
+- https://www.decompiler.com/
 
 ### Audio (HIS Format)
 
