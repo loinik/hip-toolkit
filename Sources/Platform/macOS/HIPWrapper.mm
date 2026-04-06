@@ -1,4 +1,4 @@
-// HIPWrapper.mm — Objective-C++ (.mm required)
+// HIPWrapper.mm — Objective-C++
 #import "HIPWrapper.h"
 #import <AppKit/AppKit.h>
 

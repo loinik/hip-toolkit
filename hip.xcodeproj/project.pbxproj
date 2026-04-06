@@ -7,6 +7,10 @@
 	objects = {
 
 /* Begin PBXBuildFile section */
+		EE6186742F82969000EB6D27 /* CIFArchive.cpp in Sources */ = {isa = PBXBuildFile; fileRef = EE6186692F82969000EB6D27 /* CIFArchive.cpp */; };
+		EE6186752F82969000EB6D27 /* CiftreeArchive.cpp in Sources */ = {isa = PBXBuildFile; fileRef = EE61866B2F82969000EB6D27 /* CiftreeArchive.cpp */; };
+		EE6186782F82969000EB6D27 /* HIPWrapper.mm in Sources */ = {isa = PBXBuildFile; fileRef = EE6186702F82969000EB6D27 /* HIPWrapper.mm */; };
+		EE6186792F82969000EB6D27 /* HISArchive.cpp in Sources */ = {isa = PBXBuildFile; fileRef = EE6186722F82969000EB6D27 /* HISArchive.cpp */; };
 		EE6186C52F829A4600EB6D27 /* stb_vorbis.c in Sources */ = {isa = PBXBuildFile; fileRef = EE6186BD2F829A4600EB6D27 /* stb_vorbis.c */; };
 		EE6187172F829A8100EB6D27 /* ldebug.c in Sources */ = {isa = PBXBuildFile; fileRef = EE6186EA2F829A8100EB6D27 /* ldebug.c */; };
 		EE6187182F829A8100EB6D27 /* loadlib.c in Sources */ = {isa = PBXBuildFile; fileRef = EE6186FA2F829A8100EB6D27 /* loadlib.c */; };
@@ -42,6 +46,9 @@
 		EE6187372F82A42800EB6D27 /* luadec in Resources */ = {isa = PBXBuildFile; fileRef = EE6187362F82A42800EB6D27 /* luadec */; };
 		EE61873F2F82B9D100EB6D27 /* Quartz.framework in Frameworks */ = {isa = PBXBuildFile; fileRef = EE61873E2F82B9D100EB6D27 /* Quartz.framework */; };
 		EE61874B2F82B9D100EB6D27 /* HIPQuickLook.appex in Embed Foundation Extensions */ = {isa = PBXBuildFile; fileRef = EE61873C2F82B9D100EB6D27 /* HIPQuickLook.appex */; settings = {ATTRIBUTES = (RemoveHeadersOnCopy, ); }; };
+		EE61877F2F83721300EB6D27 /* Assets.xcassets in Resources */ = {isa = PBXBuildFile; fileRef = EE61877B2F83721300EB6D27 /* Assets.xcassets */; };
+		EE6187812F83721300EB6D27 /* ContentView.swift in Sources */ = {isa = PBXBuildFile; fileRef = EE61877C2F83721300EB6D27 /* ContentView.swift */; };
+		EE6187822F83721300EB6D27 /* hipApp.swift in Sources */ = {isa = PBXBuildFile; fileRef = EE61877D2F83721300EB6D27 /* hipApp.swift */; };
 /* End PBXBuildFile section */
 
 /* Begin PBXContainerItemProxy section */
@@ -69,6 +76,14 @@
 /* End PBXCopyFilesBuildPhase section */
 
 /* Begin PBXFileReference section */
+		EE6186682F82969000EB6D27 /* CIFArchive.hpp */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.cpp.h; path = CIFArchive.hpp; sourceTree = "<group>"; };
+		EE6186692F82969000EB6D27 /* CIFArchive.cpp */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.cpp.cpp; path = CIFArchive.cpp; sourceTree = "<group>"; };
+		EE61866A2F82969000EB6D27 /* CiftreeArchive.hpp */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.cpp.h; path = CiftreeArchive.hpp; sourceTree = "<group>"; };
+		EE61866B2F82969000EB6D27 /* CiftreeArchive.cpp */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.cpp.cpp; path = CiftreeArchive.cpp; sourceTree = "<group>"; };
+		EE61866F2F82969000EB6D27 /* HIPWrapper.h */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.h; path = HIPWrapper.h; sourceTree = "<group>"; };
+		EE6186702F82969000EB6D27 /* HIPWrapper.mm */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.cpp.objcpp; path = HIPWrapper.mm; sourceTree = "<group>"; };
+		EE6186712F82969000EB6D27 /* HISArchive.hpp */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.cpp.h; path = HISArchive.hpp; sourceTree = "<group>"; };
+		EE6186722F82969000EB6D27 /* HISArchive.cpp */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.cpp.cpp; path = HISArchive.cpp; sourceTree = "<group>"; };
 		EE6186BD2F829A4600EB6D27 /* stb_vorbis.c */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.c; path = stb_vorbis.c; sourceTree = "<group>"; };
 		EE6186E12F829A8100EB6D27 /* lapi.h */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.h; path = lapi.h; sourceTree = "<group>"; };
 		EE6186E22F829A8100EB6D27 /* lapi.c */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.c; path = lapi.c; sourceTree = "<group>"; };
@@ -127,31 +142,18 @@
 		EE6187362F82A42800EB6D27 /* luadec */ = {isa = PBXFileReference; lastKnownFileType = "compiled.mach-o.executable"; path = luadec; sourceTree = "<group>"; };
 		EE61873C2F82B9D100EB6D27 /* HIPQuickLook.appex */ = {isa = PBXFileReference; explicitFileType = "wrapper.app-extension"; includeInIndex = 0; path = HIPQuickLook.appex; sourceTree = BUILT_PRODUCTS_DIR; };
 		EE61873E2F82B9D100EB6D27 /* Quartz.framework */ = {isa = PBXFileReference; lastKnownFileType = wrapper.framework; name = Quartz.framework; path = System/Library/Frameworks/Quartz.framework; sourceTree = SDKROOT; };
+		EE61877B2F83721300EB6D27 /* Assets.xcassets */ = {isa = PBXFileReference; lastKnownFileType = folder.assetcatalog; path = Assets.xcassets; sourceTree = "<group>"; };
+		EE61877C2F83721300EB6D27 /* ContentView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ContentView.swift; sourceTree = "<group>"; };
+		EE61877D2F83721300EB6D27 /* hipApp.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = hipApp.swift; sourceTree = "<group>"; };
+		EE61877E2F83721300EB6D27 /* Info.plist */ = {isa = PBXFileReference; lastKnownFileType = text.plist.xml; path = Info.plist; sourceTree = "<group>"; };
+		EE61878C2F83723A00EB6D27 /* hip-Bridging-Header.h */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.h; path = "hip-Bridging-Header.h"; sourceTree = "<group>"; };
 		EE6F8A272F7A4C38005E4E41 /* hip.app */ = {isa = PBXFileReference; explicitFileType = wrapper.application; includeInIndex = 0; path = hip.app; sourceTree = BUILT_PRODUCTS_DIR; };
 /* End PBXFileReference section */
-
-/* Begin PBXFileSystemSynchronizedBuildFileExceptionSet section */
-		EE6187542F82C8BA00EB6D27 /* Exceptions for "hip" folder in "hip" target */ = {
-			isa = PBXFileSystemSynchronizedBuildFileExceptionSet;
-			membershipExceptions = (
-				Info.plist,
-			);
-			target = EE6F8A262F7A4C38005E4E41 /* hip */;
-		};
-/* End PBXFileSystemSynchronizedBuildFileExceptionSet section */
 
 /* Begin PBXFileSystemSynchronizedRootGroup section */
 		EE6187402F82B9D100EB6D27 /* HIPQuickLook */ = {
 			isa = PBXFileSystemSynchronizedRootGroup;
 			path = HIPQuickLook;
-			sourceTree = "<group>";
-		};
-		EE6F8A292F7A4C38005E4E41 /* hip */ = {
-			isa = PBXFileSystemSynchronizedRootGroup;
-			exceptions = (
-				EE6187542F82C8BA00EB6D27 /* Exceptions for "hip" folder in "hip" target */,
-			);
-			path = hip;
 			sourceTree = "<group>";
 		};
 /* End PBXFileSystemSynchronizedRootGroup section */
@@ -254,11 +256,71 @@
 			name = Frameworks;
 			sourceTree = "<group>";
 		};
+		EE6187552F83701800EB6D27 /* Sources */ = {
+			isa = PBXGroup;
+			children = (
+				EE61878E2F8373B100EB6D27 /* Assets */,
+				EE61878D2F83739A00EB6D27 /* App */,
+				EE6187572F8370CA00EB6D27 /* Platform */,
+				EE6187562F8370C400EB6D27 /* Core */,
+			);
+			path = Sources;
+			sourceTree = "<group>";
+		};
+		EE6187562F8370C400EB6D27 /* Core */ = {
+			isa = PBXGroup;
+			children = (
+				EE6186682F82969000EB6D27 /* CIFArchive.hpp */,
+				EE6186692F82969000EB6D27 /* CIFArchive.cpp */,
+				EE61866A2F82969000EB6D27 /* CiftreeArchive.hpp */,
+				EE61866B2F82969000EB6D27 /* CiftreeArchive.cpp */,
+				EE6186712F82969000EB6D27 /* HISArchive.hpp */,
+				EE6186722F82969000EB6D27 /* HISArchive.cpp */,
+			);
+			path = Core;
+			sourceTree = "<group>";
+		};
+		EE6187572F8370CA00EB6D27 /* Platform */ = {
+			isa = PBXGroup;
+			children = (
+				EE6187582F8370D600EB6D27 /* macOS */,
+			);
+			path = Platform;
+			sourceTree = "<group>";
+		};
+		EE6187582F8370D600EB6D27 /* macOS */ = {
+			isa = PBXGroup;
+			children = (
+				EE61866F2F82969000EB6D27 /* HIPWrapper.h */,
+				EE6186702F82969000EB6D27 /* HIPWrapper.mm */,
+				EE61878C2F83723A00EB6D27 /* hip-Bridging-Header.h */,
+			);
+			path = macOS;
+			sourceTree = "<group>";
+		};
+		EE61878D2F83739A00EB6D27 /* App */ = {
+			isa = PBXGroup;
+			children = (
+				EE61877C2F83721300EB6D27 /* ContentView.swift */,
+				EE61877D2F83721300EB6D27 /* hipApp.swift */,
+				EE61877E2F83721300EB6D27 /* Info.plist */,
+			);
+			path = App;
+			sourceTree = "<group>";
+		};
+		EE61878E2F8373B100EB6D27 /* Assets */ = {
+			isa = PBXGroup;
+			children = (
+				EE61877B2F83721300EB6D27 /* Assets.xcassets */,
+			);
+			path = Assets;
+			sourceTree = "<group>";
+		};
 		EE6F8A1E2F7A4C38005E4E41 = {
 			isa = PBXGroup;
 			children = (
+				EE6187552F83701800EB6D27 /* Sources */,
 				EE6186BE2F829A4600EB6D27 /* Vendor */,
-				EE6F8A292F7A4C38005E4E41 /* hip */,
 				EE6187402F82B9D100EB6D27 /* HIPQuickLook */,
 				EE61873D2F82B9D100EB6D27 /* Frameworks */,
 				EE6F8A282F7A4C38005E4E41 /* Products */,
@@ -312,9 +374,6 @@
 			);
 			dependencies = (
 				EE61874A2F82B9D100EB6D27 /* PBXTargetDependency */,
-			);
-			fileSystemSynchronizedGroups = (
-				EE6F8A292F7A4C38005E4E41 /* hip */,
 			);
 			name = hip;
 			packageProductDependencies = (
@@ -374,6 +433,7 @@
 			isa = PBXResourcesBuildPhase;
 			buildActionMask = 2147483647;
 			files = (
+				EE61877F2F83721300EB6D27 /* Assets.xcassets in Resources */,
 				EE6187372F82A42800EB6D27 /* luadec in Resources */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
@@ -392,7 +452,11 @@
 			isa = PBXSourcesBuildPhase;
 			buildActionMask = 2147483647;
 			files = (
+				EE6186742F82969000EB6D27 /* CIFArchive.cpp in Sources */,
+				EE6186752F82969000EB6D27 /* CiftreeArchive.cpp in Sources */,
+				EE6186782F82969000EB6D27 /* HIPWrapper.mm in Sources */,
 				EE6186C52F829A4600EB6D27 /* stb_vorbis.c in Sources */,
+				EE6186792F82969000EB6D27 /* HISArchive.cpp in Sources */,
 				EE6187172F829A8100EB6D27 /* ldebug.c in Sources */,
 				EE6187182F829A8100EB6D27 /* loadlib.c in Sources */,
 				EE6187192F829A8100EB6D27 /* lfunc.c in Sources */,
@@ -422,6 +486,8 @@
 				EE6187312F829A8100EB6D27 /* lvm.c in Sources */,
 				EE6187322F829A8100EB6D27 /* lbaselib.c in Sources */,
 				EE6187332F829A8100EB6D27 /* lparser.c in Sources */,
+				EE6187812F83721300EB6D27 /* ContentView.swift in Sources */,
+				EE6187822F83721300EB6D27 /* hipApp.swift in Sources */,
 				EE6187342F829A8100EB6D27 /* ltable.c in Sources */,
 				EE6187352F829A8100EB6D27 /* lstate.c in Sources */,
 			);
@@ -647,8 +713,8 @@
 				ENABLE_RESOURCE_ACCESS_USB = NO;
 				ENABLE_USER_SELECTED_FILES = readwrite;
 				GENERATE_INFOPLIST_FILE = YES;
-				INFOPLIST_FILE = hip/Info.plist;
-				INFOPLIST_KEY_CFBundleDisplayName = "HIP Tools";
+				INFOPLIST_FILE = Sources/App/Info.plist;
+				INFOPLIST_KEY_CFBundleDisplayName = "HIP Toolkit";
 				INFOPLIST_KEY_LSApplicationCategoryType = "public.app-category.developer-tools";
 				INFOPLIST_KEY_NSHumanReadableCopyright = "";
 				LD_RUNPATH_SEARCH_PATHS = (
@@ -664,7 +730,7 @@
 				SWIFT_APPROACHABLE_CONCURRENCY = YES;
 				SWIFT_DEFAULT_ACTOR_ISOLATION = MainActor;
 				SWIFT_EMIT_LOC_STRINGS = YES;
-				SWIFT_OBJC_BRIDGING_HEADER = "hip/hip-Bridging-Header.h";
+				SWIFT_OBJC_BRIDGING_HEADER = "Sources/Platform/macOS/hip-Bridging-Header.h";
 				SWIFT_OPTIMIZATION_LEVEL = "-Onone";
 				SWIFT_UPCOMING_FEATURE_MEMBER_IMPORT_VISIBILITY = YES;
 				SWIFT_VERSION = 5.0;
@@ -700,8 +766,8 @@
 				ENABLE_RESOURCE_ACCESS_USB = NO;
 				ENABLE_USER_SELECTED_FILES = readwrite;
 				GENERATE_INFOPLIST_FILE = YES;
-				INFOPLIST_FILE = hip/Info.plist;
-				INFOPLIST_KEY_CFBundleDisplayName = "HIP Tools";
+				INFOPLIST_FILE = Sources/App/Info.plist;
+				INFOPLIST_KEY_CFBundleDisplayName = "HIP Toolkit";
 				INFOPLIST_KEY_LSApplicationCategoryType = "public.app-category.developer-tools";
 				INFOPLIST_KEY_NSHumanReadableCopyright = "";
 				LD_RUNPATH_SEARCH_PATHS = (
@@ -717,7 +783,7 @@
 				SWIFT_APPROACHABLE_CONCURRENCY = YES;
 				SWIFT_DEFAULT_ACTOR_ISOLATION = MainActor;
 				SWIFT_EMIT_LOC_STRINGS = YES;
-				SWIFT_OBJC_BRIDGING_HEADER = "hip/hip-Bridging-Header.h";
+				SWIFT_OBJC_BRIDGING_HEADER = "Sources/Platform/macOS/hip-Bridging-Header.h";
 				SWIFT_UPCOMING_FEATURE_MEMBER_IMPORT_VISIBILITY = YES;
 				SWIFT_VERSION = 5.0;
 			};
