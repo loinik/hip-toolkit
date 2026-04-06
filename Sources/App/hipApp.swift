@@ -7,11 +7,17 @@
 
 import SwiftUI
 
+
 @main
 struct hipApp: App {
     var body: some Scene {
         WindowGroup {
             ContentView()
         }
+        WindowGroup(id: "hip-toolkit.preview", for: URL.self) { $url in
+            if let url { FilePreviewWindowView(url: url) }
+        }
+        .defaultSize(width: 720, height: 520)
+        .restorationBehavior(.disabled)
     }
 }

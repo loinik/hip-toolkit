@@ -148,8 +148,7 @@ Known limitations:
 
 This behavior is expected for bytecode decompilation when original debug symbols are missing.
 
-For higher-quality output and more stable symbol reconstruction, it is recommended to use:
-- https://www.decompiler.com/
+For higher-quality output and more stable symbol reconstruction, it is recommended to use https://www.decompiler.com/
 
 ### Audio (HIS Format)
 

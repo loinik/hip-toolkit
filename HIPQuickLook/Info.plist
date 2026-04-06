@@ -2,63 +2,23 @@
 <!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
 <plist version="1.0">
 <dict>
-
-    <!-- ── Bundle identity ──────────────────────────────────────────── -->
-    <key>CFBundleDevelopmentRegion</key>
-    <string>$(DEVELOPMENT_LANGUAGE)</string>
-
-    <key>CFBundleDisplayName</key>
-    <string>HIP Quick Look</string>
-
-    <key>CFBundleExecutable</key>
-    <string>$(EXECUTABLE_NAME)</string>
-
-    <key>CFBundleIdentifier</key>
-    <!-- Must be: <main-app-bundle-id>.QLExtension -->
-    <string>$(PRODUCT_BUNDLE_IDENTIFIER)</string>
-
-    <key>CFBundleInfoDictionaryVersion</key>
-    <string>6.0</string>
-
-    <key>CFBundleName</key>
-    <string>$(PRODUCT_NAME)</string>
-
-    <key>CFBundlePackageType</key>
-    <string>$(PRODUCT_BUNDLE_PACKAGE_TYPE)</string>
-
-    <key>CFBundleShortVersionString</key>
-    <string>1.0</string>
-
-    <key>CFBundleVersion</key>
-    <string>1</string>
-
-    <!-- ── Extension metadata ───────────────────────────────────────── -->
-    <key>NSExtension</key>
-    <dict>
-        <key>NSExtensionAttributes</key>
-        <dict>
-            <!-- The UTIs this extension handles.
-                 These must match the UTTypeIdentifiers declared as
-                 UTExportedTypeDeclarations in the MAIN app's Info.plist. -->
-            <key>QLSupportedContentTypes</key>
-            <array>
-                <string>com.herinteractive.cif</string>
-                <string>com.herinteractive.ciftree</string>
-                <string>com.herinteractive.his</string>
-            </array>
-
-            <!-- Set to true if you want Spotlight to index text content -->
-            <key>QLSupportsSearchableItems</key>
-            <false/>
-        </dict>
-
-        <key>NSExtensionPointIdentifier</key>
-        <string>com.apple.quicklook.preview</string>
-
-        <!-- Must match the Swift class name inside the extension module -->
-        <key>NSExtensionPrincipalClass</key>
-        <string>$(PRODUCT_MODULE_NAME).PreviewViewController</string>
-    </dict>
-
+	<key>NSExtension</key>
+	<dict>
+		<key>NSExtensionAttributes</key>
+		<dict>
+			<key>QLSupportedContentTypes</key>
+			<array>
+				<string>com.herinteractive.cif</string>
+				<string>com.herinteractive.ciftree</string>
+				<string>com.herinteractive.his</string>
+			</array>
+			<key>QLSupportsSearchableItems</key>
+			<false/>
+		</dict>
+		<key>NSExtensionPointIdentifier</key>
+		<string>com.apple.quicklook.preview</string>
+		<key>NSExtensionPrincipalClass</key>
+		<string>$(PRODUCT_MODULE_NAME).PreviewViewController</string>
+	</dict>
 </dict>
 </plist>
