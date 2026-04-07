@@ -146,6 +146,7 @@ final class PreviewViewController: NSViewController, QLPreviewingController {
 
     private var avPlayer: AVPlayer?
     private var tmpOGGURL: URL?
+    private var timeUpdateTimer: Timer?
 
     override func loadView() {
         view = NSView()
@@ -153,6 +154,7 @@ final class PreviewViewController: NSViewController, QLPreviewingController {
     }
 
     deinit {
+        timeUpdateTimer?.invalidate()
         avPlayer?.pause()
         if let tmp = tmpOGGURL { try? FileManager.default.removeItem(at: tmp) }
     }
@@ -226,107 +228,171 @@ final class PreviewViewController: NSViewController, QLPreviewingController {
         ])
     }
 
-    // MARK: - HIS audio preview (with AVPlayer)
+    // MARK: - HIS audio preview (system-style player)
 
     private func buildHISPreview(_ data: Data, url: URL) {
         guard let meta = parseHIS(data) else { buildError("Not a valid HIS file"); return }
-
-        // Strip 32-byte HIS header → OGG Vorbis
         let oggData = data.count > 32 ? data.suffix(from: 32) : Data()
-
-        // Write OGG to temp file
-        var playerView: NSView?
-        if !oggData.isEmpty {
-            let tmp = URL(fileURLWithPath: NSTemporaryDirectory())
-                .appendingPathComponent(UUID().uuidString)
-                .appendingPathExtension("ogg")
-            if (try? oggData.write(to: tmp)) != nil {
-                tmpOGGURL = tmp
-                let player = AVPlayer(url: tmp)
-                self.avPlayer = player
-                playerView = buildAudioPlayerView(player: player, meta: meta)
-            }
-        }
-
-        // Info card
-        let dur = meta.durationSeconds
-        let lines: [InfoLine] = [
-            .header("HIS Audio"),
-            .row("Channels",    meta.channels == 1 ? "Mono" : "Stereo"),
-            .row("Sample rate", "\(meta.sampleRate) Hz"),
-            .row("Duration",    dur > 0 ? fmtDur(dur) : "—"),
-            .row("OGG body",    fmt(meta.oggBodySize)),
-        ]
-
         view.subviews.forEach { $0.removeFromSuperview() }
+        guard !oggData.isEmpty else { buildError("Empty audio body"); return }
 
-        let stack = NSStackView()
-        stack.orientation = .vertical
-        stack.spacing = 0
-        stack.translatesAutoresizingMaskIntoConstraints = false
-        view.addSubview(stack)
-        NSLayoutConstraint.activate([
-            stack.topAnchor.constraint(equalTo: view.topAnchor),
-            stack.bottomAnchor.constraint(equalTo: view.bottomAnchor),
-            stack.leadingAnchor.constraint(equalTo: view.leadingAnchor),
-            stack.trailingAnchor.constraint(equalTo: view.trailingAnchor),
-        ])
+        let tmp = URL(fileURLWithPath: NSTemporaryDirectory())
+            .appendingPathComponent(UUID().uuidString)
+            .appendingPathExtension("ogg")
+        guard (try? oggData.write(to: tmp)) != nil else { buildError("Cannot buffer audio"); return }
+        tmpOGGURL = tmp
 
-        // Player controls at top
-        if let pv = playerView {
-            stack.addArrangedSubview(pv)
-            pv.widthAnchor.constraint(equalTo: stack.widthAnchor).isActive = true
-        }
-
-        // Info card below
-        let cardHost = NSView()
-        cardHost.translatesAutoresizingMaskIntoConstraints = false
-        buildInfoCardInto(cardHost, icon: "waveform", color: .systemPurple, lines: lines)
-        stack.addArrangedSubview(cardHost)
-        cardHost.widthAnchor.constraint(equalTo: stack.widthAnchor).isActive = true
+        let player = AVPlayer(url: tmp)
+        self.avPlayer = player
+        buildSystemHISPlayerView(player: player, meta: meta,
+                                 name: url.deletingPathExtension().lastPathComponent)
     }
 
-    private func buildAudioPlayerView(player: AVPlayer, meta: HISMeta) -> NSView {
-        let container = NSView()
-        container.translatesAutoresizingMaskIntoConstraints = false
-        container.wantsLayer = true
-        container.layer?.backgroundColor = NSColor.windowBackgroundColor.withAlphaComponent(0.6).cgColor
+    private func buildSystemHISPlayerView(player: AVPlayer, meta: HISMeta, name: String) {
+        view.subviews.forEach { $0.removeFromSuperview() }
+        let dur = meta.durationSeconds
 
-        // Play/Pause button
-        let playBtn = NSButton(title: "▶  Play", target: self, action: #selector(togglePlay))
-        playBtn.bezelStyle = .rounded
+        // ── Waveform icon ────────────────────────────────────────────────────
+        let iconCfg = NSImage.SymbolConfiguration(pointSize: 64, weight: .light)
+        let iconImg = (NSImage(systemSymbolName: "waveform.circle.fill",
+                               accessibilityDescription: nil) ?? NSImage())
+            .withSymbolConfiguration(iconCfg) ?? NSImage()
+        let iconView = NSImageView(image: iconImg)
+        iconView.contentTintColor = .controlAccentColor
+        iconView.imageScaling = .scaleProportionallyUpOrDown
+        iconView.translatesAutoresizingMaskIntoConstraints = false
+        iconView.widthAnchor.constraint(equalToConstant: 72).isActive = true
+        iconView.heightAnchor.constraint(equalToConstant: 72).isActive = true
+
+        // ── Name + info stack ────────────────────────────────────────────────
+        let nameLabel = makeLabel(name, size: 17, weight: .semibold)
+        nameLabel.alignment = .center
+        nameLabel.translatesAutoresizingMaskIntoConstraints = false
+
+        let infoStack = NSStackView(views: [iconView, nameLabel])
+        infoStack.orientation = .vertical
+        infoStack.alignment = .centerX
+        infoStack.spacing = 10
+        infoStack.translatesAutoresizingMaskIntoConstraints = false
+
+        // ── Scrub slider ─────────────────────────────────────────────────────
+        let slider = NSSlider(value: 0, minValue: 0, maxValue: 1,
+                              target: self, action: #selector(scrubDidChange(_:)))
+        slider.controlSize = .regular
+        slider.isEnabled = dur > 0
+        slider.tag = 203
+        slider.translatesAutoresizingMaskIntoConstraints = false
+
+        // ── Time labels ──────────────────────────────────────────────────────
+        let currentTimeLbl = makeLabel("0:00", size: 11, weight: .regular,
+                                       color: .secondaryLabelColor)
+        currentTimeLbl.tag = 201
+        currentTimeLbl.translatesAutoresizingMaskIntoConstraints = false
+
+        let totalTimeLbl = makeLabel(dur > 0 ? fmtDur(dur) : "—",
+                                     size: 11, weight: .regular, color: .secondaryLabelColor)
+        totalTimeLbl.alignment = .right
+        totalTimeLbl.tag = 202
+        totalTimeLbl.translatesAutoresizingMaskIntoConstraints = false
+
+        let timeSpacer = NSView()
+        timeSpacer.translatesAutoresizingMaskIntoConstraints = false
+        timeSpacer.setContentHuggingPriority(.defaultLow, for: .horizontal)
+        let timeRow = NSStackView(views: [currentTimeLbl, timeSpacer, totalTimeLbl])
+        timeRow.orientation = .horizontal
+        timeRow.translatesAutoresizingMaskIntoConstraints = false
+
+        // ── Play/Pause button ────────────────────────────────────────────────
+        let playBtn = NSButton(frame: .zero)
+        playBtn.isBordered = false
+        let playCfg = NSImage.SymbolConfiguration(pointSize: 52, weight: .regular)
+        playBtn.image = (NSImage(systemSymbolName: "play.circle.fill",
+                                 accessibilityDescription: "Play") ?? NSImage())
+            .withSymbolConfiguration(playCfg) ?? NSImage()
+        playBtn.contentTintColor = .controlAccentColor
+        playBtn.imagePosition = .imageOnly
+        playBtn.target = self
+        playBtn.action = #selector(togglePlayPause(_:))
+        playBtn.tag = 100
         playBtn.translatesAutoresizingMaskIntoConstraints = false
-        playBtn.tag = 100 // so we can find it later
-        container.addSubview(playBtn)
 
-        // Duration label
-        let durLabel = makeLabel(meta.durationSeconds > 0 ? fmtDur(meta.durationSeconds) : "",
-                                 size: 11, weight: .regular, color: .secondaryLabelColor)
-        durLabel.translatesAutoresizingMaskIntoConstraints = false
-        container.addSubview(durLabel)
-
+        // ── Layout ───────────────────────────────────────────────────────────
+        view.addSubview(infoStack)
+        view.addSubview(slider)
+        view.addSubview(timeRow)
+        view.addSubview(playBtn)
         NSLayoutConstraint.activate([
-            container.heightAnchor.constraint(equalToConstant: 56),
-            playBtn.centerYAnchor.constraint(equalTo: container.centerYAnchor),
-            playBtn.leadingAnchor.constraint(equalTo: container.leadingAnchor, constant: 20),
-            durLabel.centerYAnchor.constraint(equalTo: container.centerYAnchor),
-            durLabel.leadingAnchor.constraint(equalTo: playBtn.trailingAnchor, constant: 12),
+            infoStack.centerXAnchor.constraint(equalTo: view.centerXAnchor),
+            infoStack.centerYAnchor.constraint(equalTo: view.centerYAnchor, constant: -80),
+
+            slider.topAnchor.constraint(equalTo: infoStack.bottomAnchor, constant: 28),
+            slider.leadingAnchor.constraint(equalTo: view.leadingAnchor, constant: 28),
+            slider.trailingAnchor.constraint(equalTo: view.trailingAnchor, constant: -28),
+
+            timeRow.topAnchor.constraint(equalTo: slider.bottomAnchor, constant: 4),
+            timeRow.leadingAnchor.constraint(equalTo: slider.leadingAnchor),
+            timeRow.trailingAnchor.constraint(equalTo: slider.trailingAnchor),
+
+            playBtn.topAnchor.constraint(equalTo: timeRow.bottomAnchor, constant: 20),
+            playBtn.centerXAnchor.constraint(equalTo: view.centerXAnchor),
+            playBtn.widthAnchor.constraint(equalToConstant: 56),
+            playBtn.heightAnchor.constraint(equalToConstant: 56),
         ])
 
-        return container
+        startTimeUpdates(player: player, duration: dur)
     }
 
-    @objc private func togglePlay(_ sender: NSButton) {
+    @objc private func togglePlayPause(_ sender: NSButton) {
         guard let player = avPlayer else { return }
         if player.timeControlStatus == .playing {
             player.pause()
-            sender.title = "▶  Play"
+            updatePlayButtonImage(isPlaying: false)
         } else {
-            // Rewind if finished
-            let dur = player.currentItem?.duration ?? .zero
-            if player.currentTime() >= dur { player.seek(to: .zero) }
+            if let item = player.currentItem, !item.duration.isIndefinite,
+               player.currentTime().seconds >= item.duration.seconds - 0.05 {
+                player.seek(to: .zero)
+            }
             player.play()
-            sender.title = "⏸  Pause"
+            updatePlayButtonImage(isPlaying: true)
+        }
+    }
+
+    @objc private func scrubDidChange(_ sender: NSSlider) {
+        guard let player = avPlayer,
+              let item = player.currentItem,
+              !item.duration.isIndefinite,
+              item.duration.seconds > 0 else { return }
+        let target = CMTime(seconds: sender.doubleValue * item.duration.seconds,
+                            preferredTimescale: 600)
+        player.seek(to: target, toleranceBefore: .zero, toleranceAfter: .zero)
+    }
+
+    private func updatePlayButtonImage(isPlaying: Bool) {
+        guard let btn = view.viewWithTag(100) as? NSButton else { return }
+        let cfg  = NSImage.SymbolConfiguration(pointSize: 52, weight: .regular)
+        let name = isPlaying ? "pause.circle.fill" : "play.circle.fill"
+        btn.image = (NSImage(systemSymbolName: name, accessibilityDescription: nil) ?? NSImage())
+            .withSymbolConfiguration(cfg) ?? NSImage()
+    }
+
+    private func startTimeUpdates(player: AVPlayer, duration: Double) {
+        timeUpdateTimer?.invalidate()
+        guard duration > 0 else { return }
+        timeUpdateTimer = Timer.scheduledTimer(withTimeInterval: 0.1, repeats: true) {
+            [weak self, weak player] _ in
+            guard let self, let player else { return }
+            guard let item = player.currentItem, !item.duration.isIndefinite else { return }
+            let current = player.currentTime().seconds
+            let total   = item.duration.seconds
+            if let sl = self.view.viewWithTag(203) as? NSSlider {
+                sl.doubleValue = total > 0 ? min(1, current / total) : 0
+            }
+            if let lbl = self.view.viewWithTag(201) as? NSTextField {
+                lbl.stringValue = self.fmtDur(max(0, current))
+            }
+            if total > 0 && current >= total - 0.05 {
+                self.updatePlayButtonImage(isPlaying: false)
+            }
         }
     }
 
