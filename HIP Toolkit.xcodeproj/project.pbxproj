@@ -45,11 +45,11 @@
 		EE6187352F829A8100EB6D27 /* lstate.c in Sources */ = {isa = PBXBuildFile; fileRef = EE6187032F829A8100EB6D27 /* lstate.c */; };
 		EE6187372F82A42800EB6D27 /* luadec in Resources */ = {isa = PBXBuildFile; fileRef = EE6187362F82A42800EB6D27 /* luadec */; };
 		EE61873F2F82B9D100EB6D27 /* Quartz.framework in Frameworks */ = {isa = PBXBuildFile; fileRef = EE61873E2F82B9D100EB6D27 /* Quartz.framework */; };
-		EE6188022F82B9D100EB6D27 /* QuickLookThumbnailing.framework in Frameworks */ = {isa = PBXBuildFile; fileRef = EE6188012F82B9D100EB6D27 /* QuickLookThumbnailing.framework */; };
 		EE61874B2F82B9D100EB6D27 /* HIPQuickLook.appex in Embed Foundation Extensions */ = {isa = PBXBuildFile; fileRef = EE61873C2F82B9D100EB6D27 /* HIPQuickLook.appex */; settings = {ATTRIBUTES = (RemoveHeadersOnCopy, ); }; };
 		EE61877F2F83721300EB6D27 /* Assets.xcassets in Resources */ = {isa = PBXBuildFile; fileRef = EE61877B2F83721300EB6D27 /* Assets.xcassets */; };
 		EE6187812F83721300EB6D27 /* ContentView.swift in Sources */ = {isa = PBXBuildFile; fileRef = EE61877C2F83721300EB6D27 /* ContentView.swift */; };
 		EE6187822F83721300EB6D27 /* hipApp.swift in Sources */ = {isa = PBXBuildFile; fileRef = EE61877D2F83721300EB6D27 /* hipApp.swift */; };
+		EE6188022F82B9D100EB6D27 /* QuickLookThumbnailing.framework in Frameworks */ = {isa = PBXBuildFile; fileRef = EE6188012F82B9D100EB6D27 /* QuickLookThumbnailing.framework */; };
 /* End PBXBuildFile section */
 
 /* Begin PBXContainerItemProxy section */
@@ -143,12 +143,12 @@
 		EE6187362F82A42800EB6D27 /* luadec */ = {isa = PBXFileReference; lastKnownFileType = "compiled.mach-o.executable"; path = luadec; sourceTree = "<group>"; };
 		EE61873C2F82B9D100EB6D27 /* HIPQuickLook.appex */ = {isa = PBXFileReference; explicitFileType = "wrapper.app-extension"; includeInIndex = 0; path = HIPQuickLook.appex; sourceTree = BUILT_PRODUCTS_DIR; };
 		EE61873E2F82B9D100EB6D27 /* Quartz.framework */ = {isa = PBXFileReference; lastKnownFileType = wrapper.framework; name = Quartz.framework; path = System/Library/Frameworks/Quartz.framework; sourceTree = SDKROOT; };
-		EE6188012F82B9D100EB6D27 /* QuickLookThumbnailing.framework */ = {isa = PBXFileReference; lastKnownFileType = wrapper.framework; name = QuickLookThumbnailing.framework; path = System/Library/Frameworks/QuickLookThumbnailing.framework; sourceTree = SDKROOT; };
 		EE61877B2F83721300EB6D27 /* Assets.xcassets */ = {isa = PBXFileReference; lastKnownFileType = folder.assetcatalog; path = Assets.xcassets; sourceTree = "<group>"; };
 		EE61877C2F83721300EB6D27 /* ContentView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ContentView.swift; sourceTree = "<group>"; };
 		EE61877D2F83721300EB6D27 /* hipApp.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = hipApp.swift; sourceTree = "<group>"; };
 		EE61877E2F83721300EB6D27 /* Info.plist */ = {isa = PBXFileReference; lastKnownFileType = text.plist.xml; path = Info.plist; sourceTree = "<group>"; };
 		EE61878C2F83723A00EB6D27 /* hip-Bridging-Header.h */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.h; path = "hip-Bridging-Header.h"; sourceTree = "<group>"; };
+		EE6188012F82B9D100EB6D27 /* QuickLookThumbnailing.framework */ = {isa = PBXFileReference; lastKnownFileType = wrapper.framework; name = QuickLookThumbnailing.framework; path = System/Library/Frameworks/QuickLookThumbnailing.framework; sourceTree = SDKROOT; };
 		EE6F8A272F7A4C38005E4E41 /* HIP Toolkit.app */ = {isa = PBXFileReference; explicitFileType = wrapper.application; includeInIndex = 0; path = "HIP Toolkit.app"; sourceTree = BUILT_PRODUCTS_DIR; };
 /* End PBXFileReference section */
 
@@ -180,6 +180,14 @@
 /* End PBXFrameworksBuildPhase section */
 
 /* Begin PBXGroup section */
+		EE5C69942F84DA2D007F90F4 /* Recovered References */ = {
+			isa = PBXGroup;
+			children = (
+				EE6188012F82B9D100EB6D27 /* QuickLookThumbnailing.framework */,
+			);
+			name = "Recovered References";
+			sourceTree = "<group>";
+		};
 		EE6186BC2F829A4600EB6D27 /* lua */ = {
 			isa = PBXGroup;
 			children = (
@@ -327,6 +335,7 @@
 				EE6187402F82B9D100EB6D27 /* HIPQuickLook */,
 				EE61873D2F82B9D100EB6D27 /* Frameworks */,
 				EE6F8A282F7A4C38005E4E41 /* Products */,
+				EE5C69942F84DA2D007F90F4 /* Recovered References */,
 			);
 			sourceTree = "<group>";
 		};

@@ -2,42 +2,25 @@
 <!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
 <plist version="1.0">
 <dict>
-	<!-- NSExtensions (array) lets a single .appex bundle register
-	     multiple extension points — here preview + thumbnail. -->
-	<key>NSExtensions</key>
-	<array>
-		<!-- 1. Quick Look preview (space-bar, column-view, full preview) -->
+	<!-- Single NSExtension for Quick Look preview.
+	     Thumbnail support requires a separate App Extension target. -->
+	<key>NSExtension</key>
+	<dict>
+		<key>NSExtensionAttributes</key>
 		<dict>
-			<key>NSExtensionAttributes</key>
-			<dict>
-				<key>QLSupportedContentTypes</key>
-				<array>
-					<string>com.herinteractive.cif</string>
-					<string>com.herinteractive.ciftree</string>
-					<string>com.herinteractive.his</string>
-				</array>
-				<key>QLSupportsSearchableItems</key>
-				<false/>
-			</dict>
-			<key>NSExtensionPointIdentifier</key>
-			<string>com.apple.quicklook.preview</string>
-			<key>NSExtensionPrincipalClass</key>
-			<string>$(PRODUCT_MODULE_NAME).PreviewViewController</string>
+			<key>QLSupportedContentTypes</key>
+			<array>
+				<string>com.herinteractive.cif</string>
+				<string>com.herinteractive.ciftree</string>
+				<string>com.herinteractive.his</string>
+			</array>
+			<key>QLSupportsSearchableItems</key>
+			<false/>
 		</dict>
-		<!-- 2. Quick Look thumbnail (Finder icon-view; PNG-bearing CIFs only) -->
-		<dict>
-			<key>NSExtensionAttributes</key>
-			<dict>
-				<key>QLSupportedContentTypes</key>
-				<array>
-					<string>com.herinteractive.cif</string>
-				</array>
-			</dict>
-			<key>NSExtensionPointIdentifier</key>
-			<string>com.apple.quicklook.thumbnail</string>
-			<key>NSExtensionPrincipalClass</key>
-			<string>$(PRODUCT_MODULE_NAME).ThumbnailProvider</string>
-		</dict>
-	</array>
+		<key>NSExtensionPointIdentifier</key>
+		<string>com.apple.quicklook.preview</string>
+		<key>NSExtensionPrincipalClass</key>
+		<string>$(PRODUCT_MODULE_NAME).PreviewViewController</string>
+	</dict>
 </dict>
 </plist>

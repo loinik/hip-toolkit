@@ -58,10 +58,10 @@ struct CIFHeader {
     let height:   UInt32
     let bodySize: UInt32
     var isPNG:    Bool { rawType == 2 }
-    var isOVL:    Bool { rawType == 4 }   // overlay PNG
+    var isOVL:    Bool { rawType == 4 }   // Sea of Darkness overlay PNG
     var isLua:    Bool { rawType == 3 }
     var isXSheet: Bool { rawType == 6 }
-    var isImage:  Bool { isPNG || isOVL }
+    var isImage:  Bool { isPNG || isOVL } // any PNG-body CIF type
 }
 
 func parseCIFHeader(_ data: Data) -> CIFHeader? {
@@ -134,7 +134,7 @@ private func parseCiftree(_ data: Data) -> [CiftreeEntry]? {
         var label = "CIF"
         if off+kCIFHeaderSize <= total,
            let hdr = parseCIFHeader(Data(data[off..<Swift.min(off+kCIFHeaderSize,total)])) {
-            if hdr.isPNG    { label = "PNG  \(hdr.width)×\(hdr.height)" }
+            if hdr.isImage   { label = "PNG  \(hdr.width)×\(hdr.height)\(hdr.isOVL ? " OVL" : "")" }
             else if hdr.isLua    { label = "Lua" }
             else if hdr.isXSheet { label = "XSheet" }
         }
@@ -166,12 +166,11 @@ final class PreviewViewController: NSViewController, QLPreviewingController {
         let ext  = url.pathExtension.lowercased()
         let name = url.deletingPathExtension().lastPathComponent.uppercased()
 
-        if ext == "his" || (ext == "cif" /* unlikely */ && data.hasPrefix([0x48,0x49,0x53])) {
+        if ext == "his" {
             buildHISPreview(data, url: url)
         } else if ext == "dat" {
             buildCiftreePreview(data, url: url)
         } else {
-            // CIF files — including _OVL (PNG), regular PNG, Lua, XSheet
             buildCIFPreview(data, name: name, url: url)
         }
         handler(nil)
@@ -186,16 +185,25 @@ final class PreviewViewController: NSViewController, QLPreviewingController {
         }
         let body = cifBody(data)
 
-        if hdr.isPNG {
-            // _OVL, _CNV, _BKG, or any PNG CIF — show as image
+        // ── Image: type 2 (PNG) and type 4 (OVL overlay) both contain PNG body ──
+        if hdr.isImage {
             if let img = NSImage(data: body) {
-                buildImageView(img, label: name.hasSuffix("_OVL") ? "\(name)  —  overlay PNG" : nil)
+                let label: String?
+                if hdr.isOVL {
+                    label = "\(name)  —  overlay PNG (type 4)"
+                } else if name.hasSuffix("_OVL") {
+                    label = "\(name)  —  overlay PNG"
+                } else {
+                    label = nil
+                }
+                buildImageView(img, label: label)
             } else {
                 buildError("PNG body could not be decoded")
             }
             return
         }
 
+        // ── Lua ──
         if hdr.isLua {
             let compiled = body.count >= 4 && body[0]==0x1B && body[1]==0x4C
             let lines: [InfoLine] = compiled
@@ -214,12 +222,13 @@ final class PreviewViewController: NSViewController, QLPreviewingController {
             return
         }
 
+        // ── XSheet ──
         if hdr.isXSheet {
             buildInfoCard(icon:"tablecells", color:.systemBlue, lines: [
                 .header("XSheet Sprite Data"),
-                .row("Size", fmt(body.count)),
+                .row("Body size", fmt(body.count)),
                 .divider,
-                .note("XSheet defines sprite frame coordinates. Open in hip to export.")
+                .note("XSheet defines sprite frame coordinates. Open in hip to inspect or export as JSON.")
             ])
             return
         }
@@ -230,7 +239,7 @@ final class PreviewViewController: NSViewController, QLPreviewingController {
         ])
     }
 
-    // MARK: - HIS audio preview (system-style player)
+    // MARK: - HIS audio preview
 
     private func buildHISPreview(_ data: Data, url: URL) {
         guard let meta = parseHIS(data) else { buildError("Not a valid HIS file"); return }
@@ -254,7 +263,6 @@ final class PreviewViewController: NSViewController, QLPreviewingController {
         view.subviews.forEach { $0.removeFromSuperview() }
         let dur = meta.durationSeconds
 
-        // ── Waveform icon ────────────────────────────────────────────────────
         let iconCfg = NSImage.SymbolConfiguration(pointSize: 64, weight: .light)
         let iconImg = (NSImage(systemSymbolName: "waveform.circle.fill",
                                accessibilityDescription: nil) ?? NSImage())
@@ -266,7 +274,6 @@ final class PreviewViewController: NSViewController, QLPreviewingController {
         iconView.widthAnchor.constraint(equalToConstant: 72).isActive = true
         iconView.heightAnchor.constraint(equalToConstant: 72).isActive = true
 
-        // ── Name + info stack ────────────────────────────────────────────────
         let nameLabel = makeLabel(name, size: 17, weight: .semibold)
         nameLabel.alignment = .center
         nameLabel.translatesAutoresizingMaskIntoConstraints = false
@@ -277,7 +284,6 @@ final class PreviewViewController: NSViewController, QLPreviewingController {
         infoStack.spacing = 10
         infoStack.translatesAutoresizingMaskIntoConstraints = false
 
-        // ── Scrub slider ─────────────────────────────────────────────────────
         let slider = NSSlider(value: 0, minValue: 0, maxValue: 1,
                               target: self, action: #selector(scrubDidChange(_:)))
         slider.controlSize = .regular
@@ -285,7 +291,6 @@ final class PreviewViewController: NSViewController, QLPreviewingController {
         slider.tag = 203
         slider.translatesAutoresizingMaskIntoConstraints = false
 
-        // ── Time labels ──────────────────────────────────────────────────────
         let currentTimeLbl = makeLabel("0:00", size: 11, weight: .regular,
                                        color: .secondaryLabelColor)
         currentTimeLbl.tag = 201
@@ -304,7 +309,6 @@ final class PreviewViewController: NSViewController, QLPreviewingController {
         timeRow.orientation = .horizontal
         timeRow.translatesAutoresizingMaskIntoConstraints = false
 
-        // ── Play/Pause button ────────────────────────────────────────────────
         let playBtn = NSButton(frame: .zero)
         playBtn.isBordered = false
         let playCfg = NSImage.SymbolConfiguration(pointSize: 52, weight: .regular)
@@ -318,7 +322,6 @@ final class PreviewViewController: NSViewController, QLPreviewingController {
         playBtn.tag = 100
         playBtn.translatesAutoresizingMaskIntoConstraints = false
 
-        // ── Layout ───────────────────────────────────────────────────────────
         view.addSubview(infoStack)
         view.addSubview(slider)
         view.addSubview(timeRow)
