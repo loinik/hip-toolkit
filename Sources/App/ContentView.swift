@@ -682,6 +682,7 @@ struct ResultRow: View {
 
 struct FilePreviewWindowView: View {
     let url: URL
+    @Environment(\.openWindow) private var openWindow
 
     var body: some View {
         Group {
@@ -705,9 +706,40 @@ struct FilePreviewWindowView: View {
         .toolbar {
             ToolbarItem(placement: .primaryAction) {
                 Button { NSWorkspace.shared.activateFileViewerSelecting([url]) } label: {
-                    Label("Reveal in Finder", systemImage: "folder")
+                    Label("Reveal in Finder", systemImage: "finder")
                 }
                 .help("Reveal in Finder")
+            }
+            ToolbarItem(placement: .confirmationAction) {
+                Button(action: openFileForPreview) {
+                    Label("Open…", systemImage: "folder")
+                }
+                .help("Open a new file for inspection (⌘O)")
+                .keyboardShortcut("o", modifiers: .command)
+            }
+        }
+    }
+
+    private func openFileForPreview() {
+        let panel = NSOpenPanel()
+        panel.canChooseFiles          = true
+        panel.canChooseDirectories    = false
+        panel.allowsMultipleSelection = true
+        panel.message                 = "Choose a file to inspect"
+        panel.allowedContentTypes     = [
+            UTType(filenameExtension: "cif")    ?? .data,
+            UTType(filenameExtension: "his")    ?? .data,
+            UTType(filenameExtension: "dat")    ?? .data,
+            UTType(filenameExtension: "lua")    ?? .data,
+            UTType(filenameExtension: "ogg")    ?? .data,
+            UTType(filenameExtension: "xsheet") ?? .data,
+            .png,
+            UTType(filenameExtension: "jpg")    ?? .data,
+            UTType(filenameExtension: "jpeg")   ?? .data,
+        ]
+        if panel.runModal() == .OK {
+            for url in panel.urls {
+                openWindow(id: "hip-toolkit.preview", value: url)
             }
         }
     }
