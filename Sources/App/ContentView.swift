@@ -251,13 +251,20 @@ final class AppViewModel: ObservableObject {
             return [fail(url.lastPathComponent, "Expected a folder")]
         }
         let fm = FileManager.default
-        guard let contents = try? fm.contentsOfDirectory(
-            at: url, includingPropertiesForKeys: nil) else {
-            return [fail(url.lastPathComponent, "Cannot read folder")]
+        guard let enumerator = fm.enumerator(
+            at: url,
+            includingPropertiesForKeys: [.isRegularFileKey],
+            options: [.skipsHiddenFiles, .skipsPackageDescendants]) else {
+            return [fail(url.lastPathComponent, "Cannot enumerate folder")]
+        }
+        var allFiles: [URL] = []
+        for case let fileURL as URL in enumerator {
+            guard (try? fileURL.resourceValues(forKeys: [.isRegularFileKey]).isRegularFile) == true else { continue }
+            allFiles.append(fileURL)
         }
         var cifEntries: [(name: String, data: Data)] = []
         var warnings:   [ConversionResult] = []
-        for file in contents.sorted(by: { $0.lastPathComponent < $1.lastPathComponent }) {
+        for file in allFiles.sorted(by: { $0.lastPathComponent < $1.lastPathComponent }) {
             let ext  = file.pathExtension.lowercased()
             let stem = file.deletingPathExtension().lastPathComponent
             let entryName = capitalizeNames ? stem.uppercased() : stem
@@ -340,7 +347,12 @@ final class AppViewModel: ObservableObject {
                 let outURL = outDir.appendingPathComponent(entry.name + ".cif")
                 try entry.cifData.write(to: outURL)
                 if extractCifContents {
-                    rows.append(contentsOf: decodeCIF(outURL))
+                    let decResults = decodeCIF(outURL)
+                    // Remove the intermediate .cif only when decoding produced at least one successful result
+                    if decResults.contains(where: { $0.icon == "checkmark.circle.fill" }) {
+                        try? FileManager.default.removeItem(at: outURL)
+                    }
+                    rows.append(contentsOf: decResults)
                 } else {
                     rows.append(ConversionResult(
                         icon: "doc.fill", tint: .green,

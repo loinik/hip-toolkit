@@ -60,6 +60,10 @@ std::vector<uint8_t> encodePNG(const std::filesystem::path& imagePath,
 /// Lua source or bytecode → CIF (type 3).
 std::vector<uint8_t> encodeLua(const std::filesystem::path& luaPath);
 
+/// Lua source or bytecode → CIF (type 3).
+/// If compileLua=true and the file is uncompiled source, compiles to bytecode first.
+std::vector<uint8_t> encodeLua(const std::filesystem::path& luaPath, bool compileLua);
+
 /// Raw XSheet body → CIF (type 6).
 /// Pass the raw XSHEET bytes (starting with "XSHEET HerInteractive\0").
 std::vector<uint8_t> encodeXSheet(const std::filesystem::path& xsheetPath);
@@ -71,6 +75,12 @@ std::vector<uint8_t> decode(const std::filesystem::path& cifPath);
 
 /// Returns the header without loading the body.
 CIFHeader readHeader(const std::filesystem::path& cifPath);
+
+/// Parse a CIF header from raw in-memory bytes (no filesystem access).
+CIFHeader readHeaderFromBytes(const std::vector<uint8_t>& cifBytes);
+
+/// Strip the CIF header from in-memory bytes and return the payload body.
+std::vector<uint8_t> decodeFromBytes(const std::vector<uint8_t>& cifBytes);
 
 // -- Utilities ---------------------------------------------------------------
 

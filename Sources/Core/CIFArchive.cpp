@@ -6,10 +6,17 @@
 
 #include "CIFArchive.hpp"
 
+#include <algorithm>
 #include <array>
+#include <cctype>
 #include <cstring>
 #include <fstream>
 #include <stdexcept>
+
+extern "C" {
+#include "lua.h"
+#include "lauxlib.h"
+}
 
 namespace CIF {
 
@@ -60,6 +67,13 @@ void readPNGDimensions(const std::vector<uint8_t>& data,
         throw std::runtime_error("CIF: not a PNG file");
     outW = readBE32(data.data() + 16);
     outH = readBE32(data.data() + 20);
+}
+
+static int luaDumpWriter(lua_State* /*L*/, const void* p, size_t sz, void* ud) {
+    auto* vec = static_cast<std::vector<uint8_t>*>(ud);
+    const auto* bytes = static_cast<const uint8_t*>(p);
+    vec->insert(vec->end(), bytes, bytes + sz);
+    return 0;
 }
 
 } // anonymous namespace
@@ -123,6 +137,29 @@ std::vector<uint8_t> encodeLua(const std::filesystem::path& luaPath) {
     return result;
 }
 
+std::vector<uint8_t> encodeLua(const std::filesystem::path& luaPath, bool compileLua) {
+    auto body = readFile(luaPath);
+
+    if (compileLua && !isCompiledLua(body)) {
+        lua_State* L = luaL_newstate();
+        std::vector<uint8_t> bytecode;
+        if (luaL_loadfile(L, luaPath.c_str()) == 0) {
+            lua_dump(L, luaDumpWriter, &bytecode);
+        }
+        lua_close(L);
+        if (!bytecode.empty()) {
+            body = std::move(bytecode);
+        }
+    }
+
+    auto header = buildHeader(FileType::Lua, 0, 0, static_cast<uint32_t>(body.size()));
+    std::vector<uint8_t> result;
+    result.reserve(HEADER_SIZE + body.size());
+    result.insert(result.end(), header.begin(), header.end());
+    result.insert(result.end(), body.begin(), body.end());
+    return result;
+}
+
 std::vector<uint8_t> encodeXSheet(const std::filesystem::path& xsheetPath) {
     auto body = readFile(xsheetPath);
 
@@ -149,7 +186,10 @@ std::vector<uint8_t> encodeXSheet(const std::filesystem::path& xsheetPath) {
 // -- Decoding ----------------------------------------------------------------
 
 CIFHeader readHeader(const std::filesystem::path& cifPath) {
-    auto data = readFile(cifPath);
+    return readHeaderFromBytes(readFile(cifPath));
+}
+
+CIFHeader readHeaderFromBytes(const std::vector<uint8_t>& data) {
     if (data.size() < HEADER_SIZE) throw std::runtime_error("CIF: file too small");
     if (std::memcmp(data.data(), MAGIC.data(), MAGIC.size()) != 0)
         throw std::runtime_error("CIF: invalid magic");
@@ -162,7 +202,10 @@ CIFHeader readHeader(const std::filesystem::path& cifPath) {
 }
 
 std::vector<uint8_t> decode(const std::filesystem::path& cifPath) {
-    auto data = readFile(cifPath);
+    return decodeFromBytes(readFile(cifPath));
+}
+
+std::vector<uint8_t> decodeFromBytes(const std::vector<uint8_t>& data) {
     if (data.size() < HEADER_SIZE) throw std::runtime_error("CIF: file too small");
     if (std::memcmp(data.data(), MAGIC.data(), MAGIC.size()) != 0)
         throw std::runtime_error("CIF: invalid magic");

@@ -19,6 +19,14 @@ NS_ASSUME_NONNULL_BEGIN
 @property (nonatomic, strong) NSData   *cifData;
 @end
 
+/// Options used when packing a folder into a Ciftree .dat archive.
+@interface HIPPackOptions : NSObject
+@property (nonatomic) BOOL capitalizeNames;  ///< Uppercase entry names (stem only)
+@property (nonatomic) BOOL compileLua;       ///< Compile .lua source to bytecode  (default YES)
+@property (nonatomic) BOOL useOVLForPNG;     ///< Encode PNG as CIF type 4 (OVL)
+- (instancetype)init;
+@end
+
 // MARK: - Main wrapper
 
 @interface HIPWrapper : NSObject
@@ -62,13 +70,25 @@ NS_ASSUME_NONNULL_BEGIN
 
 // ── Ciftree archive ──────────────────────────────────────────────────────
 
-/// Pack .cif files into a Ciftree .dat archive
+/// Pack a folder (recursively) into a Ciftree .dat archive.
+/// Handles .cif, .png, .lua, .xsheet; skips everything else.
++ (nullable NSData *)packFolderAtPath:(NSString *)folderPath
+                              options:(HIPPackOptions *)options
+                                error:(NSError **)error;
+
+/// Pack explicit .cif files into a Ciftree .dat archive (used by the converter UI).
 + (nullable NSData *)packCiftreeFromPaths:(NSArray<NSString *> *)paths
                                     error:(NSError **)error;
 
 /// Unpack a Ciftree .dat archive
 + (nullable NSArray<CiftreeFileEntry *> *)unpackCiftreeAtPath:(NSString *)path
                                                         error:(NSError **)error;
+
+/// Unpack a Ciftree .dat and write each entry to outDir, optionally decoding to native format.
++ (BOOL)unpackCiftreeAtPath:(NSString *)datPath
+              toFolderPath:(NSString *)outPath
+          extractContents:(BOOL)extractContents
+                    error:(NSError **)error;
 
 // ── HIS audio ───────────────────────────────────────────────────────────
 

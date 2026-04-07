@@ -3,6 +3,7 @@
 
 #include <algorithm>
 #include <array>
+#include <cctype>
 #include <cstring>
 #include <stdexcept>
 
@@ -19,7 +20,7 @@ static constexpr std::array<uint8_t, 28> CIFTREE_MAGIC = {
 
 static constexpr size_t MAGIC_SIZE = 28;
 static constexpr size_t NAME_BYTES = 64;  // used only when packing (our own archives)
-static constexpr size_t TAIL_PAD   = 4;
+static constexpr size_t TAIL_PAD   = 0;   // original tool writes no trailing bytes after indexesSize
 
 void writeLE32v(std::vector<uint8_t>& v, uint32_t value) {
     v.push_back(static_cast<uint8_t>(value));
@@ -45,65 +46,57 @@ std::string trimName(const uint8_t* field, size_t fieldLen) {
 } // anonymous namespace
 
 
-// ── Pack ──────────────────────────────────────────────────────────────────
-//
-// Offsets stored in the title table are ABSOLUTE from byte 0 of the file,
-// matching the original C# tool (indexes starts at 28 = MAGIC_SIZE).
+// ── Pack (entries overload) ───────────────────────────────────────────────
 
-std::vector<uint8_t> packCiftree(const std::vector<std::filesystem::path>& cifPaths) {
-    if (cifPaths.empty())
-        throw std::runtime_error("Ciftree: no files to pack");
+std::vector<uint8_t> packCiftree(const std::vector<CiftreeEntry>& entries) {
+    if (entries.empty())
+        throw std::runtime_error("Ciftree: no entries to pack");
 
-    struct FileRecord {
-        std::string          name;
-        uint32_t             absOffset;  // absolute offset from byte 0
-        std::vector<uint8_t> data;
-    };
-
-    std::vector<FileRecord> records;
-    records.reserve(cifPaths.size());
-    // First file starts right after the magic (byte 28)
-    uint32_t cursor = static_cast<uint32_t>(MAGIC_SIZE);
-
-    for (const auto& path : cifPaths) {
-        FileRecord rec;
-        rec.name      = path.stem().string();
-        rec.absOffset = cursor;
-        rec.data      = readFile(path);
-        cursor       += static_cast<uint32_t>(rec.data.size());
-        records.push_back(std::move(rec));
-    }
-
-    const uint32_t fileCount   = static_cast<uint32_t>(records.size());
+    const uint32_t fileCount   = static_cast<uint32_t>(entries.size());
     const uint32_t entrySize   = static_cast<uint32_t>(NAME_BYTES + 4);
     const uint32_t titlesBytes = fileCount * entrySize;
     const uint32_t indexesSize = titlesBytes + 4;
+
+    // Compute absolute offsets
+    std::vector<uint32_t> offsets;
+    offsets.reserve(fileCount);
+    uint32_t cursor = static_cast<uint32_t>(MAGIC_SIZE);
+    for (const auto& e : entries) {
+        offsets.push_back(cursor);
+        cursor += static_cast<uint32_t>(e.cifData.size());
+    }
 
     std::vector<uint8_t> out;
     out.reserve(MAGIC_SIZE + (cursor - MAGIC_SIZE) + 4 + titlesBytes + 4 + TAIL_PAD);
 
     out.insert(out.end(), CIFTREE_MAGIC.begin(), CIFTREE_MAGIC.end());
-
-    for (const auto& rec : records)
-        out.insert(out.end(), rec.data.begin(), rec.data.end());
+    for (const auto& e : entries)
+        out.insert(out.end(), e.cifData.begin(), e.cifData.end());
 
     writeLE32v(out, fileCount);
-
-    for (const auto& rec : records) {
-        // Name: zero-padded to NAME_BYTES
+    for (size_t i = 0; i < entries.size(); ++i) {
         std::array<uint8_t, NAME_BYTES> field{};
-        size_t copyLen = std::min(rec.name.size(), NAME_BYTES);
-        std::memcpy(field.data(), rec.name.data(), copyLen);
+        size_t copyLen = std::min(entries[i].name.size(), NAME_BYTES);
+        std::memcpy(field.data(), entries[i].name.data(), copyLen);
         out.insert(out.end(), field.begin(), field.end());
-        // Offset: ABSOLUTE from byte 0
-        writeLE32v(out, rec.absOffset);
+        writeLE32v(out, offsets[i]);
     }
-
     writeLE32v(out, indexesSize);
-
     for (size_t i = 0; i < TAIL_PAD; ++i) out.push_back(0x00);
-
     return out;
+}
+
+// ── Pack (paths overload) ─────────────────────────────────────────────────
+
+std::vector<uint8_t> packCiftree(const std::vector<std::filesystem::path>& cifPaths) {
+    if (cifPaths.empty())
+        throw std::runtime_error("Ciftree: no files to pack");
+
+    std::vector<CiftreeEntry> entries;
+    entries.reserve(cifPaths.size());
+    for (const auto& path : cifPaths)
+        entries.push_back({path.stem().string(), readFile(path)});
+    return packCiftree(entries);
 }
 
 
@@ -144,8 +137,9 @@ std::vector<CiftreeEntry> unpackCiftree(const std::filesystem::path& datPath) {
         return true;
     };
 
-    if      (tryAt(total - 8)) { trailingZeros = 4; }
-    else if (tryAt(total - 4)) { trailingZeros = 0; }
+    // Try TAIL_PAD=0 first (matches original tool output), then TAIL_PAD=4 (older tool versions).
+    if      (tryAt(total - 4)) { trailingZeros = 0; }
+    else if (tryAt(total - 8)) { trailingZeros = 4; }
     else
         throw std::runtime_error("Ciftree: cannot locate index section");
 
@@ -226,6 +220,103 @@ std::vector<CiftreeEntry> unpackCiftree(const std::filesystem::path& datPath) {
     }
 
     return result;
+}
+
+
+// ── packFolder ────────────────────────────────────────────────────────────
+
+std::vector<uint8_t> packFolder(const std::filesystem::path& folderPath,
+                                 const PackOptions& opts) {
+    namespace fs = std::filesystem;
+
+    std::vector<fs::path> filePaths;
+    for (const auto& entry : fs::recursive_directory_iterator(
+            folderPath, fs::directory_options::skip_permission_denied)) {
+        if (entry.is_regular_file())
+            filePaths.push_back(entry.path());
+    }
+    std::sort(filePaths.begin(), filePaths.end());
+
+    std::vector<CiftreeEntry> entries;
+    entries.reserve(filePaths.size());
+
+    for (const auto& path : filePaths) {
+        std::string rawExt = path.extension().string();
+        std::string ext;
+        ext.reserve(rawExt.size());
+        for (unsigned char c : rawExt)
+            ext.push_back(static_cast<char>(std::tolower(c)));
+
+        std::string stem = path.stem().string();
+        if (opts.capitalizeNames) {
+            std::string up;
+            up.reserve(stem.size());
+            for (unsigned char c : stem)
+                up.push_back(static_cast<char>(std::toupper(c)));
+            stem = std::move(up);
+        }
+
+        try {
+            std::vector<uint8_t> cifData;
+            if (ext == ".cif") {
+                cifData = readFile(path);
+            } else if (ext == ".png") {
+                FileType ft = opts.useOVLForPNG ? FileType::OVL : FileType::PNG;
+                cifData = encodePNG(path, ft);
+            } else if (ext == ".lua") {
+                cifData = encodeLua(path, opts.compileLua);
+            } else if (ext == ".xsheet") {
+                cifData = encodeXSheet(path);
+            } else {
+                continue;  // unsupported — skip silently
+            }
+            entries.push_back({std::move(stem), std::move(cifData)});
+        } catch (const std::exception&) {
+            continue;  // encoding failed — skip silently
+        }
+    }
+
+    return packCiftree(entries);
+}
+
+
+// ── unpackToFolder ────────────────────────────────────────────────────────
+
+void unpackToFolder(const std::filesystem::path& datPath,
+                    const std::filesystem::path& outDir,
+                    const UnpackOptions& opts) {
+    auto entries = unpackCiftree(datPath);
+    std::filesystem::create_directories(outDir);
+
+    for (const auto& entry : entries) {
+        if (!opts.extractContents) {
+            writeFile(outDir / (entry.name + ".cif"), entry.cifData);
+            continue;
+        }
+
+        if (entry.cifData.size() < HEADER_SIZE) {
+            writeFile(outDir / (entry.name + ".cif"), entry.cifData);
+            continue;
+        }
+
+        std::string ext = ".cif";
+        try {
+            auto hdr = readHeaderFromBytes(entry.cifData);
+            switch (hdr.type) {
+                case FileType::PNG:
+                case FileType::OVL:    ext = ".png";    break;
+                case FileType::Lua:    ext = ".lua";    break;
+                case FileType::XSheet: ext = ".xsheet"; break;
+                default:               ext = ".cif";    break;
+            }
+        } catch (...) { ext = ".cif"; }
+
+        if (ext == ".cif") {
+            writeFile(outDir / (entry.name + ".cif"), entry.cifData);
+        } else {
+            writeFile(outDir / (entry.name + ext), decodeFromBytes(entry.cifData));
+        }
+    }
 }
 
 } // namespace CIF

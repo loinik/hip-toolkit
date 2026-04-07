@@ -6,14 +6,6 @@
 #include "CiftreeArchive.hpp"
 #include "HISArchive.hpp"
 
-
-// MARK: - Lua Headers
-extern "C" {
-    #include "lua.h"
-    #include "lualib.h"
-    #include "lauxlib.h"
-}
-
 // MARK: - Helpers
 
 static NSError *hipError(NSString *msg) {
@@ -22,14 +14,6 @@ static NSError *hipError(NSString *msg) {
 }
 static NSData *vecToData(const std::vector<uint8_t>& v) {
     return [NSData dataWithBytes:v.data() length:v.size()];
-}
-
-// MARK: - Lua Dump Writer
-
-static int luaBytecodeWriter(lua_State *L, const void *p, size_t size, void *u) {
-    NSMutableData *data = (__bridge NSMutableData *)u;
-    [data appendBytes:p length:size];
-    return 0;
 }
 
 // MARK: - CIFFileInfo
@@ -44,6 +28,16 @@ static int luaBytecodeWriter(lua_State *L, const void *p, size_t size, void *u) 
 // MARK: - CiftreeFileEntry
 
 @implementation CiftreeFileEntry
+@end
+
+// MARK: - HIPPackOptions
+
+@implementation HIPPackOptions
+- (instancetype)init {
+    self = [super init];
+    if (self) { _compileLua = YES; }
+    return self;
+}
 @end
 
 // MARK: - HIPWrapper
@@ -122,31 +116,9 @@ static int luaBytecodeWriter(lua_State *L, const void *p, size_t size, void *u) 
                           compileLua:(BOOL)compileLua
                                error:(NSError **)error {
     try {
+        // Lua compilation is handled by the C++ core (CIFArchive.cpp)
         std::filesystem::path fsp(path.fileSystemRepresentation);
-        auto body = CIF::readFile(fsp);
-
-        if (!CIF::isCompiledLua(body) && compileLua) {
-            lua_State *L = luaL_newstate();
-            
-            if (luaL_loadfile(L, path.fileSystemRepresentation) == 0) {
-                NSMutableData *bytecodeData = [NSMutableData data];
-                lua_dump(L, luaBytecodeWriter, (__bridge void *)bytecodeData);
-                
-                NSString *tmpOut = [NSTemporaryDirectory() stringByAppendingPathComponent:
-                                    [[[NSUUID UUID] UUIDString] stringByAppendingPathExtension:@"luac"]];
-                
-                if ([bytecodeData writeToFile:tmpOut atomically:YES]) {
-                    fsp = std::filesystem::path(tmpOut.fileSystemRepresentation);
-                }
-            } else {
-                const char *errMsg = lua_tostring(L, -1);
-                NSLog(@"Lua compilation failed for %@: %s", path, errMsg);
-            }
-            
-            lua_close(L);
-        }
-
-        return vecToData(CIF::encodeLua(fsp));
+        return vecToData(CIF::encodeLua(fsp, compileLua));
 
     } catch (const std::exception &e) {
         if (error) *error = hipError(@(e.what()));
@@ -300,6 +272,21 @@ static int luaBytecodeWriter(lua_State *L, const void *p, size_t size, void *u) 
 
 // ── Ciftree ──────────────────────────────────────────────────────────────
 
++ (nullable NSData *)packFolderAtPath:(NSString *)folderPath
+                              options:(HIPPackOptions *)options
+                                error:(NSError **)error {
+    try {
+        CIF::PackOptions opts;
+        opts.capitalizeNames = options.capitalizeNames;
+        opts.compileLua      = options.compileLua;
+        opts.useOVLForPNG    = options.useOVLForPNG;
+        return vecToData(CIF::packFolder(folderPath.fileSystemRepresentation, opts));
+    } catch (const std::exception &e) {
+        if (error) *error = hipError(@(e.what()));
+        return nil;
+    }
+}
+
 + (nullable NSData *)packCiftreeFromPaths:(NSArray<NSString *> *)paths
                                     error:(NSError **)error {
     try {
@@ -329,6 +316,22 @@ static int luaBytecodeWriter(lua_State *L, const void *p, size_t size, void *u) 
     } catch (const std::exception &e) {
         if (error) *error = hipError(@(e.what()));
         return nil;
+    }
+}
+
++ (BOOL)unpackCiftreeAtPath:(NSString *)datPath
+               toFolderPath:(NSString *)outPath
+           extractContents:(BOOL)extractContents
+                     error:(NSError **)error {
+    try {
+        CIF::UnpackOptions opts;
+        opts.extractContents = extractContents;
+        CIF::unpackToFolder(datPath.fileSystemRepresentation,
+                            outPath.fileSystemRepresentation, opts);
+        return YES;
+    } catch (const std::exception &e) {
+        if (error) *error = hipError(@(e.what()));
+        return NO;
     }
 }
 
