@@ -1,4 +1,4 @@
-# HER Interactive Lua Scripting Engine Reference
+# HeR Interactive Lua Scripting Engine Reference
 
 This document is a comprehensive guide to the Lua-based scripting system used in HER Interactive's Nancy Drew adventure games. The engine uses a custom runtime where game logic, UI, puzzles, conversations, and navigation are all defined declaratively in Lua scripts processed by an internal **Assets Renderer** (`AR`).
 
@@ -113,7 +113,7 @@ After the summary, the file declares AR nodes. The engine loads and processes th
 1. Disabling UI overlays (`UIFrame`)
 2. Initializing managers (messages, photos, themes)
 3. Setting default options from persistent storage
-4. Playing the logo sequence (HER Interactive → partner logos → Nancy Drew logo)
+4. Playing the logo sequence (HeR Interactive → partner logos → Nancy Drew logo)
 5. Fading into the main menu background
 6. Transitioning to `TitleMenu_SC`
 
@@ -1340,4 +1340,4 @@ This demonstrates how scenes combine all node types into a cohesive interactive 
 
 ---
 
-*This guide was reverse-engineered from decompiled Lua scripts of HER Interactive's game engine. Names, patterns, and behaviors are inferred from code analysis.*
+*This guide was reverse-engineered from decompiled Lua scripts of HeR Interactive's game engine. Names, patterns, and behaviors are inferred from code analysis.*
