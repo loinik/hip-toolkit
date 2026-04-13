@@ -1,6 +1,6 @@
 # HeR Interactive Lua Scripting Engine Reference
 
-This document is a comprehensive guide to the Lua-based scripting system used in HER Interactive's Nancy Drew adventure games. The engine uses a custom runtime where game logic, UI, puzzles, conversations, and navigation are all defined declaratively in Lua scripts processed by an internal **Assets Renderer** (`AR`).
+This document is a comprehensive guide to the Lua-based scripting system used in HeR Interactive's Nancy Drew adventure games. The engine uses a custom runtime where game logic, UI, puzzles, conversations, and navigation are all defined declaratively in Lua scripts processed by an internal **Assets Renderer** (`AR`).
 
 > **Game analyzed:** *Nancy Drew: Ghost of Thornton Hall* (GTH), internal resolution 1024×768.
 
