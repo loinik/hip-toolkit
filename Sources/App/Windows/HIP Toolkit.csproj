@@ -1,0 +1,49 @@
+<Project Sdk="Microsoft.NET.Sdk">
+  <PropertyGroup>
+    <OutputType>WinExe</OutputType>
+    <TargetFramework>net8.0-windows10.0.19041.0</TargetFramework>
+    <TargetPlatformMinVersion>10.0.17763.0</TargetPlatformMinVersion>
+    <RootNamespace>HIPToolkit</RootNamespace>
+    <ApplicationManifest>app.manifest</ApplicationManifest>
+    <Platforms>x86;x64;ARM64</Platforms>
+    <RuntimeIdentifiers>win-x86;win-x64;win-arm64</RuntimeIdentifiers>
+    <UseWinUI>true</UseWinUI>
+    <Nullable>enable</Nullable>
+    <ImplicitUsings>enable</ImplicitUsings>
+    <WindowsPackageType>None</WindowsPackageType>
+    <WindowsAppSDKSelfContained>true</WindowsAppSDKSelfContained>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <PackageReference Include="Microsoft.WindowsAppSDK" Version="1.6.*" />
+    <PackageReference Include="Microsoft.Windows.SDK.BuildTools" Version="10.0.*" />
+  </ItemGroup>
+
+  <!-- Map C# platform names to C++ MSBuild platform folder names (x86 -> Win32) -->
+  <PropertyGroup>
+    <_NativePlatform Condition="'$(Platform)'=='x86'">Win32</_NativePlatform>
+    <_NativePlatform Condition="'$(Platform)'!='x86'">$(Platform)</_NativePlatform>
+  </PropertyGroup>
+
+  <!-- Path to the native bridge DLL produced by the HIP.Bridge (C++) project. -->
+  <PropertyGroup>
+    <HIPBridgeDll>$(SolutionDir)build\$(_NativePlatform)\$(Configuration)\HIP.Bridge\HIP.Bridge.dll</HIPBridgeDll>
+  </PropertyGroup>
+
+  <!--
+    Copy the native bridge DLL next to the C# executable.
+    The HIP.Bridge (C++) project is ordered before this one via the build
+    dependency declared in HIP Toolkit.sln, so by the time Build finishes the
+    DLL exists. We copy into $(OutDir) — the real runtime folder, including the
+    RID subfolder (e.g. win-x64) that WinUI 3 self-contained apps run from.
+    If the DLL is missing we fail the build loudly instead of letting the app
+    start and crash later with "Unable to load DLL 'HIP.Bridge'" (0x8007007E).
+  -->
+  <Target Name="CopyNativeBridge" AfterTargets="Build">
+    <Error Condition="!Exists('$(HIPBridgeDll)')"
+           Text="HIP.Bridge.dll was not found at '$(HIPBridgeDll)'. The native HIP.Bridge (C++) project must be built for $(Platform)/$(Configuration) before the app. Building the whole solution does this automatically via the build dependency declared in HIP Toolkit.sln." />
+    <Copy SourceFiles="$(HIPBridgeDll)"
+          DestinationFolder="$(OutDir)"
+          SkipUnchangedFiles="true" />
+  </Target>
+</Project>

@@ -142,8 +142,12 @@ std::vector<uint8_t> encodeLua(const std::filesystem::path& luaPath, bool compil
 
     if (compileLua && !isCompiledLua(body)) {
         lua_State* L = luaL_newstate();
+        if (!L) {
+            throw std::runtime_error("CIF: failed to create Lua state");
+        }
         std::vector<uint8_t> bytecode;
-        if (luaL_loadfile(L, luaPath.c_str()) == 0) {
+        const std::string luaPathNarrow = luaPath.string();
+        if (luaL_loadfile(L, luaPathNarrow.c_str()) == 0) {
             lua_dump(L, luaDumpWriter, &bytecode);
         }
         lua_close(L);

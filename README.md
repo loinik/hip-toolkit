@@ -33,14 +33,33 @@ A development kit for extracting, compiling, and decompiling game archives from 
 
 - **macOS 26 (Tahoe)** or later
 - Xcode 26+ for building
+- Windows 10/11 with Visual Studio 2022 for the native Windows solution
+- Windows App Runtime **1.6 or newer** for the WinUI 3 app
+    - Example: **1.8.6** is compatible
+    - Download: https://learn.microsoft.com/en-us/windows/apps/windows-app-sdk/downloads
 
 ## Building
+
+### macOS
 
 ```bash
 git clone https://github.com/loinik/hip-toolkit.git
 cd hip-toolkit
 xcodebuild -scheme hip -configuration Release
 ```
+
+### Windows
+
+Open `HIP Toolkit.sln` in Visual Studio 2022 and build for `Debug|x64` or `Release|x64`.
+
+If launching the app shows a dialog about missing Windows App Runtime (for example, version 1.6), install a compatible runtime from:
+
+- https://learn.microsoft.com/en-us/windows/apps/windows-app-sdk/downloads
+
+The solution references the shared C++ sources in-place:
+
+- `Sources/Platform/Windows/HIP.Core` — static library wrapping the cross-platform C++ engine.
+- `Sources/App/Windows/` — WinUI 3 / C# + XAML GUI application (planned).
 
 ## Usage
 
@@ -77,22 +96,24 @@ HIPWrapper.autoDecompileLua(in: archiveDirectory)
 
 ```
 Sources/
-├── Core/              # Cross-platform C++ engine
+├── Core/                # Cross-platform C++ engine
 │   ├── CIFArchive.hpp/.cpp
 │   ├── CiftreeArchive.hpp/.cpp
 │   └── HISArchive.hpp/.cpp
 │
 ├── Platform/
-│   └── macOS/
-│       ├── HIPWrapper.h/.mm    # Objective-C++ wrapper
-│       └── hip-Bridging-Header.h
+│   ├── macOS/
+│   │   ├── HIPWrapper.h/.mm    # Objective-C++ wrapper
+│   │   └── hip-Bridging-Header.h
+│   └── Windows/
+│       ├── HIP.Core.vcxproj    # C++ static library (VS 2022)
+│       └── HIP.Common.props    # Shared MSBuild properties
 │
-├── App/                # SwiftUI Interface
-│   ├── hipApp.swift
-│   ├── ContentView.swift
-│   └── Info.plist
+├── App/
+│   ├── macOS/           # SwiftUI macOS interface
+│   └── Windows/         # C# + XAML (WinUI 3) GUI application
 │
-└── Vendor/
+Vendor/
     ├── lua/           # Lua 5.1.5 source (compilation)
     ├── luadec/        # Lua decompiler binary
     └── stb_vorbis.c   # Audio decoding
@@ -105,6 +126,8 @@ Sources/
 - **Swift UI** — Modern native interface
 
 This design allows easy porting to Windows/Linux by implementing platform-specific wrappers while keeping the core logic unchanged.
+
+On Windows, `HIP.Core` is built as a C++ static library. The C# GUI in `Sources/App/Windows` will consume it via a native wrapper DLL with P/Invoke.
 
 ## Supported File Types
 

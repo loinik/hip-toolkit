@@ -1,0 +1,13 @@
+.DS_Store
+.vs/
+build/
+build-int/
+Debug/
+Release/
+x64/
+x86/
+*.VC.db
+*.VC.opendb
+*.suo
+*.user
+
