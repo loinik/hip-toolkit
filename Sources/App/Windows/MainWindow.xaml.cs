@@ -33,9 +33,9 @@ public sealed partial class MainWindow : Window
 
     private void Category_Click(object sender, RoutedEventArgs e)
     {
-        if (RadioCIF.IsChecked == true)      _vm.Category = AppCategory.CIF;
+        if (RadioCIF.IsChecked == true) _vm.Category = AppCategory.CIF;
         else if (RadioCiftree.IsChecked == true) _vm.Category = AppCategory.Ciftree;
-        else if (RadioHIS.IsChecked == true)     _vm.Category = AppCategory.HIS;
+        else if (RadioHIS.IsChecked == true) _vm.Category = AppCategory.HIS;
         UpdateUI();
     }
 
@@ -49,11 +49,11 @@ public sealed partial class MainWindow : Window
     private void Setting_Changed(object sender, RoutedEventArgs e)
     {
         if (_vm is null) return;
-        _vm.CompileLua         = ChkCompileLua.IsChecked == true;
-        _vm.UseType4PNG        = ChkType4OVL.IsChecked == true;
-        _vm.CapitalizeNames    = ChkCapitalizeNames.IsChecked == true;
+        _vm.CompileLua = ChkCompileLua.IsChecked == true;
+        _vm.UseType4PNG = ChkType4OVL.IsChecked == true;
+        _vm.CapitalizeNames = ChkCapitalizeNames.IsChecked == true;
         _vm.ExtractCifContents = ChkExtractContents.IsChecked == true;
-        _vm.DecompileLua       = ChkDecompileLua.IsChecked == true;
+        _vm.DecompileLua = ChkDecompileLua.IsChecked == true;
     }
 
     // ── Drop zone ────────────────────────────────────────────────────────
@@ -132,13 +132,7 @@ public sealed partial class MainWindow : Window
 
         var file = await picker.PickSingleFileAsync();
         if (file != null)
-        {
-            // Auto-detect mode and convert
-            _vm.AutoSwitchMode(file.Path);
-            SyncRadioButtons();
-            UpdateUI();
-            await RunConversion([file.Path]);
-        }
+            PreviewWindow.Show(file.Path);
     }
 
     // ── File picker ──────────────────────────────────────────────────────
@@ -226,10 +220,10 @@ public sealed partial class MainWindow : Window
 
     private void SyncRadioButtons()
     {
-        RadioCIF.IsChecked      = _vm.Category == AppCategory.CIF;
-        RadioCiftree.IsChecked  = _vm.Category == AppCategory.Ciftree;
-        RadioHIS.IsChecked      = _vm.Category == AppCategory.HIS;
-        RadioForward.IsChecked  = _vm.Direction == AppDirection.Forward;
+        RadioCIF.IsChecked = _vm.Category == AppCategory.CIF;
+        RadioCiftree.IsChecked = _vm.Category == AppCategory.Ciftree;
+        RadioHIS.IsChecked = _vm.Category == AppCategory.HIS;
+        RadioForward.IsChecked = _vm.Direction == AppDirection.Forward;
         RadioBackward.IsChecked = _vm.Direction == AppDirection.Backward;
     }
 
@@ -240,16 +234,16 @@ public sealed partial class MainWindow : Window
         // Direction labels
         RadioForward.Content = _vm.Category switch
         {
-            AppCategory.CIF     => "File → CIF",
+            AppCategory.CIF => "File → CIF",
             AppCategory.Ciftree => "Pack",
-            AppCategory.HIS     => "OGG → HIS",
+            AppCategory.HIS => "OGG → HIS",
             _ => "▶"
         };
         RadioBackward.Content = _vm.Category switch
         {
-            AppCategory.CIF     => "CIF → File",
+            AppCategory.CIF => "CIF → File",
             AppCategory.Ciftree => "Unpack",
-            AppCategory.HIS     => "HIS → OGG",
+            AppCategory.HIS => "HIS → OGG",
             _ => "◀"
         };
 
@@ -268,36 +262,35 @@ public sealed partial class MainWindow : Window
         // Drop zone hints
         (DropTitle.Text, DropSubtitle.Text, BtnChoose.Content) = mode switch
         {
-            AppMode.CifEncode     => ("Drag PNG, JPEG, Lua, XSheet or XSheet JSON files",
+            AppMode.CifEncode => ("Drag PNG, JPEG, Lua, XSheet or XSheet JSON files",
                                       "PNG/JPEG → CIF image · Lua → CIF script · XSheet / JSON → CIF sprite",
                                       "Choose Files…"),
-            AppMode.CifDecode     => ("Drag .cif files",
+            AppMode.CifDecode => ("Drag .cif files",
                                       "CIF → PNG / .lua / .xsheet — saved next to original",
                                       "Choose Files…"),
-            AppMode.CiftreePack   => ("Drag a folder",
+            AppMode.CiftreePack => ("Drag a folder",
                                       "All supported files in the folder are converted and packed into .dat",
                                       "Choose Folder…"),
             AppMode.CiftreeUnpack => ("Drag a Ciftree .dat archive",
                                       "Each embedded .cif is extracted to a folder next to the archive",
                                       "Choose Archive…"),
-            AppMode.HisEncode     => ("Drag .ogg files",
+            AppMode.HisEncode => ("Drag .ogg files",
                                       "OGG Vorbis → HIS (HeR Interactive Sound)",
                                       "Choose Files…"),
-            AppMode.HisDecode     => ("Drag .his files",
+            AppMode.HisDecode => ("Drag .his files",
                                       "HIS → OGG Vorbis — saved next to original",
                                       "Choose Files…"),
             _ => ("Drag files here", "", "Choose…")
         };
 
-        // Drop icon
         DropIcon.Glyph = mode switch
         {
-            AppMode.CifEncode     => "\uE896",   // Download
-            AppMode.CifDecode     => "\uE898",   // Upload
-            AppMode.CiftreePack   => "\uE7B8",   // Package
-            AppMode.CiftreeUnpack => "\uE7B8",
-            AppMode.HisEncode     => "\uE8D6",   // Volume
-            AppMode.HisDecode     => "\uE767",   // Music note
+            AppMode.CifEncode => "\uE896",   // Download
+            AppMode.CifDecode => "\uE898",   // Upload
+            AppMode.CiftreePack => "\uE7B8",   // Package
+            AppMode.CiftreeUnpack => "\uE7B8",   // Package
+            AppMode.HisEncode => "\uF61F",   // NoiseCancelation
+            AppMode.HisDecode => "\uF620",   // NoiseCancelationOff
             _ => "\uE896"
         };
     }

@@ -106,9 +106,17 @@
                       IsChecked="True"
                       ToolTipService.ToolTip="Automatically decode each CIF entry when unpacking"
                       Checked="Setting_Changed" Unchecked="Setting_Changed" />
-            <CheckBox x:Name="ChkDecompileLua" Content="Decompile Lua" Visibility="Collapsed"
+            <CheckBox x:Name="ChkDecompileLua" Visibility="Collapsed"
                       ToolTipService.ToolTip="Run luadec on extracted Lua bytecode to produce readable source"
-                      Checked="Setting_Changed" Unchecked="Setting_Changed" />
+                      Checked="Setting_Changed" Unchecked="Setting_Changed">
+                <StackPanel Orientation="Horizontal" Spacing="6">
+                    <TextBlock Text="Decompile Lua" VerticalAlignment="Center"/>
+                    <Border Background="{ThemeResource SystemAccentColor}" CornerRadius="3"
+                            Padding="4,1,4,1" VerticalAlignment="Center">
+                        <TextBlock Text="β" FontSize="10" Foreground="White"/>
+                    </Border>
+                </StackPanel>
+            </CheckBox>
         </StackPanel>
 
         <!-- ═══ Row 3: Results history ═══ -->

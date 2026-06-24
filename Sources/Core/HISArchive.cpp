@@ -139,10 +139,14 @@ bool parseWAV(const std::vector<uint8_t>& d, WavInfo& out) {
 }
 
 void writeLE32v(std::vector<uint8_t>& v, uint32_t x) {
-    v.push_back(x);v.push_back(x>>8);v.push_back(x>>16);v.push_back(x>>24);
+    v.push_back(static_cast<uint8_t>(x));
+    v.push_back(static_cast<uint8_t>(x >> 8));
+    v.push_back(static_cast<uint8_t>(x >> 16));
+    v.push_back(static_cast<uint8_t>(x >> 24));
 }
 void writeLE16v(std::vector<uint8_t>& v, uint16_t x) {
-    v.push_back(x);v.push_back(x>>8);
+    v.push_back(static_cast<uint8_t>(x));
+    v.push_back(static_cast<uint8_t>(x >> 8));
 }
 
 std::vector<uint8_t> buildHISHeader(uint16_t channels, uint32_t sampleRate,
@@ -160,9 +164,9 @@ std::vector<uint8_t> buildHISHeader(uint16_t channels, uint32_t sampleRate,
     // Sample rate
     writeLE32v(h, sampleRate);
     // Byte rate
-    writeLE32v(h, sampleRate * channels * (bitsPerSample / 8));
+    writeLE32v(h, sampleRate * static_cast<uint32_t>(channels) * (bitsPerSample / 8u));
     // Block align
-    writeLE16v(h, channels * (bitsPerSample / 8));
+    writeLE16v(h, static_cast<uint16_t>(channels * (bitsPerSample / 8u)));
     // Bits per sample
     writeLE16v(h, bitsPerSample);
     // PCM data size

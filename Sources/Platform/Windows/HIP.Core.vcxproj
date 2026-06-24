@@ -171,7 +171,10 @@
     <ClCompile Include="..\..\Core\CIFArchive.cpp" />
     <ClCompile Include="..\..\Core\CiftreeArchive.cpp" />
     <ClCompile Include="..\..\Core\HISArchive.cpp" />
-    <ClCompile Include="..\..\..\Vendor\lua\*.c" Exclude="..\..\..\Vendor\lua\print.c" />
+    <ClCompile Include="..\..\..\Vendor\lua\*.c" Exclude="..\..\..\Vendor\lua\print.c">
+      <!-- Suppress warnings in Lua C source that are noise for third-party code -->
+      <DisableSpecificWarnings>4324;4334;4244;4267;4310;4701;4703</DisableSpecificWarnings>
+    </ClCompile>
   </ItemGroup>
 
   <ItemGroup>

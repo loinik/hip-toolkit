@@ -1,7 +1,6 @@
 // HIPBridge.cpp — implementation of the flat C API
 // Links against HIP.Core (static library).
-
-#define HIP_BRIDGE_EXPORTS
+// HIP_BRIDGE_EXPORTS is defined via the project preprocessor settings.
 
 #include "HIPBridge.h"
 #include "CIFArchive.hpp"
@@ -20,7 +19,6 @@ namespace fs = std::filesystem;
 
 static thread_local std::string g_lastError;
 
-static void setError(const char* msg) { g_lastError = msg; }
 static void setError(const std::string& msg) { g_lastError = msg; }
 
 static uint8_t* copyToHeap(const std::vector<uint8_t>& v, uint32_t* outSize) {
