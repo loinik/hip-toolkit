@@ -75,8 +75,9 @@ static lua_Number LoadNumber(LoadState* S)
 
 static TString* LoadString(LoadState* S)
 {
- size_t size;
- LoadVar(S,size);
+ unsigned int size32;          /* 32-bit chunk: длина строки = 4 байта */
+ LoadVar(S,size32);
+ size_t size = size32;
  if (size==0)
   return NULL;
  else
@@ -220,7 +221,7 @@ void luaU_header (char* h)
  *h++=(char)LUAC_FORMAT;
  *h++=(char)*(char*)&x;				/* endianness */
  *h++=(char)sizeof(int);
- *h++=(char)sizeof(size_t);
+ *h++=(char)4;
  *h++=(char)sizeof(Instruction);
  *h++=(char)sizeof(lua_Number);
  *h++=(char)(((lua_Number)0.5)==0);		/* is lua_Number integral? */
