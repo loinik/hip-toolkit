@@ -26,16 +26,20 @@ public sealed partial class MainWindow : Window
                 ? Visibility.Visible : Visibility.Collapsed;
         };
 
+        CategoryBar.SelectedItem = ItemCIF;
         UpdateUI();
     }
 
     // ── Category / Direction selection ────────────────────────────────────
 
-    private void Category_Click(object sender, RoutedEventArgs e)
+    private void CategoryBar_SelectionChanged(SelectorBar sender, SelectorBarSelectionChangedEventArgs e)
     {
-        if (RadioCIF.IsChecked == true) _vm.Category = AppCategory.CIF;
-        else if (RadioCiftree.IsChecked == true) _vm.Category = AppCategory.Ciftree;
-        else if (RadioHIS.IsChecked == true) _vm.Category = AppCategory.HIS;
+        _vm.Category = (string?)sender.SelectedItem?.Tag switch
+        {
+            "Ciftree" => AppCategory.Ciftree,
+            "HIS"     => AppCategory.HIS,
+            _         => AppCategory.CIF
+        };
         UpdateUI();
     }
 
@@ -220,10 +224,13 @@ public sealed partial class MainWindow : Window
 
     private void SyncRadioButtons()
     {
-        RadioCIF.IsChecked = _vm.Category == AppCategory.CIF;
-        RadioCiftree.IsChecked = _vm.Category == AppCategory.Ciftree;
-        RadioHIS.IsChecked = _vm.Category == AppCategory.HIS;
-        RadioForward.IsChecked = _vm.Direction == AppDirection.Forward;
+        CategoryBar.SelectedItem = _vm.Category switch
+        {
+            AppCategory.Ciftree => ItemCiftree,
+            AppCategory.HIS     => ItemHIS,
+            _                   => ItemCIF
+        };
+        RadioForward.IsChecked  = _vm.Direction == AppDirection.Forward;
         RadioBackward.IsChecked = _vm.Direction == AppDirection.Backward;
     }
 

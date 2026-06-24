@@ -36,19 +36,13 @@
                 </Button>
             </StackPanel>
 
-            <!-- Center: Category tabs -->
-            <StackPanel Grid.Column="1" Orientation="Horizontal" Spacing="0"
-                        VerticalAlignment="Center">
-                <RadioButton x:Name="RadioCIF" Content="CIF" GroupName="Category"
-                             IsChecked="True" Click="Category_Click"
-                             Style="{StaticResource DefaultToggleButtonStyle}" MinWidth="60" />
-                <RadioButton x:Name="RadioCiftree" Content="Ciftree" GroupName="Category"
-                             Click="Category_Click"
-                             Style="{StaticResource DefaultToggleButtonStyle}" MinWidth="60" />
-                <RadioButton x:Name="RadioHIS" Content="HIS" GroupName="Category"
-                             Click="Category_Click"
-                             Style="{StaticResource DefaultToggleButtonStyle}" MinWidth="60" />
-            </StackPanel>
+            <!-- Center: Category selector -->
+            <SelectorBar x:Name="CategoryBar" Grid.Column="1" VerticalAlignment="Center"
+                         SelectionChanged="CategoryBar_SelectionChanged">
+                <SelectorBarItem x:Name="ItemCIF"     Text="CIF"     Tag="CIF"/>
+                <SelectorBarItem x:Name="ItemCiftree" Text="Ciftree" Tag="Ciftree"/>
+                <SelectorBarItem x:Name="ItemHIS"     Text="HIS"     Tag="HIS"/>
+            </SelectorBar>
         </Grid>
 
         <!-- ═══ Row 1: Drop zone ═══ -->
@@ -109,12 +103,10 @@
             <CheckBox x:Name="ChkDecompileLua" Visibility="Collapsed"
                       ToolTipService.ToolTip="Run luadec on extracted Lua bytecode to produce readable source"
                       Checked="Setting_Changed" Unchecked="Setting_Changed">
-                <StackPanel Orientation="Horizontal" Spacing="6">
+                <StackPanel Orientation="Horizontal" Spacing="4">
                     <TextBlock Text="Decompile Lua" VerticalAlignment="Center"/>
-                    <Border Background="{ThemeResource SystemAccentColor}" CornerRadius="3"
-                            Padding="4,1,4,1" VerticalAlignment="Center">
-                        <TextBlock Text="β" FontSize="10" Foreground="White"/>
-                    </Border>
+                    <TextBlock Text="β" FontSize="11" VerticalAlignment="Center"
+                               Foreground="{ThemeResource TextFillColorSecondaryBrush}"/>
                 </StackPanel>
             </CheckBox>
         </StackPanel>
