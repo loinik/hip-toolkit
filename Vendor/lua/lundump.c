@@ -75,9 +75,8 @@ static lua_Number LoadNumber(LoadState* S)
 
 static TString* LoadString(LoadState* S)
 {
- unsigned int size32;          /* 32-bit chunk: длина строки = 4 байта */
- LoadVar(S,size32);
- size_t size = size32;
+ size_t size;
+ LoadVar(S,size);
  if (size==0)
   return NULL;
  else
