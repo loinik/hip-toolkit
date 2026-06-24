@@ -50,4 +50,10 @@
           DestinationFolder="$(OutDir)"
           SkipUnchangedFiles="true" />
   </Target>
+
+  <Target Name="CopyNativeBridgeToPublish" AfterTargets="Publish">
+    <Copy SourceFiles="$(HIPBridgeDll)"
+          DestinationFolder="$(PublishDir)"
+          SkipUnchangedFiles="true" />
+  </Target>
 </Project>
