@@ -25,6 +25,16 @@
     <_NativePlatform Condition="'$(Platform)'!='x86'">$(Platform)</_NativePlatform>
   </PropertyGroup>
 
+  <!-- luadec binaries — select the right one at runtime via RuntimeInformation -->
+  <ItemGroup>
+    <Content Include="$(SolutionDir)Vendor\luadec-win-x64.exe"
+             CopyToOutputDirectory="PreserveNewest"
+             Link="luadec-win-x64.exe" />
+    <Content Include="$(SolutionDir)Vendor\luadec-win-arm64.exe"
+             CopyToOutputDirectory="PreserveNewest"
+             Link="luadec-win-arm64.exe" />
+  </ItemGroup>
+
   <!-- Path to the native bridge DLL produced by the HIP.Bridge (C++) project. -->
   <PropertyGroup>
     <HIPBridgeDll>$(SolutionDir)build\$(_NativePlatform)\$(Configuration)\HIP.Bridge\HIP.Bridge.dll</HIPBridgeDll>

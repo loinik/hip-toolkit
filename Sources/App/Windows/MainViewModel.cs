@@ -49,6 +49,13 @@ public sealed class MainViewModel : INotifyPropertyChanged
         set { _compileLua = value; OnPropertyChanged(); }
     }
 
+    private bool _decompileLua;
+    public bool DecompileLua
+    {
+        get => _decompileLua;
+        set { _decompileLua = value; OnPropertyChanged(); }
+    }
+
     private bool _extractCifContents = true;
     public bool ExtractCifContents
     {
@@ -227,13 +234,47 @@ public sealed class MainViewModel : INotifyPropertyChanged
             };
 
             var outPath = Path.ChangeExtension(path, outExt);
-            File.WriteAllBytes(outPath, data);
 
+            // ── Lua ──
+            if (info.IsLua)
+            {
+                File.WriteAllBytes(outPath, data);
+                bool isCompiled = data.Length >= 4
+                    && data[0] == 0x1B && data[1] == 0x4C
+                    && data[2] == 0x75 && data[3] == 0x61;
+
+                if (!isCompiled)
+                    return [Ok(name, $"→ .lua  {FormatSize(data.Length)} · source")];
+
+                if (!DecompileLua)
+                    return [Ok(name, $"→ .lua  {FormatSize(data.Length)} · bytecode")];
+
+                try
+                {
+                    var source = HIPInterop.DecompileLua(outPath);
+                    if (string.IsNullOrEmpty(source))
+                        return [
+                            Ok(name,   $"→ .lua  {FormatSize(data.Length)} · bytecode saved"),
+                            Warn(name, "Decompilation failed: empty output")
+                        ];
+                    File.WriteAllText(outPath, source, System.Text.Encoding.UTF8);
+                    return [Ok(name, $"→ .lua  {FormatSize(source.Length)} · decompiled")];
+                }
+                catch (Exception ex)
+                {
+                    return [
+                        Ok(name,   $"→ .lua  {FormatSize(data.Length)} · bytecode saved"),
+                        Warn(name, $"Decompilation failed: {ex.Message}")
+                    ];
+                }
+            }
+
+            // ── PNG / OVL / XSheet / other ──
+            File.WriteAllBytes(outPath, data);
             var detail = FormatSize(data.Length);
             if (info.IsPNG || info.IsOVL) detail = $"{info.Width}×{info.Height} · {detail}";
-            if (info.IsOVL) detail += " · OVL";
+            if (info.IsOVL)    detail += " · OVL";
             if (info.IsXSheet) detail = $"XSheet · {detail}";
-
             return [Ok(name, $"→ {outExt}  {detail}")];
         }
         catch (Exception ex) { return [Fail(name, ex.Message)]; }
@@ -272,8 +313,37 @@ public sealed class MainViewModel : INotifyPropertyChanged
             Directory.CreateDirectory(outDir);
             HIPInterop.UnpackToFolder(path, outDir, ExtractCifContents);
 
-            var count = Directory.GetFiles(outDir, "*", SearchOption.TopDirectoryOnly).Length;
-            return [Ok(name, $"→ {count} files extracted to {Path.GetFileName(outDir)}/")];
+            var files = Directory.GetFiles(outDir, "*", SearchOption.TopDirectoryOnly);
+            var results = new List<ConversionResult>
+            {
+                Ok(name, $"→ {files.Length} files extracted to {Path.GetFileName(outDir)}/")
+            };
+
+            if (DecompileLua && ExtractCifContents)
+            {
+                foreach (var file in files)
+                {
+                    if (!file.EndsWith(".lua", StringComparison.OrdinalIgnoreCase)) continue;
+                    var bytes = File.ReadAllBytes(file);
+                    if (bytes.Length < 4 || bytes[0] != 0x1B || bytes[1] != 0x4C
+                        || bytes[2] != 0x75 || bytes[3] != 0x61) continue;
+                    try
+                    {
+                        var source = HIPInterop.DecompileLua(file);
+                        if (!string.IsNullOrEmpty(source))
+                        {
+                            File.WriteAllText(file, source, System.Text.Encoding.UTF8);
+                            results.Add(Ok(Path.GetFileName(file), "decompiled"));
+                        }
+                    }
+                    catch (Exception ex)
+                    {
+                        results.Add(Warn(Path.GetFileName(file), $"Decompilation failed: {ex.Message}"));
+                    }
+                }
+            }
+
+            return results;
         }
         catch (Exception ex) { return [Fail(name, ex.Message)]; }
     }
@@ -317,6 +387,8 @@ public sealed class MainViewModel : INotifyPropertyChanged
     private static ConversionResult Ok(string title, string detail) =>
         new("\uE73E", title, detail, false);      // ✓ checkmark glyph
 
+    private static ConversionResult Warn(string title, string detail) =>
+        new("\uE7BA", title, detail, false);      // ⚠ warning glyph
     private static ConversionResult Fail(string title, string detail) =>
         new("\uEA39", title, detail, true);        // ✗ error glyph
 

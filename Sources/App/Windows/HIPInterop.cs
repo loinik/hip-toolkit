@@ -1,3 +1,4 @@
+using System.Diagnostics;
 using System.Runtime.InteropServices;
 
 namespace HIPToolkit;
@@ -183,5 +184,42 @@ internal static class HIPInterop
     {
         ThrowIfFailed(DecodeHISRaw(hisPath, out var ptr, out var size));
         return ExtractBytes(ptr, size);
+    }
+
+    public static string DecompileLua(string luacPath)
+    {
+        var luadecName = RuntimeInformation.ProcessArchitecture == Architecture.Arm64
+            ? "luadec-win-arm64.exe"
+            : "luadec-win-x64.exe";
+
+        var appDir = AppContext.BaseDirectory;
+        var luadecPath = Path.Combine(appDir, luadecName);
+
+        if (!File.Exists(luadecPath))
+            throw new InvalidOperationException($"Luadec binary not found: {luadecPath}");
+
+        using var proc = new Process
+        {
+            StartInfo = new ProcessStartInfo
+            {
+                FileName = luadecPath,
+                Arguments = $"\"{luacPath}\"",
+                RedirectStandardOutput = true,
+                RedirectStandardError = true,
+                UseShellExecute = false,
+                CreateNoWindow = true,
+            }
+        };
+
+        proc.Start();
+        var stdout = proc.StandardOutput.ReadToEnd();
+        var stderr = proc.StandardError.ReadToEnd();
+        proc.WaitForExit();
+
+        if (proc.ExitCode != 0)
+            throw new InvalidOperationException(
+                string.IsNullOrWhiteSpace(stderr) ? $"luadec exited with code {proc.ExitCode}" : stderr.Trim());
+
+        return stdout;
     }
 }

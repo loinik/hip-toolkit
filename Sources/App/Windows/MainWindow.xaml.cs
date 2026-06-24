@@ -53,6 +53,7 @@ public sealed partial class MainWindow : Window
         _vm.UseType4PNG        = ChkType4OVL.IsChecked == true;
         _vm.CapitalizeNames    = ChkCapitalizeNames.IsChecked == true;
         _vm.ExtractCifContents = ChkExtractContents.IsChecked == true;
+        _vm.DecompileLua       = ChkDecompileLua.IsChecked == true;
     }
 
     // ── Drop zone ────────────────────────────────────────────────────────
@@ -260,6 +261,8 @@ public sealed partial class MainWindow : Window
         ChkCapitalizeNames.Visibility = mode == AppMode.CiftreePack
             ? Visibility.Visible : Visibility.Collapsed;
         ChkExtractContents.Visibility = mode == AppMode.CiftreeUnpack
+            ? Visibility.Visible : Visibility.Collapsed;
+        ChkDecompileLua.Visibility = mode is AppMode.CifDecode or AppMode.CiftreeUnpack
             ? Visibility.Visible : Visibility.Collapsed;
 
         // Drop zone hints

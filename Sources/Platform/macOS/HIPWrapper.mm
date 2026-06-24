@@ -127,7 +127,7 @@ static NSData *vecToData(const std::vector<uint8_t>& v) {
 }
 
 + (nullable NSString *)decompileLuaAtPath:(NSString *)path error:(NSError **)error {
-    NSString *luadecPath = [[NSBundle mainBundle] pathForResource:@"luadec" ofType:nil];
+    NSString *luadecPath = [[NSBundle mainBundle] pathForResource:@"luadec-macos-arm64" ofType:nil];
     if (!luadecPath) {
         if (error) {
             *error = [NSError errorWithDomain:@"HIPErrorDomain"
@@ -138,11 +138,7 @@ static NSData *vecToData(const std::vector<uint8_t>& v) {
     }
 
     NSTask *task = [[NSTask alloc] init];
-    if (@available(macOS 10.13, *)) {
-        task.executableURL = [NSURL fileURLWithPath:luadecPath];
-    } else {
-        task.launchPath = luadecPath;
-    }
+    task.executableURL = [NSURL fileURLWithPath:luadecPath];
     task.arguments = @[path];
 
     NSPipe *outputPipe = [NSPipe pipe];
@@ -151,21 +147,10 @@ static NSData *vecToData(const std::vector<uint8_t>& v) {
     NSPipe *errorPipe = [NSPipe pipe];
     task.standardError = errorPipe;
 
-    @try {
-        if (@available(macOS 10.13, *)) {
-            [task launchAndReturnError:error];
-        } else {
-            [task launch];
-        }
-        [task waitUntilExit];
-    } @catch (NSException *exception) {
-        if (error) {
-            *error = [NSError errorWithDomain:@"HIPErrorDomain"
-                                         code:2
-                                     userInfo:@{NSLocalizedDescriptionKey: [NSString stringWithFormat:@"Error launching NSTask: %@", exception.reason]}];
-        }
+    if (![task launchAndReturnError:error]) {
         return nil;
     }
+    [task waitUntilExit];
 
     NSData *outputData = [[outputPipe fileHandleForReading] readDataToEndOfFile];
     NSString *outputString = [[NSString alloc] initWithData:outputData encoding:NSUTF8StringEncoding];

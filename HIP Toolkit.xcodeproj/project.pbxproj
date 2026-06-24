@@ -43,7 +43,7 @@
 		EE6187332F829A8100EB6D27 /* lparser.c in Sources */ = {isa = PBXBuildFile; fileRef = EE6187012F829A8100EB6D27 /* lparser.c */; };
 		EE6187342F829A8100EB6D27 /* ltable.c in Sources */ = {isa = PBXBuildFile; fileRef = EE6187082F829A8100EB6D27 /* ltable.c */; };
 		EE6187352F829A8100EB6D27 /* lstate.c in Sources */ = {isa = PBXBuildFile; fileRef = EE6187032F829A8100EB6D27 /* lstate.c */; };
-		EE6187372F82A42800EB6D27 /* luadec in Resources */ = {isa = PBXBuildFile; fileRef = EE6187362F82A42800EB6D27 /* luadec */; };
+		EE6187372F82A42800EB6D27 /* luadec-macos-arm64 in Resources */ = {isa = PBXBuildFile; fileRef = EE6187362F82A42800EB6D27 /* luadec-macos-arm64 */; };
 		EE61873F2F82B9D100EB6D27 /* Quartz.framework in Frameworks */ = {isa = PBXBuildFile; fileRef = EE61873E2F82B9D100EB6D27 /* Quartz.framework */; };
 		EE61874B2F82B9D100EB6D27 /* HIP Quick Look.appex in Embed Foundation Extensions */ = {isa = PBXBuildFile; fileRef = EE61873C2F82B9D100EB6D27 /* HIP Quick Look.appex */; settings = {ATTRIBUTES = (RemoveHeadersOnCopy, ); }; };
 		EE61877F2F83721300EB6D27 /* Assets.xcassets in Resources */ = {isa = PBXBuildFile; fileRef = EE61877B2F83721300EB6D27 /* Assets.xcassets */; };
@@ -143,7 +143,7 @@
 		EE6187142F829A8100EB6D27 /* lzio.c */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.c; path = lzio.c; sourceTree = "<group>"; };
 		EE6187152F829A8100EB6D27 /* Makefile */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.make; path = Makefile; sourceTree = "<group>"; };
 		EE6187162F829A8100EB6D27 /* print.c */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.c; path = print.c; sourceTree = "<group>"; };
-		EE6187362F82A42800EB6D27 /* luadec */ = {isa = PBXFileReference; lastKnownFileType = "compiled.mach-o.executable"; path = luadec; sourceTree = "<group>"; };
+		EE6187362F82A42800EB6D27 /* luadec-macos-arm64 */ = {isa = PBXFileReference; lastKnownFileType = "compiled.mach-o.executable"; path = "luadec-macos-arm64"; sourceTree = "<group>"; };
 		EE61873C2F82B9D100EB6D27 /* HIP Quick Look.appex */ = {isa = PBXFileReference; explicitFileType = "wrapper.app-extension"; includeInIndex = 0; path = "HIP Quick Look.appex"; sourceTree = BUILT_PRODUCTS_DIR; };
 		EE61873E2F82B9D100EB6D27 /* Quartz.framework */ = {isa = PBXFileReference; lastKnownFileType = wrapper.framework; name = Quartz.framework; path = System/Library/Frameworks/Quartz.framework; sourceTree = SDKROOT; };
 		EE61877B2F83721300EB6D27 /* Assets.xcassets */ = {isa = PBXFileReference; lastKnownFileType = folder.assetcatalog; path = Assets.xcassets; sourceTree = "<group>"; };
@@ -258,7 +258,7 @@
 			children = (
 				EE6186BC2F829A4600EB6D27 /* lua */,
 				EE6186BD2F829A4600EB6D27 /* stb_vorbis.c */,
-				EE6187362F82A42800EB6D27 /* luadec */,
+				EE6187362F82A42800EB6D27 /* luadec-macos-arm64 */,
 			);
 			path = Vendor;
 			sourceTree = "<group>";
@@ -462,7 +462,7 @@
 				EE77C5682FEA85DB00965EC2 /* Info.plist in Resources */,
 				EEE5AB292F84E9E200365579 /* Toolkit.icon in Resources */,
 				EE61877F2F83721300EB6D27 /* Assets.xcassets in Resources */,
-				EE6187372F82A42800EB6D27 /* luadec in Resources */,
+				EE6187372F82A42800EB6D27 /* luadec-macos-arm64 in Resources */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
