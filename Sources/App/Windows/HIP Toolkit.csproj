@@ -24,6 +24,13 @@
     <PackageReference Include="Microsoft.Windows.SDK.BuildTools" Version="10.0.*" />
   </ItemGroup>
 
+  <!-- Strings JSON — single source of truth for all UI strings -->
+  <ItemGroup>
+    <Content Include="$(SolutionDir)Sources\Strings\en.json"
+             CopyToOutputDirectory="PreserveNewest"
+             Link="Strings\en.json" />
+  </ItemGroup>
+
   <!-- luadec binaries — select the right one at runtime via RuntimeInformation -->
   <ItemGroup>
     <Content Include="$(SolutionDir)Vendor\luadec-win-x64.exe"

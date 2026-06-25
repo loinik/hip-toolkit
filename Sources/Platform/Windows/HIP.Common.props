@@ -13,7 +13,7 @@
       <LanguageStandard>stdcpp20</LanguageStandard>
       <MultiProcessorCompilation>true</MultiProcessorCompilation>
       <PreprocessorDefinitions>_CRT_SECURE_NO_WARNINGS;NOMINMAX;WIN32_LEAN_AND_MEAN;%(PreprocessorDefinitions)</PreprocessorDefinitions>
-      <AdditionalIncludeDirectories>$(MSBuildThisFileDirectory)..\..\Core;$(MSBuildThisFileDirectory)..\..\..\Vendor;$(MSBuildThisFileDirectory)..\..\..\Vendor\lua;%(AdditionalIncludeDirectories)</AdditionalIncludeDirectories>
+      <AdditionalIncludeDirectories>$(MSBuildThisFileDirectory)..\..\Core;$(MSBuildThisFileDirectory)..\..\..\Vendor;$(MSBuildThisFileDirectory)..\..\..\Vendor\lua;$(MSBuildThisFileDirectory)..\..\..\Vendor\libogg\include;$(MSBuildThisFileDirectory)..\..\..\Vendor\libvorbis\include;$(MSBuildThisFileDirectory)..\..\..\Vendor\libvorbis\src;$(MSBuildThisFileDirectory)..\..\..\Vendor\libshine\src;%(AdditionalIncludeDirectories)</AdditionalIncludeDirectories>
     </ClCompile>
   </ItemDefinitionGroup>
 </Project>

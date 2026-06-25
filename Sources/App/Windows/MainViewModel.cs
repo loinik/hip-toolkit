@@ -15,6 +15,9 @@ public enum AppMode
     HisEncode, HisDecode
 }
 
+public enum HisOutputFormat { OGG, WAV, MP3 }
+
+
 public record ConversionResult(string Icon, string Title, string Detail, bool IsError, bool IsExpandable = false, string? RevealPath = null)
 {
     public bool HasRevealPath => RevealPath != null;
@@ -80,6 +83,13 @@ public sealed class MainViewModel : INotifyPropertyChanged
         set { _useType4PNG = value; OnPropertyChanged(); }
     }
 
+    private HisOutputFormat _hisOutputFormat = HisOutputFormat.WAV;
+    public HisOutputFormat HisOutputFormat
+    {
+        get => _hisOutputFormat;
+        set { _hisOutputFormat = value; OnPropertyChanged(); }
+    }
+
     private bool _isProcessing;
     public bool IsProcessing
     {
@@ -117,6 +127,8 @@ public sealed class MainViewModel : INotifyPropertyChanged
             ".jpg"  => (AppCategory.CIF, AppDirection.Forward),
             ".jpeg" => (AppCategory.CIF, AppDirection.Forward),
             ".ogg"  => (AppCategory.HIS, AppDirection.Forward),
+            ".wav"  => (AppCategory.HIS, AppDirection.Forward),
+            ".mp3"  => (AppCategory.HIS, AppDirection.Forward),
             ".xsheet" => (AppCategory.CIF, AppDirection.Forward),
             ".json" => (AppCategory.CIF, AppDirection.Forward),
             _ when isDir => (AppCategory.Ciftree, AppDirection.Forward),
@@ -178,7 +190,7 @@ public sealed class MainViewModel : INotifyPropertyChanged
                         AppMode.CifDecode => DecodeCIF(path),
                         AppMode.HisEncode => EncodeHIS(path),
                         AppMode.HisDecode => DecodeHIS(path),
-                        _ => [Fail(Path.GetFileName(path), "Unknown mode")]
+                        _ => [Fail(Path.GetFileName(path), S.Get("error_unknown_mode"))]
                     }, token);
 
                 foreach (var r in results)
@@ -482,11 +494,12 @@ public sealed class MainViewModel : INotifyPropertyChanged
     private List<ConversionResult> EncodeHIS(string path)
     {
         var name = Path.GetFileName(path);
-        if (!path.EndsWith(".ogg", StringComparison.OrdinalIgnoreCase))
-            return [Fail(name, "Expected .ogg")];
+        var ext = Path.GetExtension(path).ToLowerInvariant();
+        if (ext is not (".ogg" or ".wav" or ".mp3"))
+            return [Fail(name, S.Get("error_expected_audio"))];
         try
         {
-            var data = HIPInterop.EncodeHIS(path);
+            var data = HIPInterop.EncodeHISFromAudio(path);
             var outPath = Path.ChangeExtension(path, ".his");
             File.WriteAllBytes(outPath, data);
             return [Ok(name, $"→ .his  {FormatSize(data.Length)}")];
@@ -500,13 +513,18 @@ public sealed class MainViewModel : INotifyPropertyChanged
     {
         var name = Path.GetFileName(path);
         if (!path.EndsWith(".his", StringComparison.OrdinalIgnoreCase))
-            return [Fail(name, "Expected .his")];
+            return [Fail(name, S.Get("error_expected_his"))];
         try
         {
-            var data = HIPInterop.DecodeHIS(path);
-            var outPath = Path.ChangeExtension(path, ".ogg");
-            File.WriteAllBytes(outPath, data);
-            return [Ok(name, $"→ .ogg  {FormatSize(data.Length)}")];
+            var fmtExt = HisOutputFormat switch {
+                HisOutputFormat.WAV => "wav",
+                HisOutputFormat.MP3 => "mp3",
+                _                  => "ogg"
+            };
+            var outData = HIPInterop.DecodeHISToFormat(path, fmtExt);
+            var outPath = Path.ChangeExtension(path, "." + fmtExt);
+            File.WriteAllBytes(outPath, outData);
+            return [Ok(name, $"→ .{fmtExt}  {FormatSize(outData.Length)}")];
         }
         catch (Exception ex) { return [Fail(name, ex.Message)]; }
     }

@@ -7,12 +7,14 @@
 	objects = {
 
 /* Begin PBXBuildFile section */
+		EE000001VORBISCOMPILE0001 /* vorbis_compile.c in Sources */ = {isa = PBXBuildFile; fileRef = EE000001VORBISCOMPILE0000 /* vorbis_compile.c */; settings = {COMPILER_FLAGS = "-w"; }; };
+		EE000002SHINECOMPILE0001 /* shine_compile.c in Sources */ = {isa = PBXBuildFile; fileRef = EE000002SHINECOMPILE0000 /* shine_compile.c */; settings = {COMPILER_FLAGS = "-w"; }; };
 		EE6186742F82969000EB6D27 /* CIFArchive.cpp in Sources */ = {isa = PBXBuildFile; fileRef = EE6186692F82969000EB6D27 /* CIFArchive.cpp */; };
 		EE6186752F82969000EB6D27 /* CiftreeArchive.cpp in Sources */ = {isa = PBXBuildFile; fileRef = EE61866B2F82969000EB6D27 /* CiftreeArchive.cpp */; };
 		EE6186782F82969000EB6D27 /* HIPWrapper.mm in Sources */ = {isa = PBXBuildFile; fileRef = EE6186702F82969000EB6D27 /* HIPWrapper.mm */; };
 		EE6186792F82969000EB6D27 /* HISArchive.cpp in Sources */ = {isa = PBXBuildFile; fileRef = EE6186722F82969000EB6D27 /* HISArchive.cpp */; };
-		EE618703AA000001DEADBEEF /* XSheetArchive.cpp in Sources */ = {isa = PBXBuildFile; fileRef = EE618701AA000001DEADBEEF /* XSheetArchive.cpp */; };
 		EE6186C52F829A4600EB6D27 /* stb_vorbis.c in Sources */ = {isa = PBXBuildFile; fileRef = EE6186BD2F829A4600EB6D27 /* stb_vorbis.c */; };
+		EE618703AA000001DEADBEEF /* XSheetArchive.cpp in Sources */ = {isa = PBXBuildFile; fileRef = EE618701AA000001DEADBEEF /* XSheetArchive.cpp */; };
 		EE6187172F829A8100EB6D27 /* ldebug.c in Sources */ = {isa = PBXBuildFile; fileRef = EE6186EA2F829A8100EB6D27 /* ldebug.c */; };
 		EE6187182F829A8100EB6D27 /* loadlib.c in Sources */ = {isa = PBXBuildFile; fileRef = EE6186FA2F829A8100EB6D27 /* loadlib.c */; };
 		EE6187192F829A8100EB6D27 /* lfunc.c in Sources */ = {isa = PBXBuildFile; fileRef = EE6186EF2F829A8100EB6D27 /* lfunc.c */; };
@@ -52,6 +54,8 @@
 		EE77C5662FEA85DB00965EC2 /* ContentView.swift in Sources */ = {isa = PBXBuildFile; fileRef = EE77C5622FEA85DB00965EC2 /* ContentView.swift */; };
 		EE77C5672FEA85DB00965EC2 /* hipApp.swift in Sources */ = {isa = PBXBuildFile; fileRef = EE77C5632FEA85DB00965EC2 /* hipApp.swift */; };
 		EE77C5682FEA85DB00965EC2 /* Info.plist in Resources */ = {isa = PBXBuildFile; fileRef = EE77C5642FEA85DB00965EC2 /* Info.plist */; };
+		EEA0BB01CC000001DEADBEEF /* Strings.swift in Sources */ = {isa = PBXBuildFile; fileRef = EEA0BB02CC000001DEADBEEF /* Strings.swift */; };
+		EEA0BB03CC000001DEADBEEF /* en.json in Resources */ = {isa = PBXBuildFile; fileRef = EEA0BB04CC000001DEADBEEF /* en.json */; };
 		EEE5AB292F84E9E200365579 /* Toolkit.icon in Resources */ = {isa = PBXBuildFile; fileRef = EEE5AB282F84E9E200365579 /* Toolkit.icon */; };
 		EEE5AB2A2F84E9E200365579 /* Toolkit.icon in Resources */ = {isa = PBXBuildFile; fileRef = EEE5AB282F84E9E200365579 /* Toolkit.icon */; };
 /* End PBXBuildFile section */
@@ -81,6 +85,8 @@
 /* End PBXCopyFilesBuildPhase section */
 
 /* Begin PBXFileReference section */
+		EE000001VORBISCOMPILE0000 /* vorbis_compile.c */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.c; name = vorbis_compile.c; path = Vendor/libvorbis/src/vorbis_compile.c; sourceTree = SOURCE_ROOT; };
+		EE000002SHINECOMPILE0000 /* shine_compile.c */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.c; name = shine_compile.c; path = Vendor/libshine/src/shine_compile.c; sourceTree = SOURCE_ROOT; };
 		EE6186682F82969000EB6D27 /* CIFArchive.hpp */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.cpp.h; path = CIFArchive.hpp; sourceTree = "<group>"; };
 		EE6186692F82969000EB6D27 /* CIFArchive.cpp */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.cpp.cpp; path = CIFArchive.cpp; sourceTree = "<group>"; };
 		EE61866A2F82969000EB6D27 /* CiftreeArchive.hpp */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.cpp.h; path = CiftreeArchive.hpp; sourceTree = "<group>"; };
@@ -89,9 +95,6 @@
 		EE6186702F82969000EB6D27 /* HIPWrapper.mm */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.cpp.objcpp; path = HIPWrapper.mm; sourceTree = "<group>"; };
 		EE6186712F82969000EB6D27 /* HISArchive.hpp */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.cpp.h; path = HISArchive.hpp; sourceTree = "<group>"; };
 		EE6186722F82969000EB6D27 /* HISArchive.cpp */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.cpp.cpp; path = HISArchive.cpp; sourceTree = "<group>"; };
-		EE618700AA000001DEADBEEF /* XSheetArchive.hpp */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.cpp.h; path = XSheetArchive.hpp; sourceTree = "<group>"; };
-		EE618701AA000001DEADBEEF /* XSheetArchive.cpp */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.cpp.cpp; path = XSheetArchive.cpp; sourceTree = "<group>"; };
-		EE618702AA000001DEADBEEF /* nlohmann_json.hpp */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.cpp.h; path = nlohmann_json.hpp; sourceTree = "<group>"; };
 		EE6186BD2F829A4600EB6D27 /* stb_vorbis.c */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.c; path = stb_vorbis.c; sourceTree = "<group>"; };
 		EE6186E12F829A8100EB6D27 /* lapi.h */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.h; path = lapi.h; sourceTree = "<group>"; };
 		EE6186E22F829A8100EB6D27 /* lapi.c */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.c; path = lapi.c; sourceTree = "<group>"; };
@@ -125,8 +128,11 @@
 		EE6186FE2F829A8100EB6D27 /* lopcodes.c */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.c; path = lopcodes.c; sourceTree = "<group>"; };
 		EE6186FF2F829A8100EB6D27 /* loslib.c */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.c; path = loslib.c; sourceTree = "<group>"; };
 		EE6187002F829A8100EB6D27 /* lparser.h */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.h; path = lparser.h; sourceTree = "<group>"; };
+		EE618700AA000001DEADBEEF /* XSheetArchive.hpp */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.cpp.h; path = XSheetArchive.hpp; sourceTree = "<group>"; };
 		EE6187012F829A8100EB6D27 /* lparser.c */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.c; path = lparser.c; sourceTree = "<group>"; };
+		EE618701AA000001DEADBEEF /* XSheetArchive.cpp */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.cpp.cpp; path = XSheetArchive.cpp; sourceTree = "<group>"; };
 		EE6187022F829A8100EB6D27 /* lstate.h */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.h; path = lstate.h; sourceTree = "<group>"; };
+		EE618702AA000001DEADBEEF /* nlohmann_json.hpp */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.cpp.h; path = nlohmann_json.hpp; sourceTree = "<group>"; };
 		EE6187032F829A8100EB6D27 /* lstate.c */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.c; path = lstate.c; sourceTree = "<group>"; };
 		EE6187042F829A8100EB6D27 /* lstring.h */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.h; path = lstring.h; sourceTree = "<group>"; };
 		EE6187052F829A8100EB6D27 /* lstring.c */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.c; path = lstring.c; sourceTree = "<group>"; };
@@ -157,6 +163,8 @@
 		EE77C5622FEA85DB00965EC2 /* ContentView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ContentView.swift; sourceTree = "<group>"; };
 		EE77C5632FEA85DB00965EC2 /* hipApp.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = hipApp.swift; sourceTree = "<group>"; };
 		EE77C5642FEA85DB00965EC2 /* Info.plist */ = {isa = PBXFileReference; lastKnownFileType = text.plist.xml; path = Info.plist; sourceTree = "<group>"; };
+		EEA0BB02CC000001DEADBEEF /* Strings.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Strings.swift; sourceTree = "<group>"; };
+		EEA0BB04CC000001DEADBEEF /* en.json */ = {isa = PBXFileReference; lastKnownFileType = text.json; name = en.json; path = Sources/Strings/en.json; sourceTree = SOURCE_ROOT; };
 		EEE5AB282F84E9E200365579 /* Toolkit.icon */ = {isa = PBXFileReference; lastKnownFileType = folder.iconcomposer.icon; path = Toolkit.icon; sourceTree = "<group>"; };
 /* End PBXFileReference section */
 
@@ -264,6 +272,8 @@
 				EE6186BD2F829A4600EB6D27 /* stb_vorbis.c */,
 				EE6187362F82A42800EB6D27 /* luadec-macos-arm64 */,
 				EE618702AA000001DEADBEEF /* nlohmann_json.hpp */,
+				EE000001VORBISCOMPILE0000 /* vorbis_compile.c */,
+				EE000002SHINECOMPILE0000 /* shine_compile.c */,
 			);
 			path = Vendor;
 			sourceTree = "<group>";
@@ -362,8 +372,10 @@
 			isa = PBXGroup;
 			children = (
 				EE77C5622FEA85DB00965EC2 /* ContentView.swift */,
+				EEA0BB02CC000001DEADBEEF /* Strings.swift */,
 				EE77C5632FEA85DB00965EC2 /* hipApp.swift */,
 				EE77C5642FEA85DB00965EC2 /* Info.plist */,
+				EEA0BB04CC000001DEADBEEF /* en.json */,
 			);
 			path = macOS;
 			sourceTree = "<group>";
@@ -470,6 +482,7 @@
 				EEE5AB292F84E9E200365579 /* Toolkit.icon in Resources */,
 				EE61877F2F83721300EB6D27 /* Assets.xcassets in Resources */,
 				EE6187372F82A42800EB6D27 /* luadec-macos-arm64 in Resources */,
+				EEA0BB03CC000001DEADBEEF /* en.json in Resources */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
@@ -491,6 +504,8 @@
 				EE6186752F82969000EB6D27 /* CiftreeArchive.cpp in Sources */,
 				EE6186782F82969000EB6D27 /* HIPWrapper.mm in Sources */,
 				EE6186C52F829A4600EB6D27 /* stb_vorbis.c in Sources */,
+				EE000001VORBISCOMPILE0001 /* vorbis_compile.c in Sources */,
+				EE000002SHINECOMPILE0001 /* shine_compile.c in Sources */,
 				EE6186792F82969000EB6D27 /* HISArchive.cpp in Sources */,
 				EE618703AA000001DEADBEEF /* XSheetArchive.cpp in Sources */,
 				EE6187172F829A8100EB6D27 /* ldebug.c in Sources */,
@@ -523,6 +538,7 @@
 				EE6187322F829A8100EB6D27 /* lbaselib.c in Sources */,
 				EE6187332F829A8100EB6D27 /* lparser.c in Sources */,
 				EE77C5662FEA85DB00965EC2 /* ContentView.swift in Sources */,
+				EEA0BB01CC000001DEADBEEF /* Strings.swift in Sources */,
 				EE77C5672FEA85DB00965EC2 /* hipApp.swift in Sources */,
 				EE6187342F829A8100EB6D27 /* ltable.c in Sources */,
 				EE6187352F829A8100EB6D27 /* lstate.c in Sources */,
@@ -732,7 +748,7 @@
 				"CODE_SIGN_IDENTITY[sdk=macosx*]" = "-";
 				CODE_SIGN_STYLE = Automatic;
 				COMBINE_HIDPI_IMAGES = YES;
-				CURRENT_PROJECT_VERSION = 8;
+				CURRENT_PROJECT_VERSION = 12;
 				DEVELOPMENT_TEAM = 3L864KU2J8;
 				ENABLE_APP_SANDBOX = YES;
 				ENABLE_FILE_ACCESS_DOWNLOADS_FOLDER = readwrite;
@@ -743,7 +759,6 @@
 				ENABLE_INCOMING_NETWORK_CONNECTIONS = NO;
 				ENABLE_OUTGOING_NETWORK_CONNECTIONS = NO;
 				ENABLE_PREVIEWS = YES;
-				HEADER_SEARCH_PATHS = "$(SRCROOT)/Vendor";
 				ENABLE_RESOURCE_ACCESS_AUDIO_INPUT = NO;
 				ENABLE_RESOURCE_ACCESS_BLUETOOTH = NO;
 				ENABLE_RESOURCE_ACCESS_CALENDARS = NO;
@@ -754,6 +769,13 @@
 				ENABLE_RESOURCE_ACCESS_USB = NO;
 				ENABLE_USER_SELECTED_FILES = readwrite;
 				GENERATE_INFOPLIST_FILE = YES;
+				HEADER_SEARCH_PATHS = (
+					"$(SRCROOT)/Vendor",
+					"$(SRCROOT)/Vendor/libogg/include",
+					"$(SRCROOT)/Vendor/libvorbis/include",
+					"$(SRCROOT)/Vendor/libvorbis/src",
+					"$(SRCROOT)/Vendor/libshine/src",
+				);
 				INFOPLIST_FILE = Sources/App/macOS/Info.plist;
 				INFOPLIST_KEY_CFBundleDisplayName = "HIP Toolkit";
 				INFOPLIST_KEY_LSApplicationCategoryType = "public.app-category.developer-tools";
@@ -763,7 +785,7 @@
 					"@executable_path/../Frameworks",
 				);
 				MACOSX_DEPLOYMENT_TARGET = 26.0;
-				MARKETING_VERSION = 0.9.0;
+				MARKETING_VERSION = 1.0.0;
 				PRODUCT_BUNDLE_IDENTIFIER = "loinik.hip-toolkit";
 				PRODUCT_NAME = "$(TARGET_NAME)";
 				REGISTER_APP_GROUPS = YES;
@@ -788,7 +810,7 @@
 				"CODE_SIGN_IDENTITY[sdk=macosx*]" = "-";
 				CODE_SIGN_STYLE = Automatic;
 				COMBINE_HIDPI_IMAGES = YES;
-				CURRENT_PROJECT_VERSION = 8;
+				CURRENT_PROJECT_VERSION = 12;
 				DEVELOPMENT_TEAM = 3L864KU2J8;
 				ENABLE_APP_SANDBOX = YES;
 				ENABLE_FILE_ACCESS_DOWNLOADS_FOLDER = readwrite;
@@ -799,7 +821,6 @@
 				ENABLE_INCOMING_NETWORK_CONNECTIONS = NO;
 				ENABLE_OUTGOING_NETWORK_CONNECTIONS = NO;
 				ENABLE_PREVIEWS = YES;
-				HEADER_SEARCH_PATHS = "$(SRCROOT)/Vendor";
 				ENABLE_RESOURCE_ACCESS_AUDIO_INPUT = NO;
 				ENABLE_RESOURCE_ACCESS_BLUETOOTH = NO;
 				ENABLE_RESOURCE_ACCESS_CALENDARS = NO;
@@ -810,6 +831,13 @@
 				ENABLE_RESOURCE_ACCESS_USB = NO;
 				ENABLE_USER_SELECTED_FILES = readwrite;
 				GENERATE_INFOPLIST_FILE = YES;
+				HEADER_SEARCH_PATHS = (
+					"$(SRCROOT)/Vendor",
+					"$(SRCROOT)/Vendor/libogg/include",
+					"$(SRCROOT)/Vendor/libvorbis/include",
+					"$(SRCROOT)/Vendor/libvorbis/src",
+					"$(SRCROOT)/Vendor/libshine/src",
+				);
 				INFOPLIST_FILE = Sources/App/macOS/Info.plist;
 				INFOPLIST_KEY_CFBundleDisplayName = "HIP Toolkit";
 				INFOPLIST_KEY_LSApplicationCategoryType = "public.app-category.developer-tools";
@@ -819,7 +847,7 @@
 					"@executable_path/../Frameworks",
 				);
 				MACOSX_DEPLOYMENT_TARGET = 26.0;
-				MARKETING_VERSION = 0.9.0;
+				MARKETING_VERSION = 1.0.0;
 				PRODUCT_BUNDLE_IDENTIFIER = "loinik.hip-toolkit";
 				PRODUCT_NAME = "$(TARGET_NAME)";
 				REGISTER_APP_GROUPS = YES;

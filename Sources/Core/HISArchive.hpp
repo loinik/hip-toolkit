@@ -27,7 +27,18 @@ static constexpr size_t HIS_HEADER_SIZE = 32;
 /// OGG → HIS: builds HIS header from OGG Vorbis metadata, prepends it.
 std::vector<uint8_t> encodeHIS(const std::filesystem::path& oggPath);
 
+/// Audio (OGG / WAV / MP3) → HIS.
+/// OGG is fast-path (no transcode). WAV/MP3 are decoded to PCM then
+/// re-encoded to OGG Vorbis via libvorbis before HIS header is prepended.
+std::vector<uint8_t> encodeHISFromAudio(const std::filesystem::path& inputPath);
+
 /// HIS → OGG: strips the 32-byte HIS header, returns raw OGG bytes.
 std::vector<uint8_t> decodeHIS(const std::filesystem::path& hisPath);
+
+/// HIS → format.
+/// format = "ogg"  → returns raw OGG bytes (no conversion).
+/// format = "wav"  → decodes OGG to PCM, writes RIFF WAV.
+std::vector<uint8_t> decodeHISToFormat(const std::filesystem::path& hisPath,
+                                        const std::string& format);
 
 } // namespace CIF

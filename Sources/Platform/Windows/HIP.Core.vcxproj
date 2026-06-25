@@ -176,6 +176,15 @@
       <!-- Suppress warnings in Lua C source that are noise for third-party code -->
       <DisableSpecificWarnings>4324;4334;4244;4267;4310;4701;4703</DisableSpecificWarnings>
     </ClCompile>
+    <ClCompile Include="..\..\..\Vendor\stb_vorbis.c">
+      <DisableSpecificWarnings>4244;4245;4267;4305;4701;4706</DisableSpecificWarnings>
+    </ClCompile>
+    <ClCompile Include="..\..\..\Vendor\libvorbis\src\vorbis_compile.c">
+      <DisableSpecificWarnings>4244;4245;4267;4305;4701;4706;4996</DisableSpecificWarnings>
+    </ClCompile>
+    <ClCompile Include="..\..\..\Vendor\libshine\src\shine_compile.c">
+      <DisableSpecificWarnings>4244;4245;4267;4305;4701;4706</DisableSpecificWarnings>
+    </ClCompile>
   </ItemGroup>
 
   <ItemGroup>

@@ -32,8 +32,15 @@ enum AppMode {
 
 // MARK: - File-kind detection
 
+enum HisOutputFormat: String, CaseIterable, Identifiable {
+    case wav, ogg, mp3
+    var id: Self { self }
+    var ext: String { rawValue }
+    var label: String { rawValue.uppercased() }
+}
+
 enum HIPFileKind {
-    case cif, his, dat, lua, image, ogg, xsheet, json, folder, unknown
+    case cif, his, dat, lua, image, ogg, wav, mp3, xsheet, json, folder, unknown
 
     static func from(_ url: URL) -> HIPFileKind {
         if url.hasDirectoryPath { return .folder }
@@ -43,7 +50,9 @@ enum HIPFileKind {
         case "dat":                return .dat
         case "lua":                return .lua
         case "png", "jpg", "jpeg": return .image
+        case "wav":                return .wav
         case "ogg":                return .ogg
+        case "mp3":                return .mp3
         case "xsheet":             return .xsheet
         case "json":               return .json
         default:                   return .unknown
@@ -57,7 +66,7 @@ enum HIPFileKind {
         case .dat:     return (.ciftree, .backward)
         case .lua:     return (.cif,     .forward)
         case .image:   return (.cif,     .forward)
-        case .ogg:     return (.his,     .forward)
+        case .wav, .ogg, .mp3: return (.his, .forward)
         case .folder:  return (.ciftree, .forward)
         case .xsheet:  return (.cif,     .forward)
         case .json:    return (.cif,     .forward)
@@ -94,10 +103,10 @@ final class AppViewModel: ObservableObject {
     @Published var isDragging   = false
     @Published var compileLua         = true
     @Published var decompileLua       = false
-    @Published var extractCifContents = true   // auto-decode CIF entries when unpacking Ciftree
-    @Published var capitalizeNames    = false  // uppercase entry names when packing (not extension)
-    /// Sea of Darkness: encode PNG as CIF type 4 (OVL) instead of type 2.
+    @Published var extractCifContents = true
+    @Published var capitalizeNames    = false
     @Published var useType4PNG        = false
+    @Published var hisOutputFormat: HisOutputFormat = .wav
     @Published var showCancelConfirmation = false
 
     // Cancellation handles
@@ -156,6 +165,7 @@ final class AppViewModel: ObservableObject {
         let extractCifContents = self.extractCifContents
         let capitalizeNames    = self.capitalizeNames
         let useType4PNG        = self.useType4PNG
+        let hisOutputFormat    = self.hisOutputFormat
 
         let t = Task {
             var batch: [ConversionResult] = []
@@ -164,7 +174,6 @@ final class AppViewModel: ObservableObject {
                 let items: [ConversionResult]
                 switch mode {
                 case .ciftreePack:
-                    // NSSavePanel must stay on main; heavy encoding goes to background inside
                     items = await packCiftreeAsync(url, compileLua: compileLua,
                                                    capitalizeNames: capitalizeNames,
                                                    useType4PNG: useType4PNG)
@@ -172,12 +181,12 @@ final class AppViewModel: ObservableObject {
                     items = await unpackCiftreeAsync(url, extractContents: extractCifContents,
                                                      decompileLua: decompileLua)
                 default:
-                    items = await Task.detached(priority: .userInitiated) { [mode, compileLua, decompileLua, useType4PNG] in
+                    items = await Task.detached(priority: .userInitiated) { [mode, compileLua, decompileLua, useType4PNG, hisOutputFormat] in
                         switch mode {
                         case .cifEncode: return [AppViewModel.encodeCIF(url, compileLua: compileLua, useType4PNG: useType4PNG)]
                         case .cifDecode: return AppViewModel.decodeCIF(url, decompileLua: decompileLua)
                         case .hisEncode: return [AppViewModel.encodeHIS(url)]
-                        case .hisDecode: return [AppViewModel.decodeHIS(url)]
+                        case .hisDecode: return [AppViewModel.decodeHIS(url, format: hisOutputFormat)]
                         default: return []
                         }
                     }.value
@@ -197,7 +206,7 @@ final class AppViewModel: ObservableObject {
     private func packCiftreeAsync(_ url: URL, compileLua: Bool,
                                    capitalizeNames: Bool, useType4PNG: Bool) async -> [ConversionResult] {
         guard url.hasDirectoryPath else {
-            return [AppViewModel.fail(url.lastPathComponent, "Expected a folder")]
+            return [AppViewModel.fail(url.lastPathComponent, S.get("error_expected_folder"))]
         }
         let onProgress: @Sendable (Int, Int) -> Void = { [weak self] cur, tot in
             Task { @MainActor [weak self] in self?.progress = (current: cur, total: tot) }
@@ -235,7 +244,7 @@ final class AppViewModel: ObservableObject {
     // Unpack: check write access on main, show NSOpenPanel if denied, do work on background
     private func unpackCiftreeAsync(_ url: URL, extractContents: Bool, decompileLua: Bool) async -> [ConversionResult] {
         guard url.pathExtension.lowercased() == "dat" else {
-            return [AppViewModel.fail(url.lastPathComponent, "Expected .dat archive")]
+            return [AppViewModel.fail(url.lastPathComponent, S.get("error_expected_dat"))]
         }
         var outDir = url.deletingPathExtension()
         let parentWritable = FileManager.default.isWritableFile(atPath: outDir.deletingLastPathComponent().path)
@@ -320,7 +329,7 @@ final class AppViewModel: ObservableObject {
     nonisolated static func decodeCIF(_ url: URL, decompileLua: Bool) -> [ConversionResult] {
         let name = url.lastPathComponent
         guard url.pathExtension.lowercased() == "cif" else {
-            return [fail(name, "Expected .cif")]
+            return [fail(name, S.get("error_expected_cif"))]
         }
         do {
             let info = try HIPWrapper.readHeader(atPath: url.path)
@@ -520,11 +529,12 @@ final class AppViewModel: ObservableObject {
 
     nonisolated static func encodeHIS(_ url: URL) -> ConversionResult {
         let name = url.lastPathComponent
-        guard url.pathExtension.lowercased() == "ogg" else {
-            return fail(name, "Expected .ogg (OGG Vorbis)")
+        let ext  = url.pathExtension.lowercased()
+        guard ext == "wav" || ext == "ogg" || ext == "mp3" else {
+            return fail(name, S.get("error_expected_audio"))
         }
         do {
-            let data = try HIPWrapper.encodeHISFromOGG(atPath: url.path) as Data
+            let data = try HIPWrapper.encodeHISFromAudio(atPath: url.path) as Data
             let out  = url.deletingPathExtension().appendingPathExtension("his")
             try data.write(to: out)
             return ok(name, "→ .his  " + sizeStr(data.count))
@@ -533,16 +543,16 @@ final class AppViewModel: ObservableObject {
 
     // ── HIS decode ───────────────────────────────────────────────────────
 
-    nonisolated static func decodeHIS(_ url: URL) -> ConversionResult {
+    nonisolated static func decodeHIS(_ url: URL, format: HisOutputFormat) -> ConversionResult {
         let name = url.lastPathComponent
         guard url.pathExtension.lowercased() == "his" else {
-            return fail(name, "Expected .his")
+            return fail(name, S.get("error_expected_his"))
         }
         do {
-            let data = try HIPWrapper.decodeHIS(atPath: url.path) as Data
-            let out  = url.deletingPathExtension().appendingPathExtension("ogg")
-            try data.write(to: out)
-            return ok(name, "→ .ogg  " + sizeStr(data.count))
+            let outData = try HIPWrapper.decodeHIS(atPath: url.path, toFormat: format.ext) as Data
+            let out = url.deletingPathExtension().appendingPathExtension(format.ext)
+            try outData.write(to: out)
+            return ok(name, "→ .\(format.ext)  " + sizeStr(outData.count))
         } catch { return fail(name, error.localizedDescription) }
     }
 
@@ -581,22 +591,22 @@ struct ContentView: View {
         .toolbar(removing: .title)
         .background(WindowTabbingDisabler())
         .background(WindowCloseInterceptor.installer)
-        .alert("Cancel Processing?", isPresented: $vm.showCancelConfirmation) {
-            Button("Cancel & Delete Output", role: .destructive) { vm.cancelAndCleanup() }
-            Button("Keep Running", role: .cancel) { }
+        .alert(S.get("alert_cancel_title"), isPresented: $vm.showCancelConfirmation) {
+            Button(S.get("alert_cancel_confirm"), role: .destructive) { vm.cancelAndCleanup() }
+            Button(S.get("alert_cancel_keep"), role: .cancel) { }
         } message: {
-            Text("The conversion will stop and the partial output will be deleted.")
+            Text(S.get("alert_cancel_message"))
         }
-        .alert("Support Us", isPresented: $showSupportAlert) {
-            Button("Donate on Ko-Fi") {
+        .alert(S.get("alert_support_title"), isPresented: $showSupportAlert) {
+            Button(S.get("alert_support_kofi")) {
                 NSWorkspace.shared.open(URL(string: "https://ko-fi.com/nancydrewhub")!)
             }
-            Button("Follow on Instagram") {
+            Button(S.get("alert_support_instagram")) {
                 NSWorkspace.shared.open(URL(string: "https://instagram.com/nancydrewhub")!)
             }
-            Button("Close", role: .cancel) { }
+            Button(S.get("alert_support_close"), role: .cancel) { }
         } message: {
-            Text("HIP Toolkit is built with care for the Nancy Drew community.\n\nIf you enjoy using it, consider supporting our team by donating or following us on Instagram.")
+            Text(S.get("alert_support_message"))
         }
         .onReceive(NotificationCenter.default.publisher(for: .hipOpenFile)) { _ in
             openFileForPreview()
@@ -619,15 +629,15 @@ struct ContentView: View {
         }
         ToolbarItem(placement: .primaryAction) {
             Button { showSupportAlert = true } label: {
-                Label("Support Us", systemImage: "heart")
+                Label(S.get("toolbar_support"), systemImage: "heart")
             }
-            .help("Support our team")
+            .help(S.get("toolbar_support_help"))
         }
         ToolbarItem(placement: .confirmationAction) {
             Button(action: openFileForPreview) {
-                Label("Open…", systemImage: "folder")
+                Label(S.get("toolbar_open"), systemImage: "folder")
             }
-            .help("Open a file for inspection (⌘O)")
+            .help(S.get("toolbar_open_help"))
         }
     }
 
@@ -646,49 +656,63 @@ struct ContentView: View {
             switch vm.mode {
             case .cifEncode:
                 Divider().frame(height: 18)
-                Toggle("Compile Lua", isOn: $vm.compileLua)
+                Toggle(S.get("toggle_compile_lua"), isOn: $vm.compileLua)
                     .toggleStyle(.checkbox)
-                    .help("Compile .lua source to bytecode before packing")
+                    .help(S.get("tooltip_compile_lua"))
                 Divider().frame(height: 18)
-                Toggle("Type 4 OVL", isOn: $vm.useType4PNG)
+                Toggle(S.get("toggle_type4_ovl"), isOn: $vm.useType4PNG)
                     .toggleStyle(.checkbox)
-                    .help("Encode PNG as CIF type 4 (OVL overlay) instead of type 2 — for Sea of Darkness")
+                    .help(S.get("tooltip_type4_ovl"))
 
             case .ciftreePack:
                 Divider().frame(height: 18)
-                Toggle("Compile Lua", isOn: $vm.compileLua)
+                Toggle(S.get("toggle_compile_lua"), isOn: $vm.compileLua)
                     .toggleStyle(.checkbox)
-                    .help("Compile .lua source to bytecode before packing")
+                    .help(S.get("tooltip_compile_lua"))
                 Divider().frame(height: 18)
-                Toggle("Capitalize names", isOn: $vm.capitalizeNames)
+                Toggle(S.get("toggle_capitalize_names"), isOn: $vm.capitalizeNames)
                     .toggleStyle(.checkbox)
-                    .help("Uppercase entry names when packing (e.g. UI_MainMenu_OVL → UI_MAINMENU_OVL); extension stays lowercase")
+                    .help(S.get("tooltip_capitalize_names"))
 
             case .cifDecode:
                 Divider().frame(height: 18)
                 Toggle(isOn: $vm.decompileLua) {
                     HStack(spacing: 4) {
-                        Text("Decompile Lua")
+                        Text(S.get("toggle_decompile_lua"))
                         Text("ß").foregroundStyle(.secondary)
                     }
                 }
                 .toggleStyle(.checkbox)
-                .help("Run luadec on extracted Lua bytecode (requires bundled luadec)")
+                .help(S.get("tooltip_decompile_lua"))
 
             case .ciftreeUnpack:
                 Divider().frame(height: 18)
-                Toggle("Extract CIF contents", isOn: $vm.extractCifContents)
+                Toggle(S.get("toggle_extract_cif_contents"), isOn: $vm.extractCifContents)
                     .toggleStyle(.checkbox)
-                    .help("Automatically decode each CIF entry to PNG, Lua, XSheet, etc. (incompatible types stay as .cif)")
+                    .help(S.get("tooltip_extract_cif_contents"))
                 Divider().frame(height: 18)
                 Toggle(isOn: $vm.decompileLua) {
                     HStack(spacing: 4) {
-                        Text("Decompile Lua")
+                        Text(S.get("toggle_decompile_lua"))
                         Text("ß").foregroundStyle(.secondary)
                     }
                 }
                 .toggleStyle(.checkbox)
-                .help("Run luadec on extracted Lua bytecode (requires bundled luadec)")
+                .help(S.get("tooltip_decompile_lua"))
+
+            case .hisDecode:
+                Divider().frame(height: 18)
+                Text(S.get("his_output_format_label"))
+                    .foregroundStyle(.secondary)
+                    .font(.subheadline)
+                Picker("", selection: $vm.hisOutputFormat) {
+                    ForEach(HisOutputFormat.allCases) { f in
+                        Text(f.label).tag(f)
+                    }
+                }
+                .pickerStyle(.segmented)
+                .fixedSize()
+                .disabled(vm.isProcessing)
 
             default:
                 EmptyView()
@@ -722,9 +746,9 @@ struct ContentView: View {
                                 .font(.subheadline).foregroundStyle(.secondary)
                         }
                     } else {
-                        ProgressView("Processing…").controlSize(.large)
+                        ProgressView(S.get("processing_label")).controlSize(.large)
                     }
-                    Button("Cancel") { vm.requestCancel() }
+                    Button(S.get("cancel_button")) { vm.requestCancel() }
                         .buttonStyle(.borderless)
                         .foregroundStyle(.red)
                         .font(.subheadline)
@@ -763,10 +787,10 @@ struct ContentView: View {
     private var resultsPanel: some View {
         VStack(spacing: 6) {
             HStack {
-                Text("History")
+                Text(S.get("history_section"))
                     .font(.caption).fontWeight(.semibold).foregroundStyle(.secondary)
                 Spacer()
-                Button("Clear", action: vm.clearResults)
+                Button(S.get("history_clear"), action: vm.clearResults)
                     .buttonStyle(.glass).buttonBorderShape(.capsule).controlSize(.small)
             }
             .padding(.horizontal, 2)
@@ -792,23 +816,23 @@ struct ContentView: View {
 
     private var dirForwardLabel: String {
         switch vm.category {
-        case .cif:     return "File → CIF"
-        case .ciftree: return "Pack"
-        case .his:     return "OGG → HIS"
+        case .cif:     return S.get("dir_file_to_cif")
+        case .ciftree: return S.get("dir_pack")
+        case .his:     return S.get("dir_file_to_his")
         }
     }
     private var dirBackwardLabel: String {
         switch vm.category {
-        case .cif:     return "CIF → File"
-        case .ciftree: return "Unpack"
-        case .his:     return "HIS → OGG"
+        case .cif:     return S.get("dir_cif_to_file")
+        case .ciftree: return S.get("dir_unpack")
+        case .his:     return S.get("dir_his_to_file")
         }
     }
     private var chooseLabel: String {
         switch vm.mode {
-        case .ciftreePack:   return "Choose Folder…"
-        case .ciftreeUnpack: return "Choose Archive…"
-        default:             return "Choose Files…"
+        case .ciftreePack:   return S.get("choose_folder")
+        case .ciftreeUnpack: return S.get("choose_archive")
+        default:             return S.get("choose_files")
         }
     }
     private var dropIcon: String {
@@ -823,22 +847,22 @@ struct ContentView: View {
     }
     private var dropTitle: String {
         switch vm.mode {
-        case .cifEncode:     return "Drag PNG, JPEG, Lua, XSheet or XSheet JSON files"
-        case .cifDecode:     return "Drag .cif files"
-        case .ciftreePack:   return "Drag a folder"
-        case .ciftreeUnpack: return "Drag a Ciftree .dat archive"
-        case .hisEncode:     return "Drag .ogg files"
-        case .hisDecode:     return "Drag .his files"
+        case .cifEncode:     return S.get("drop_title_cif_encode")
+        case .cifDecode:     return S.get("drop_title_cif_decode")
+        case .ciftreePack:   return S.get("drop_title_ciftree_pack")
+        case .ciftreeUnpack: return S.get("drop_title_ciftree_unpack")
+        case .hisEncode:     return S.get("drop_title_his_encode")
+        case .hisDecode:     return S.get("drop_title_his_decode")
         }
     }
     private var dropSubtitle: String {
         switch vm.mode {
-        case .cifEncode:     return "PNG/JPEG → CIF image · Lua → CIF script · XSheet / JSON → CIF sprite"
-        case .cifDecode:     return "CIF → PNG / .lua / .xsheet — saved next to original"
-        case .ciftreePack:   return "All supported files in the folder are converted and packed into .dat"
-        case .ciftreeUnpack: return "Each embedded .cif is extracted to a folder next to the archive"
-        case .hisEncode:     return "OGG Vorbis → HIS (HeR Interactive Sound)"
-        case .hisDecode:     return "HIS → OGG Vorbis — saved next to original"
+        case .cifEncode:     return S.get("drop_subtitle_cif_encode")
+        case .cifDecode:     return S.get("drop_subtitle_cif_decode")
+        case .ciftreePack:   return S.get("drop_subtitle_ciftree_pack")
+        case .ciftreeUnpack: return S.get("drop_subtitle_ciftree_unpack")
+        case .hisEncode:     return S.get("drop_subtitle_his_encode")
+        case .hisDecode:     return S.get("drop_subtitle_his_decode")
         }
     }
 
@@ -849,7 +873,7 @@ struct ContentView: View {
         panel.canChooseFiles          = true
         panel.canChooseDirectories    = false
         panel.allowsMultipleSelection = true
-        panel.message                 = "Choose a file to inspect"
+        panel.message                 = S.get("open_panel_inspect")
         panel.allowedContentTypes     = [
             UTType(filenameExtension: "cif")    ?? .data,
             UTType(filenameExtension: "his")    ?? .data,
@@ -892,7 +916,11 @@ struct ContentView: View {
         case .ciftreeUnpack:
             panel.allowedContentTypes = [UTType(filenameExtension: "dat") ?? .data]
         case .hisEncode:
-            panel.allowedContentTypes = [UTType(filenameExtension: "ogg") ?? .data]
+            panel.allowedContentTypes = [
+                UTType(filenameExtension: "wav") ?? .data,
+                UTType(filenameExtension: "ogg") ?? .data,
+                UTType(filenameExtension: "mp3") ?? .data,
+            ]
         case .hisDecode:
             panel.allowedContentTypes = [UTType(filenameExtension: "his") ?? .data]
         }
@@ -1866,10 +1894,10 @@ final class WindowCloseInterceptor: NSObject, NSWindowDelegate {
     func windowShouldClose(_ sender: NSWindow) -> Bool {
         guard let vm = AppViewModel.shared, vm.isProcessing else { return true }
         let alert = NSAlert()
-        alert.messageText = "Processing in Progress"
-        alert.informativeText = "A conversion is still running. Close anyway? The partial output will be deleted."
-        alert.addButton(withTitle: "Close & Delete Output")
-        alert.addButton(withTitle: "Keep Running")
+        alert.messageText = S.get("alert_close_title")
+        alert.informativeText = S.get("alert_close_message")
+        alert.addButton(withTitle: S.get("alert_close_confirm"))
+        alert.addButton(withTitle: S.get("alert_close_keep"))
         alert.alertStyle = .warning
         let response = alert.runModal()
         if response == .alertFirstButtonReturn {

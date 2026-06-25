@@ -16,6 +16,7 @@ public sealed partial class MainWindow : Window
 
     public MainWindow()
     {
+        S.Load(AppContext.BaseDirectory);
         InitializeComponent();
         Title = "HIP Toolkit";
         ExtendsContentIntoTitleBar = true;
@@ -65,6 +66,16 @@ public sealed partial class MainWindow : Window
         _vm.DecompileLua = ChkDecompileLua.IsChecked == true;
     }
 
+    private void HisFormat_Changed(object sender, SelectionChangedEventArgs e)
+    {
+        if (_vm is null || CmbHisFormat.SelectedItem is not ComboBoxItem item) return;
+        _vm.HisOutputFormat = (string?)item.Tag switch {
+            "wav" => HisOutputFormat.WAV,
+            "mp3" => HisOutputFormat.MP3,
+            _     => HisOutputFormat.OGG
+        };
+    }
+
     // ── Drop zone ────────────────────────────────────────────────────────
 
     private void DropZone_DragOver(object sender, DragEventArgs e)
@@ -108,11 +119,11 @@ public sealed partial class MainWindow : Window
     {
         var dialog = new ContentDialog
         {
-            Title = "Support Us",
-            Content = "HIP Toolkit is built with care for the Nancy Drew community.\n\nIf you enjoy using it, consider supporting our team by donating or following us on Instagram.",
-            PrimaryButtonText = "Donate on Ko-Fi",
-            SecondaryButtonText = "Follow on Instagram",
-            CloseButtonText = "Close",
+            Title = S.Get("alert_support_title"),
+            Content = S.Get("alert_support_message"),
+            PrimaryButtonText = S.Get("alert_support_kofi"),
+            SecondaryButtonText = S.Get("alert_support_instagram"),
+            CloseButtonText = S.Get("alert_support_close"),
             XamlRoot = Content.XamlRoot
         };
         var result = await dialog.ShowAsync();
@@ -186,6 +197,8 @@ public sealed partial class MainWindow : Window
                     break;
                 case AppMode.HisEncode:
                     picker.FileTypeFilter.Add(".ogg");
+                    picker.FileTypeFilter.Add(".wav");
+                    picker.FileTypeFilter.Add(".mp3");
                     break;
                 case AppMode.HisDecode:
                     picker.FileTypeFilter.Add(".his");
@@ -219,8 +232,8 @@ public sealed partial class MainWindow : Window
     private async void CancelConv_Click(object sender, RoutedEventArgs e)
     {
         if (!await ShowProcessingConfirmDialog(
-            "Cancel Processing?",
-            "The conversion will stop and the partial output will be deleted."))
+            S.Get("alert_cancel_title"),
+            S.Get("alert_cancel_message")))
             return;
         _vm.RequestCancellation();
     }
@@ -231,8 +244,8 @@ public sealed partial class MainWindow : Window
         if (_allowClose || !_vm.IsProcessing) return;
         args.Cancel = true;
         if (!await ShowProcessingConfirmDialog(
-            "Processing in Progress",
-            "A conversion is still running. Close the window? The partial output will be deleted."))
+            S.Get("alert_close_title"),
+            S.Get("alert_close_message")))
             return;
         _vm.RequestCancellation();
         _allowClose = true;
@@ -346,17 +359,17 @@ public sealed partial class MainWindow : Window
         // Direction labels
         RadioForward.Content = _vm.Category switch
         {
-            AppCategory.CIF => "File → CIF",
-            AppCategory.Ciftree => "Pack",
-            AppCategory.HIS => "OGG → HIS",
-            _ => "▶"
+            AppCategory.CIF     => S.Get("dir_file_to_cif"),
+            AppCategory.Ciftree => S.Get("dir_pack"),
+            AppCategory.HIS     => S.Get("dir_file_to_his"),
+            _                   => "▶"
         };
         RadioBackward.Content = _vm.Category switch
         {
-            AppCategory.CIF => "CIF → File",
-            AppCategory.Ciftree => "Unpack",
-            AppCategory.HIS => "HIS → OGG",
-            _ => "◀"
+            AppCategory.CIF     => S.Get("dir_cif_to_file"),
+            AppCategory.Ciftree => S.Get("dir_unpack"),
+            AppCategory.HIS     => S.Get("dir_his_to_file"),
+            _                   => "◀"
         };
 
         // Settings visibility
@@ -370,29 +383,19 @@ public sealed partial class MainWindow : Window
             ? Visibility.Visible : Visibility.Collapsed;
         ChkDecompileLua.Visibility = mode is AppMode.CifDecode or AppMode.CiftreeUnpack
             ? Visibility.Visible : Visibility.Collapsed;
+        HisFormatPanel.Visibility = mode == AppMode.HisDecode
+            ? Visibility.Visible : Visibility.Collapsed;
 
         // Drop zone hints
         (DropTitle.Text, DropSubtitle.Text, BtnChoose.Content) = mode switch
         {
-            AppMode.CifEncode => ("Drag PNG, JPEG, Lua, XSheet or XSheet JSON files",
-                                      "PNG/JPEG → CIF image · Lua → CIF script · XSheet / JSON → CIF sprite",
-                                      "Choose Files…"),
-            AppMode.CifDecode => ("Drag .cif files",
-                                      "CIF → PNG / .lua / .xsheet — saved next to original",
-                                      "Choose Files…"),
-            AppMode.CiftreePack => ("Drag a folder",
-                                      "All supported files in the folder are converted and packed into .dat",
-                                      "Choose Folder…"),
-            AppMode.CiftreeUnpack => ("Drag a Ciftree .dat archive",
-                                      "Each embedded .cif is extracted to a folder next to the archive",
-                                      "Choose Archive…"),
-            AppMode.HisEncode => ("Drag .ogg files",
-                                      "OGG Vorbis → HIS (HeR Interactive Sound)",
-                                      "Choose Files…"),
-            AppMode.HisDecode => ("Drag .his files",
-                                      "HIS → OGG Vorbis — saved next to original",
-                                      "Choose Files…"),
-            _ => ("Drag files here", "", "Choose…")
+            AppMode.CifEncode    => (S.Get("drop_title_cif_encode"),     S.Get("drop_subtitle_cif_encode"),     S.Get("choose_files")),
+            AppMode.CifDecode    => (S.Get("drop_title_cif_decode"),     S.Get("drop_subtitle_cif_decode"),     S.Get("choose_files")),
+            AppMode.CiftreePack  => (S.Get("drop_title_ciftree_pack"),   S.Get("drop_subtitle_ciftree_pack"),   S.Get("choose_folder")),
+            AppMode.CiftreeUnpack=> (S.Get("drop_title_ciftree_unpack"), S.Get("drop_subtitle_ciftree_unpack"), S.Get("choose_archive")),
+            AppMode.HisEncode    => (S.Get("drop_title_his_encode"),     S.Get("drop_subtitle_his_encode"),     S.Get("choose_files")),
+            AppMode.HisDecode    => (S.Get("drop_title_his_decode"),     S.Get("drop_subtitle_his_decode"),     S.Get("choose_files")),
+            _                    => ("Drag files here", "", "Choose…")
         };
 
         DropIcon.Glyph = mode switch

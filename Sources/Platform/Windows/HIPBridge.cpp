@@ -195,6 +195,25 @@ extern "C" HIP_API int HIP_DecodeHIS(const char* hisPath,
     } catch (const std::exception& e) { setError(e.what()); return 1; }
 }
 
+extern "C" HIP_API int HIP_EncodeHISFromAudio(const char* audioPath,
+                                               uint8_t** outData, uint32_t* outSize) {
+    try {
+        auto v = CIF::encodeHISFromAudio(toPath(audioPath));
+        *outData = copyToHeap(v, outSize);
+        return *outData ? 0 : 1;
+    } catch (const std::exception& e) { setError(e.what()); return 1; }
+}
+
+extern "C" HIP_API int HIP_DecodeHISToFormat(const char* hisPath,
+                                              const char* format,
+                                              uint8_t** outData, uint32_t* outSize) {
+    try {
+        auto v = CIF::decodeHISToFormat(toPath(hisPath), format ? format : "ogg");
+        *outData = copyToHeap(v, outSize);
+        return *outData ? 0 : 1;
+    } catch (const std::exception& e) { setError(e.what()); return 1; }
+}
+
 // ── XSheet JSON ──────────────────────────────────────────────────────────
 
 extern "C" HIP_API int HIP_XSheetBodyToJson(const uint8_t* body, uint32_t bodyLen,

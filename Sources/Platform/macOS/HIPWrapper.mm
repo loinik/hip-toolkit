@@ -54,12 +54,11 @@ static NSData *vecToData(const std::vector<uint8_t>& v) {
 + (nullable NSData *)encodePNGAtPath:(NSString *)path
                              cifType:(uint32_t)cifType
                                error:(NSError **)error {
-    // Map uint32 → FileType; validate
     CIF::FileType ft;
     if (cifType == 4) {
         ft = CIF::FileType::OVL;
     } else {
-        ft = CIF::FileType::PNG;  // default / cifType == 2
+        ft = CIF::FileType::PNG;
         if (cifType != 2) {
             NSLog(@"HIPWrapper: unknown cifType %u, defaulting to PNG (type 2)", cifType);
         }
@@ -69,7 +68,6 @@ static NSData *vecToData(const std::vector<uint8_t>& v) {
         NSString *ext = path.pathExtension.lowercaseString;
         std::filesystem::path fsp(path.fileSystemRepresentation);
 
-        // JPEG → convert to PNG in memory via AppKit, save to temp file
         if ([ext isEqualToString:@"jpg"] || [ext isEqualToString:@"jpeg"]) {
             NSImage *img = [[NSImage alloc] initWithContentsOfFile:path];
             if (!img) {
@@ -94,7 +92,6 @@ static NSData *vecToData(const std::vector<uint8_t>& v) {
             return vecToData(result);
         }
 
-        // Native PNG
         return vecToData(CIF::encodePNG(fsp, ft));
 
     } catch (const std::exception &e) {
@@ -117,10 +114,8 @@ static NSData *vecToData(const std::vector<uint8_t>& v) {
                           compileLua:(BOOL)compileLua
                                error:(NSError **)error {
     try {
-        // Lua compilation is handled by the C++ core (CIFArchive.cpp)
         std::filesystem::path fsp(path.fileSystemRepresentation);
         return vecToData(CIF::encodeLua(fsp, compileLua));
-
     } catch (const std::exception &e) {
         if (error) *error = hipError(@(e.what()));
         return nil;
@@ -152,7 +147,6 @@ static NSData *vecToData(const std::vector<uint8_t>& v) {
         return nil;
     }
 
-    // Kill luadec if it hasn't finished within 15 seconds — some bytecode causes it to loop.
     __block BOOL timedOut = NO;
     dispatch_after(dispatch_time(DISPATCH_TIME_NOW, (int64_t)(15 * NSEC_PER_SEC)),
                    dispatch_get_global_queue(QOS_CLASS_UTILITY, 0), ^{
@@ -194,34 +188,34 @@ static NSData *vecToData(const std::vector<uint8_t>& v) {
 + (void)autoDecompileLuaInDirectory:(NSString *)directoryPath {
     NSFileManager *fm = [NSFileManager defaultManager];
     NSDirectoryEnumerator *enumerator = [fm enumeratorAtPath:directoryPath];
-    
+
     const char luaMagic[] = "\x1BLua";
     NSData *magicData = [NSData dataWithBytes:luaMagic length:4];
-    
+
     for (NSString *file in enumerator) {
         NSString *fullPath = [directoryPath stringByAppendingPathComponent:file];
-        
+
         BOOL isDir = NO;
         [fm fileExistsAtPath:fullPath isDirectory:&isDir];
         if (isDir) continue;
-        
+
         if ([file hasSuffix:@"_SC"] || [file.pathExtension isEqualToString:@"luac"]) {
             NSData *fileData = [NSData dataWithContentsOfFile:fullPath];
             if (!fileData || fileData.length < 4) continue;
-            
+
             NSRange magicRange = [fileData rangeOfData:magicData
                                                options:0
                                                  range:NSMakeRange(0, fileData.length)];
-            
+
             if (magicRange.location != NSNotFound) {
                 NSData *cleanBytecode = [fileData subdataWithRange:NSMakeRange(magicRange.location, fileData.length - magicRange.location)];
                 NSString *tempPath = [NSTemporaryDirectory() stringByAppendingPathComponent:[[NSUUID UUID] UUIDString]];
                 [cleanBytecode writeToFile:tempPath atomically:YES];
-                
+
                 NSError *decError = nil;
                 NSString *decompiledCode = [self decompileLuaAtPath:tempPath error:&decError];
                 [fm removeItemAtPath:tempPath error:nil];
-                
+
                 if (decompiledCode) {
                     NSString *newPath = fullPath;
                     if ([fullPath hasSuffix:@"_SC"]) {
@@ -342,9 +336,9 @@ static NSData *vecToData(const std::vector<uint8_t>& v) {
 
 // ── HIS audio ────────────────────────────────────────────────────────────
 
-+ (nullable NSData *)encodeHISFromOGGAtPath:(NSString *)path error:(NSError **)error {
++ (nullable NSData *)encodeHISFromAudioAtPath:(NSString *)path error:(NSError **)error {
     try {
-        return vecToData(CIF::encodeHIS(path.fileSystemRepresentation));
+        return vecToData(CIF::encodeHISFromAudio(path.fileSystemRepresentation));
     } catch (const std::exception &e) {
         if (error) *error = hipError(@(e.what()));
         return nil;
@@ -360,10 +354,19 @@ static NSData *vecToData(const std::vector<uint8_t>& v) {
     }
 }
 
-// ── OGG → WAV via stb_vorbis ──────────────────────────────────────────────
++ (nullable NSData *)decodeHISAtPath:(NSString *)path
+                             toFormat:(NSString *)format
+                                error:(NSError **)error {
+    try {
+        return vecToData(CIF::decodeHISToFormat(path.fileSystemRepresentation,
+                                                 format.UTF8String ? format.UTF8String : "ogg"));
+    } catch (const std::exception &e) {
+        if (error) *error = hipError(@(e.what()));
+        return nil;
+    }
+}
 
-// Forward-declare the one stb_vorbis function we need (implementation is in
-// Vendor/stb_vorbis.c which is compiled as a separate translation unit).
+// stb_vorbis — compiled as separate TU; declared here for the WAV preview helper.
 extern "C" int stb_vorbis_decode_memory(const unsigned char *mem, int len,
                                          int *channels, int *sample_rate,
                                          short **output);
@@ -394,7 +397,6 @@ extern "C" int stb_vorbis_decode_memory(const unsigned char *mem, int len,
 
     NSMutableData *wav = [NSMutableData dataWithCapacity:44 + dataSize];
 
-    // Helper lambdas to write little-endian values
     auto wL32 = [&](uint32_t v) {
         uint8_t b[4] = { (uint8_t)(v), (uint8_t)(v>>8), (uint8_t)(v>>16), (uint8_t)(v>>24) };
         [wav appendBytes:b length:4];
@@ -405,17 +407,11 @@ extern "C" int stb_vorbis_decode_memory(const unsigned char *mem, int len,
     };
     auto wCC = [&](const char *cc) { [wav appendBytes:cc length:4]; };
 
-    // RIFF header
     wCC("RIFF");  wL32(36 + dataSize);  wCC("WAVE");
-    // fmt  chunk
     wCC("fmt ");  wL32(16);
-    wL16(1);                             // PCM
-    wL16((uint16_t)channels);
-    wL32((uint32_t)sampleRate);
-    wL32((uint32_t)byteRate);
-    wL16((uint16_t)blockAlign);
-    wL16((uint16_t)bitsPerSample);
-    // data chunk
+    wL16(1); wL16((uint16_t)channels);
+    wL32((uint32_t)sampleRate); wL32((uint32_t)byteRate);
+    wL16((uint16_t)blockAlign); wL16((uint16_t)bitsPerSample);
     wCC("data");  wL32(dataSize);
     [wav appendBytes:pcm length:dataSize];
 

@@ -1,6 +1,28 @@
 #include "HISArchive.hpp"
 #include "CIFArchive.hpp"
 
+// ── Single-header library implementations (only in this TU) ───────────────
+#define MINIMP3_IMPLEMENTATION
+#define MINIMP3_ONLY_MP3
+#include "../../Vendor/minimp3_ex.h"
+
+#define DR_WAV_IMPLEMENTATION
+#include "../../Vendor/dr_wav.h"
+
+// libogg + libvorbis (compiled via vorbis_compile.c; just include public headers)
+#include <ogg/ogg.h>
+#include <vorbis/vorbisenc.h>
+
+// libshine MP3 encoder (compiled via shine_compile.c)
+extern "C" {
+#include "../../Vendor/libshine/src/layer3.h"
+}
+
+// stb_vorbis — compiled as a separate TU (stb_vorbis.c / vorbis_compile.c)
+extern "C" int stb_vorbis_decode_memory(const unsigned char* mem, int len,
+                                         int* channels, int* sample_rate,
+                                         short** output);
+
 #include <cstring>
 #include <stdexcept>
 
@@ -42,20 +64,7 @@ VorbisInfo parseOGG(const std::vector<uint8_t>& data) {
     bool foundId = false;
 
     while (pos + 27 <= sz) {
-        // Locate next OggS capture pattern
         if (std::memcmp(&data[pos], OGG_CAPTURE, 4) != 0) { ++pos; continue; }
-
-        // OGG page header layout:
-        //  [0..3]  OggS
-        //  [4]     version (must be 0)
-        //  [5]     header_type
-        //  [6..13] granule_position (LE int64)
-        //  [14..17] bitstream_serial
-        //  [18..21] page_sequence
-        //  [22..25] checksum
-        //  [26]    num_segments
-        //  [27..27+num_segments-1] segment table
-        //  [27+num_segments ..] page data
 
         if (data[pos+4] != 0) { ++pos; continue; }
 
@@ -68,18 +77,11 @@ VorbisInfo parseOGG(const std::vector<uint8_t>& data) {
         const size_t dataOff = pos + 27 + numSegs;
         if (dataOff + pageDataSize > sz) break;
 
-        // Read granule position (signed LE 64-bit)
         int64_t granule = readLE64s(&data[pos + 6]);
-
-        // Track last valid granule (total samples)
         if (granule > 0) info.totalSamples = granule;
 
-        // Look for Vorbis identification packet if not found yet
         if (!foundId && pageDataSize >= 7 &&
             std::memcmp(&data[dataOff], VORBIS_ID, 7) == 0) {
-            //  [7..10] version (must be 0)
-            //  [11]    channels
-            //  [12..15] sample_rate
             if (dataOff + 16 <= sz) {
                 info.channels   = data[dataOff + 11];
                 info.sampleRate = readLE32(&data[dataOff + 12]);
@@ -98,46 +100,6 @@ VorbisInfo parseOGG(const std::vector<uint8_t>& data) {
     return info;
 }
 
-// ── WAV fmt parser (for encode from WAV) ─────────────────────────────────
-//  Returns false if not a PCM WAV file — caller can fall back to OGG path
-struct WavInfo {
-    uint16_t channels;
-    uint32_t sampleRate;
-    uint16_t bitsPerSample;
-    uint32_t numSamples;     // total sample frames
-};
-
-bool parseWAV(const std::vector<uint8_t>& d, WavInfo& out) {
-    if (d.size() < 44) return false;
-    if (std::memcmp(&d[0], "RIFF", 4) != 0) return false;
-    if (std::memcmp(&d[8], "WAVE", 4) != 0) return false;
-
-    // Scan for fmt chunk
-    size_t pos = 12;
-    uint16_t audioFmt = 0;
-    bool foundFmt = false, foundData = false;
-    uint32_t dataSize = 0;
-
-    while (pos + 8 <= d.size()) {
-        uint32_t chunkSize = readLE32(&d[pos + 4]);
-        if (std::memcmp(&d[pos], "fmt ", 4) == 0 && chunkSize >= 16) {
-            audioFmt          = readLE16(&d[pos + 8]);
-            out.channels      = readLE16(&d[pos + 10]);
-            out.sampleRate    = readLE32(&d[pos + 12]);
-            out.bitsPerSample = readLE16(&d[pos + 22]);
-            foundFmt = true;
-        } else if (std::memcmp(&d[pos], "data", 4) == 0) {
-            dataSize  = chunkSize;
-            foundData = true;
-        }
-        pos += 8 + chunkSize + (chunkSize & 1);  // RIFF chunks are word-aligned
-    }
-
-    if (!foundFmt || !foundData || audioFmt != 1) return false;
-    out.numSamples = dataSize / (out.channels * (out.bitsPerSample / 8));
-    return true;
-}
-
 void writeLE32v(std::vector<uint8_t>& v, uint32_t x) {
     v.push_back(static_cast<uint8_t>(x));
     v.push_back(static_cast<uint8_t>(x >> 8));
@@ -153,27 +115,220 @@ std::vector<uint8_t> buildHISHeader(uint16_t channels, uint32_t sampleRate,
                                      uint16_t bitsPerSample, uint32_t pcmDataSize) {
     std::vector<uint8_t> h;
     h.reserve(HIS_HEADER_SIZE);
-    // Magic "HIS\0"
     h.push_back('H'); h.push_back('I'); h.push_back('S'); h.push_back(0x00);
-    // Version 2
     writeLE32v(h, 2);
-    // Audio format PCM = 1
     writeLE16v(h, 1);
-    // Channels
     writeLE16v(h, channels);
-    // Sample rate
     writeLE32v(h, sampleRate);
-    // Byte rate
     writeLE32v(h, sampleRate * static_cast<uint32_t>(channels) * (bitsPerSample / 8u));
-    // Block align
     writeLE16v(h, static_cast<uint16_t>(channels * (bitsPerSample / 8u)));
-    // Bits per sample
     writeLE16v(h, bitsPerSample);
-    // PCM data size
     writeLE32v(h, pcmDataSize);
-    // Trailing 0x00000002
     writeLE32v(h, 2);
     return h;
+}
+
+// ── Audio decode helpers ──────────────────────────────────────────────────
+
+static std::vector<int16_t> decodeOGGtoPCM(const std::vector<uint8_t>& ogg,
+                                             int& channels, int& sampleRate) {
+    short* buf = nullptr;
+    int samples = stb_vorbis_decode_memory(
+        ogg.data(), static_cast<int>(ogg.size()), &channels, &sampleRate, &buf);
+    if (samples <= 0 || !buf)
+        throw std::runtime_error("HIS: cannot decode OGG Vorbis data");
+    std::vector<int16_t> pcm(buf, buf + samples * channels);
+    free(buf);
+    return pcm;
+}
+
+static std::vector<int16_t> decodeWAVtoPCM(const std::vector<uint8_t>& data,
+                                             int& channels, int& sampleRate) {
+    drwav wav;
+    if (!drwav_init_memory(&wav, data.data(), data.size(), nullptr))
+        throw std::runtime_error("HIS: cannot parse WAV data (not a valid PCM WAV file)");
+    channels   = static_cast<int>(wav.channels);
+    sampleRate = static_cast<int>(wav.sampleRate);
+    std::vector<int16_t> pcm(static_cast<size_t>(wav.totalPCMFrameCount) * wav.channels);
+    drwav_uint64 read = drwav_read_pcm_frames_s16(&wav, wav.totalPCMFrameCount, pcm.data());
+    drwav_uninit(&wav);
+    pcm.resize(static_cast<size_t>(read) * static_cast<size_t>(channels));
+    return pcm;
+}
+
+static std::vector<int16_t> decodeMP3toPCM(const std::vector<uint8_t>& data,
+                                             int& channels, int& sampleRate) {
+    mp3dec_t dec;
+    mp3dec_file_info_t info{};
+    if (mp3dec_load_buf(&dec, data.data(), data.size(), &info, nullptr, nullptr) != 0
+        || info.samples == 0)
+        throw std::runtime_error("HIS: cannot decode MP3 data");
+    channels   = info.channels;
+    sampleRate = info.hz;
+    std::vector<int16_t> pcm(info.samples);
+    std::memcpy(pcm.data(), info.buffer, info.samples * sizeof(mp3d_sample_t));
+    free(info.buffer);
+    return pcm;
+}
+
+// ── Audio encode helpers ──────────────────────────────────────────────────
+
+static std::vector<uint8_t> encodePCMtoOGG(const std::vector<int16_t>& pcm,
+                                             int channels, int sampleRate) {
+    vorbis_info vi;
+    vorbis_info_init(&vi);
+    if (vorbis_encode_init_vbr(&vi, channels, sampleRate, 0.4f) != 0) {
+        vorbis_info_clear(&vi);
+        throw std::runtime_error("HIS: vorbis_encode_init_vbr failed");
+    }
+
+    vorbis_comment vc; vorbis_comment_init(&vc);
+    vorbis_dsp_state vd; vorbis_analysis_init(&vd, &vi);
+    vorbis_block    vb; vorbis_block_init(&vd, &vb);
+
+    ogg_stream_state os;
+    ogg_stream_init(&os, 1);
+
+    ogg_packet hdr, hdr_comm, hdr_code;
+    vorbis_analysis_headerout(&vd, &vc, &hdr, &hdr_comm, &hdr_code);
+    ogg_stream_packetin(&os, &hdr);
+    ogg_stream_packetin(&os, &hdr_comm);
+    ogg_stream_packetin(&os, &hdr_code);
+
+    std::vector<uint8_t> out;
+    ogg_page og;
+    while (ogg_stream_flush(&os, &og)) {
+        out.insert(out.end(), og.header, og.header + og.header_len);
+        out.insert(out.end(), og.body,   og.body   + og.body_len);
+    }
+
+    const int BLOCK = 1024;
+    const int totalFrames = static_cast<int>(pcm.size()) / channels;
+    int offset = 0;
+
+    for (;;) {
+        int frames = std::min(BLOCK, totalFrames - offset);
+        float** buf = vorbis_analysis_buffer(&vd, frames > 0 ? frames : 1);
+        if (frames > 0) {
+            for (int c = 0; c < channels; ++c)
+                for (int i = 0; i < frames; ++i)
+                    buf[c][i] = pcm[(offset + i) * channels + c] / 32768.0f;
+        }
+        vorbis_analysis_wrote(&vd, frames);
+        offset += frames;
+
+        while (vorbis_analysis_blockout(&vd, &vb) == 1) {
+            vorbis_analysis(&vb, nullptr);
+            vorbis_bitrate_addblock(&vb);
+            ogg_packet op;
+            while (vorbis_bitrate_flushpacket(&vd, &op)) {
+                ogg_stream_packetin(&os, &op);
+                ogg_page pg;
+                while (ogg_stream_pageout(&os, &pg)) {
+                    out.insert(out.end(), pg.header, pg.header + pg.header_len);
+                    out.insert(out.end(), pg.body,   pg.body   + pg.body_len);
+                }
+            }
+        }
+
+        if (frames == 0) break;
+    }
+
+    while (ogg_stream_flush(&os, &og)) {
+        out.insert(out.end(), og.header, og.header + og.header_len);
+        out.insert(out.end(), og.body,   og.body   + og.body_len);
+    }
+
+    ogg_stream_clear(&os);
+    vorbis_block_clear(&vb);
+    vorbis_dsp_clear(&vd);
+    vorbis_comment_clear(&vc);
+    vorbis_info_clear(&vi);
+
+    return out;
+}
+
+static std::vector<uint8_t> encodePCMtoWAV(const std::vector<int16_t>& pcm,
+                                             int channels, int sampleRate) {
+    const uint32_t dataSize  = static_cast<uint32_t>(pcm.size() * 2);
+    const uint32_t byteRate  = static_cast<uint32_t>(sampleRate * channels * 2);
+    const uint16_t blockAlign = static_cast<uint16_t>(channels * 2);
+
+    std::vector<uint8_t> wav;
+    wav.reserve(44 + dataSize);
+
+    auto w32 = [&](uint32_t v) {
+        wav.push_back(v & 0xFF); wav.push_back((v >> 8) & 0xFF);
+        wav.push_back((v >> 16) & 0xFF); wav.push_back((v >> 24) & 0xFF);
+    };
+    auto w16 = [&](uint16_t v) {
+        wav.push_back(v & 0xFF); wav.push_back((v >> 8) & 0xFF);
+    };
+    auto wcc = [&](const char* s) {
+        wav.push_back(s[0]); wav.push_back(s[1]);
+        wav.push_back(s[2]); wav.push_back(s[3]);
+    };
+
+    wcc("RIFF"); w32(36 + dataSize); wcc("WAVE");
+    wcc("fmt "); w32(16); w16(1);
+    w16(static_cast<uint16_t>(channels));
+    w32(static_cast<uint32_t>(sampleRate));
+    w32(byteRate); w16(blockAlign); w16(16);
+    wcc("data"); w32(dataSize);
+
+    const auto* raw = reinterpret_cast<const uint8_t*>(pcm.data());
+    wav.insert(wav.end(), raw, raw + dataSize);
+    return wav;
+}
+
+static std::vector<uint8_t> encodePCMtoMP3(const std::vector<int16_t>& pcm,
+                                             int channels, int sampleRate) {
+    shine_config_t cfg;
+    shine_set_config_mpeg_defaults(&cfg.mpeg);
+    cfg.wave.samplerate = sampleRate;
+    cfg.wave.channels   = channels == 2 ? PCM_STEREO : PCM_MONO;
+    cfg.mpeg.bitr       = 128;
+    cfg.mpeg.mode       = channels == 2 ? STEREO : MONO;
+
+    if (shine_check_config(sampleRate, 128) < 0)
+        throw std::runtime_error("HIS: sample rate not supported by MP3 encoder");
+
+    shine_t s = shine_initialise(&cfg);
+    if (!s) throw std::runtime_error("HIS: shine_initialise failed");
+
+    const int samplesPerPass = shine_samples_per_pass(s);
+    const int totalFrames    = static_cast<int>(pcm.size()) / channels;
+
+    // Build a padded interleaved buffer so we can feed full blocks
+    int paddedFrames = ((totalFrames + samplesPerPass - 1) / samplesPerPass) * samplesPerPass;
+    std::vector<int16_t> padded(static_cast<size_t>(paddedFrames) * channels, 0);
+    std::memcpy(padded.data(), pcm.data(), pcm.size() * sizeof(int16_t));
+
+    std::vector<uint8_t> out;
+    // Deinterleave into channel planes for shine
+    std::vector<int16_t> ch0(static_cast<size_t>(samplesPerPass));
+    std::vector<int16_t> ch1(static_cast<size_t>(samplesPerPass));
+
+    for (int offset = 0; offset < paddedFrames; offset += samplesPerPass) {
+        // Deinterleave
+        for (int i = 0; i < samplesPerPass; ++i) {
+            ch0[i] = padded[static_cast<size_t>((offset + i) * channels)];
+            if (channels == 2)
+                ch1[i] = padded[static_cast<size_t>((offset + i) * channels + 1)];
+        }
+
+        int16_t* planes[2] = { ch0.data(), channels == 2 ? ch1.data() : ch0.data() };
+        int written = 0;
+        unsigned char* mp3buf = shine_encode_buffer(s, planes, &written);
+        if (written > 0)
+            out.insert(out.end(), mp3buf, mp3buf + written);
+    }
+
+    int written = 0;
+    unsigned char* flush = shine_flush(s, &written);
+    if (written > 0) out.insert(out.end(), flush, flush + written);
+    shine_close(s);
+    return out;
 }
 
 } // anonymous namespace
@@ -181,39 +336,63 @@ std::vector<uint8_t> buildHISHeader(uint16_t channels, uint32_t sampleRate,
 
 // ── Public API ────────────────────────────────────────────────────────────
 
-std::vector<uint8_t> encodeHIS(const std::filesystem::path& inputPath) {
-    auto body = readFile(inputPath);
-    const std::string ext = inputPath.extension().string();
+std::vector<uint8_t> encodeHIS(const std::filesystem::path& oggPath) {
+    auto body = readFile(oggPath);
+    const std::string ext = oggPath.extension().string();
+    if (ext != ".ogg" && ext != ".OGG")
+        throw std::runtime_error("HIS: encodeHIS expects an OGG file; got: " + ext);
 
-    std::vector<uint8_t> header;
+    auto info = parseOGG(body);
+    if (info.totalSamples <= 0)
+        throw std::runtime_error("HIS: could not determine total sample count from OGG");
 
-    if (ext == ".ogg" || ext == ".OGG") {
-        // Parse OGG Vorbis metadata
-        auto info = parseOGG(body);
-        if (info.totalSamples <= 0)
-            throw std::runtime_error("HIS: could not determine total sample count from OGG");
-
-        constexpr uint16_t BPS = 16;
-        uint32_t pcmDataSize = static_cast<uint32_t>(info.totalSamples)
-                               * info.channels * (BPS / 8);
-        header = buildHISHeader(info.channels, info.sampleRate, BPS, pcmDataSize);
-
-    } else if (ext == ".wav" || ext == ".WAV") {
-        // Parse WAV header for metadata, body stays as OGG — not possible.
-        // We can build HIS header from WAV metadata but the body must be OGG.
-        // For WAV input, we can embed the raw PCM wrapped in HIS header format,
-        // but the game expects OGG. Only support encoding from OGG.
-        throw std::runtime_error(
-            "HIS: WAV → HIS requires OGG encoding (use an OGG file as input). "
-            "Extract the audio as OGG first.");
-    } else {
-        throw std::runtime_error("HIS: unsupported input format: " + ext);
-    }
+    constexpr uint16_t BPS = 16;
+    uint32_t pcmDataSize = static_cast<uint32_t>(info.totalSamples)
+                           * info.channels * (BPS / 8);
+    auto header = buildHISHeader(info.channels, info.sampleRate, BPS, pcmDataSize);
 
     std::vector<uint8_t> result;
     result.reserve(HIS_HEADER_SIZE + body.size());
     result.insert(result.end(), header.begin(), header.end());
-    result.insert(result.end(), body.begin(), body.end());
+    result.insert(result.end(), body.begin(),   body.end());
+    return result;
+}
+
+std::vector<uint8_t> encodeHISFromAudio(const std::filesystem::path& inputPath) {
+    const auto ext = inputPath.extension().string();
+
+    // OGG fast path — no transcode needed
+    if (ext == ".ogg" || ext == ".OGG")
+        return encodeHIS(inputPath);
+
+    // WAV / MP3 → PCM → OGG Vorbis → HIS
+    auto body = readFile(inputPath);
+    int channels = 0, sampleRate = 0;
+    std::vector<int16_t> pcm;
+
+    if (ext == ".wav" || ext == ".WAV")
+        pcm = decodeWAVtoPCM(body, channels, sampleRate);
+    else if (ext == ".mp3" || ext == ".MP3")
+        pcm = decodeMP3toPCM(body, channels, sampleRate);
+    else
+        throw std::runtime_error("HIS: unsupported audio format: " + ext);
+
+    auto oggData = encodePCMtoOGG(pcm, channels, sampleRate);
+
+    // Parse the freshly-encoded OGG to get accurate metadata for HIS header
+    auto info = parseOGG(oggData);
+    if (info.totalSamples <= 0)
+        throw std::runtime_error("HIS: encoded OGG has no sample count");
+
+    constexpr uint16_t BPS = 16;
+    uint32_t pcmDataSize = static_cast<uint32_t>(info.totalSamples)
+                           * info.channels * (BPS / 8);
+    auto header = buildHISHeader(info.channels, info.sampleRate, BPS, pcmDataSize);
+
+    std::vector<uint8_t> result;
+    result.reserve(HIS_HEADER_SIZE + oggData.size());
+    result.insert(result.end(), header.begin(), header.end());
+    result.insert(result.end(), oggData.begin(), oggData.end());
     return result;
 }
 
@@ -225,8 +404,21 @@ std::vector<uint8_t> decodeHIS(const std::filesystem::path& hisPath) {
     if (data[0] != 'H' || data[1] != 'I' || data[2] != 'S' || data[3] != 0)
         throw std::runtime_error("HIS: invalid magic (expected 'HIS\\0')");
 
-    // Body starts at byte 32
     return std::vector<uint8_t>(data.begin() + HIS_HEADER_SIZE, data.end());
+}
+
+std::vector<uint8_t> decodeHISToFormat(const std::filesystem::path& hisPath,
+                                        const std::string& format) {
+    auto oggData = decodeHIS(hisPath);
+    if (format == "ogg") return oggData;
+
+    int channels = 0, sampleRate = 0;
+    auto pcm = decodeOGGtoPCM(oggData, channels, sampleRate);
+
+    if (format == "wav") return encodePCMtoWAV(pcm, channels, sampleRate);
+    if (format == "mp3") return encodePCMtoMP3(pcm, channels, sampleRate);
+
+    throw std::runtime_error("HIS: unsupported output format: " + format);
 }
 
 } // namespace CIF

@@ -91,6 +91,18 @@ HIP_API int HIP_EncodeHIS(const char* oggPath,
 HIP_API int HIP_DecodeHIS(const char* hisPath,
                            uint8_t** outData, uint32_t* outSize);
 
+/// Audio (OGG / WAV / MP3) → HIS.
+/// OGG is a fast path. WAV/MP3 are decoded to PCM and re-encoded to OGG Vorbis.
+HIP_API int HIP_EncodeHISFromAudio(const char* audioPath,
+                                    uint8_t** outData, uint32_t* outSize);
+
+/// HIS → format.
+/// format = "ogg" → strips header, returns OGG bytes.
+/// format = "wav" → decodes OGG to PCM, returns RIFF WAV bytes.
+HIP_API int HIP_DecodeHISToFormat(const char* hisPath,
+                                   const char* format,
+                                   uint8_t** outData, uint32_t* outSize);
+
 // ── XSheet JSON ──────────────────────────────────────────────────────────
 
 /// Raw .xsheet body bytes → JSON string (null-terminated, free with HIP_Free).

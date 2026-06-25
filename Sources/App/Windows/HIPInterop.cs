@@ -1,4 +1,3 @@
-using System.Diagnostics;
 using System.Runtime.InteropServices;
 
 namespace HIPToolkit;
@@ -93,6 +92,19 @@ internal static class HIPInterop
     [DllImport(DllName, EntryPoint = "HIP_DecodeHIS")]
     private static extern int DecodeHISRaw(
         [MarshalAs(UnmanagedType.LPUTF8Str)] string hisPath,
+        out nint data,
+        out uint size);
+
+    [DllImport(DllName, EntryPoint = "HIP_EncodeHISFromAudio")]
+    private static extern int EncodeHISFromAudioRaw(
+        [MarshalAs(UnmanagedType.LPUTF8Str)] string audioPath,
+        out nint data,
+        out uint size);
+
+    [DllImport(DllName, EntryPoint = "HIP_DecodeHISToFormat")]
+    private static extern int DecodeHISToFormatRaw(
+        [MarshalAs(UnmanagedType.LPUTF8Str)] string hisPath,
+        [MarshalAs(UnmanagedType.LPUTF8Str)] string format,
         out nint data,
         out uint size);
 
@@ -245,6 +257,20 @@ internal static class HIPInterop
     {
         int rc = XSheetJsonToBodyRaw(json, out var ptr, out var size);
         if (rc != 0) return null;
+        return ExtractBytes(ptr, size);
+    }
+
+    // ── HIS audio helpers ────────────────────────────────────────────────
+
+    public static byte[] EncodeHISFromAudio(string path)
+    {
+        ThrowIfFailed(EncodeHISFromAudioRaw(path, out var ptr, out var size));
+        return ExtractBytes(ptr, size);
+    }
+
+    public static byte[] DecodeHISToFormat(string hisPath, string format)
+    {
+        ThrowIfFailed(DecodeHISToFormatRaw(hisPath, format, out var ptr, out var size));
         return ExtractBytes(ptr, size);
     }
 

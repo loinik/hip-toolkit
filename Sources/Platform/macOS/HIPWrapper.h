@@ -50,7 +50,6 @@ NS_ASSUME_NONNULL_BEGIN
                                error:(NSError **)error;
 
 /// Raw XSheet body (starting with "XSHEET HerInteractive\0") → CIF type 6.
-/// Pass the extracted body bytes, NOT an already-wrapped .cif file.
 + (nullable NSData *)encodeXSheetAtPath:(NSString *)path
                                   error:(NSError **)error;
 
@@ -70,21 +69,16 @@ NS_ASSUME_NONNULL_BEGIN
 
 // ── Ciftree archive ──────────────────────────────────────────────────────
 
-/// Pack a folder (recursively) into a Ciftree .dat archive.
-/// Handles .cif, .png, .lua, .xsheet; skips everything else.
 + (nullable NSData *)packFolderAtPath:(NSString *)folderPath
                               options:(HIPPackOptions *)options
                                 error:(NSError **)error;
 
-/// Pack explicit .cif files into a Ciftree .dat archive (used by the converter UI).
 + (nullable NSData *)packCiftreeFromPaths:(NSArray<NSString *> *)paths
                                     error:(NSError **)error;
 
-/// Unpack a Ciftree .dat archive
 + (nullable NSArray<CiftreeFileEntry *> *)unpackCiftreeAtPath:(NSString *)path
                                                         error:(NSError **)error;
 
-/// Unpack a Ciftree .dat and write each entry to outDir, optionally decoding to native format.
 + (BOOL)unpackCiftreeAtPath:(NSString *)datPath
               toFolderPath:(NSString *)outPath
           extractContents:(BOOL)extractContents
@@ -92,26 +86,33 @@ NS_ASSUME_NONNULL_BEGIN
 
 // ── XSheet JSON ─────────────────────────────────────────────────────────
 
-/// Raw .xsheet body bytes → JSON string. Returns nil if not a valid XSheet binary.
 + (nullable NSString *)xsheetBodyToJson:(NSData *)body
     NS_SWIFT_NAME(xsheetBodyToJson(_:));
 
-/// JSON string → raw .xsheet body bytes. Returns nil if not a valid XSheet JSON.
 + (nullable NSData *)xsheetFromJson:(NSString *)json
     NS_SWIFT_NAME(xsheetFromJson(_:));
 
 // ── HIS audio ───────────────────────────────────────────────────────────
 
-/// OGG → HIS  (builds HIS header from OGG Vorbis metadata)
-+ (nullable NSData *)encodeHISFromOGGAtPath:(NSString *)path
-                                      error:(NSError **)error;
+/// OGG / WAV / MP3 → HIS.
+/// OGG is a fast path. WAV/MP3 are decoded and re-encoded via libvorbis.
++ (nullable NSData *)encodeHISFromAudioAtPath:(NSString *)path
+                                        error:(NSError **)error
+    NS_SWIFT_NAME(encodeHISFromAudio(atPath:));
 
-/// HIS → OGG  (strips 32-byte HIS header)
+/// HIS → OGG bytes (strips 32-byte header).
 + (nullable NSData *)decodeHISAtPath:(NSString *)path
                                error:(NSError **)error;
 
+/// HIS → format.
+/// @param format  @"ogg" (fast, strips header) or @"wav" (decodes to PCM+RIFF)
++ (nullable NSData *)decodeHISAtPath:(NSString *)path
+                             toFormat:(NSString *)format
+                                error:(NSError **)error
+    NS_SWIFT_NAME(decodeHIS(atPath:toFormat:));
+
 /// OGG Vorbis bytes → WAV (RIFF / PCM) for AVAudioPlayer playback.
-/// Uses the bundled stb_vorbis. Returns nil if the stream cannot be decoded.
+/// Uses the bundled stb_vorbis + native RIFF writer — no external deps.
 + (nullable NSData *)decodeOGGToWAVFromData:(NSData *)oggData
                                       error:(NSError **)error;
 
