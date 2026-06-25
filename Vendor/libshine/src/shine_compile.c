@@ -1,6 +1,8 @@
 /* shine_compile.c — single TU that compiles all of libshine. */
 #ifdef _MSC_VER
 #  pragma warning(push, 0)
+/* MSVC doesn't support GCC's __attribute__ syntax */
+#  define __attribute__(x)
 #endif
 #if defined(__clang__)
 #  pragma clang diagnostic push

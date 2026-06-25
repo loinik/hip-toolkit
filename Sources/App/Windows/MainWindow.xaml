@@ -131,13 +131,12 @@
             <!-- HIS output format (visible only in HIS decode mode) -->
             <StackPanel x:Name="HisFormatPanel" Orientation="Horizontal" Spacing="8"
                         Visibility="Collapsed" VerticalAlignment="Center">
-                <AppBarSeparator Margin="4,0"/>
                 <TextBlock Text="Output" VerticalAlignment="Center"
                            Foreground="{ThemeResource TextFillColorSecondaryBrush}"/>
                 <ComboBox x:Name="CmbHisFormat" SelectionChanged="HisFormat_Changed"
                           MinWidth="80">
-                    <ComboBoxItem Content="OGG" Tag="ogg"/>
                     <ComboBoxItem Content="WAV" Tag="wav" IsSelected="True"/>
+                    <ComboBoxItem Content="OGG" Tag="ogg"/>
                     <ComboBoxItem Content="MP3" Tag="mp3"/>
                 </ComboBox>
             </StackPanel>

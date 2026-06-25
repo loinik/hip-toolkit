@@ -170,14 +170,16 @@
   <ItemGroup>
     <ClCompile Include="..\..\Core\CIFArchive.cpp" />
     <ClCompile Include="..\..\Core\CiftreeArchive.cpp" />
-    <ClCompile Include="..\..\Core\HISArchive.cpp" />
+    <ClCompile Include="..\..\Core\HISArchive.cpp">
+      <DisableSpecificWarnings>4244;4267;4505</DisableSpecificWarnings>
+    </ClCompile>
     <ClCompile Include="..\..\Core\XSheetArchive.cpp" />
     <ClCompile Include="..\..\..\Vendor\lua\*.c" Exclude="..\..\..\Vendor\lua\print.c">
       <!-- Suppress warnings in Lua C source that are noise for third-party code -->
       <DisableSpecificWarnings>4324;4334;4244;4267;4310;4701;4703</DisableSpecificWarnings>
     </ClCompile>
     <ClCompile Include="..\..\..\Vendor\stb_vorbis.c">
-      <DisableSpecificWarnings>4244;4245;4267;4305;4701;4706</DisableSpecificWarnings>
+      <DisableSpecificWarnings>4244;4245;4267;4305;4456;4457;4505;4701;4706</DisableSpecificWarnings>
     </ClCompile>
     <ClCompile Include="..\..\..\Vendor\libvorbis\src\vorbis_compile.c">
       <DisableSpecificWarnings>4244;4245;4267;4305;4701;4706;4996</DisableSpecificWarnings>
