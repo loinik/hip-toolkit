@@ -26,24 +26,36 @@
 
   <!-- Strings JSON — single source of truth for all UI strings -->
   <ItemGroup>
-    <Content Include="$(SolutionDir)Sources\Strings\en.json"
-             CopyToOutputDirectory="PreserveNewest"
-             Link="Strings\en.json" />
+    <Content Include="$(SolutionDir)Sources\Strings\en.json" CopyToOutputDirectory="PreserveNewest" Link="Strings\en.json" />
   </ItemGroup>
 
   <!-- luadec binaries — select the right one at runtime via RuntimeInformation -->
   <ItemGroup>
-    <Content Include="$(SolutionDir)Vendor\luadec-win-x64.exe"
-             CopyToOutputDirectory="PreserveNewest"
-             Link="luadec-win-x64.exe" />
-    <Content Include="$(SolutionDir)Vendor\luadec-win-arm64.exe"
-             CopyToOutputDirectory="PreserveNewest"
-             Link="luadec-win-arm64.exe" />
+    <Content Include="$(SolutionDir)Vendor\luadec-win-x64.exe" CopyToOutputDirectory="PreserveNewest" Link="luadec-win-x64.exe" />
+    <Content Include="$(SolutionDir)Vendor\luadec-win-arm64.exe" CopyToOutputDirectory="PreserveNewest" Link="luadec-win-arm64.exe" />
+  </ItemGroup>
+  <ItemGroup>
+    <None Include="..\..\..\README.md">
+      <Pack>True</Pack>
+      <PackagePath>\</PackagePath>
+    </None>
+    <None Include="..\..\..\Toolkit.png">
+      <Pack>True</Pack>
+      <PackagePath>\</PackagePath>
+    </None>
   </ItemGroup>
 
   <!-- Path to the native bridge DLL produced by the HIP.Bridge (C++) project. -->
   <PropertyGroup>
     <HIPBridgeDll>$(SolutionDir)build\$(Platform)\$(Configuration)\HIP.Bridge\HIP.Bridge.dll</HIPBridgeDll>
+    <Authors>Mike Lucyšyn, Nancy Drew Hub</Authors>
+    <Title>$(AssemblyName)</Title>
+    <RepositoryUrl>https://github.com/loinik/hip-toolkit</RepositoryUrl>
+    <PackageReadmeFile>README.md</PackageReadmeFile>
+    <PackageIcon>Toolkit.png</PackageIcon>
+    <PackageProjectUrl>https://nancydrew.me/kit/toolkit</PackageProjectUrl>
+    <Copyright>© 2026 Mike Lucyšyn × Nancy Drew Hub</Copyright>
+    <Description>This project is for educational and preservation purposes only. It is not affiliated with or endorsed by HeR Interactive, inc. Use responsibly and respect copyright holders' rights.</Description>
   </PropertyGroup>
 
   <!--
@@ -56,16 +68,11 @@
     start and crash later with "Unable to load DLL 'HIP.Bridge'" (0x8007007E).
   -->
   <Target Name="CopyNativeBridge" AfterTargets="Build">
-    <Error Condition="!Exists('$(HIPBridgeDll)')"
-           Text="HIP.Bridge.dll was not found at '$(HIPBridgeDll)'. The native HIP.Bridge (C++) project must be built for $(Platform)/$(Configuration) before the app. Building the whole solution does this automatically via the build dependency declared in HIP Toolkit.sln." />
-    <Copy SourceFiles="$(HIPBridgeDll)"
-          DestinationFolder="$(OutDir)"
-          SkipUnchangedFiles="true" />
+    <Error Condition="!Exists('$(HIPBridgeDll)')" Text="HIP.Bridge.dll was not found at '$(HIPBridgeDll)'. The native HIP.Bridge (C++) project must be built for $(Platform)/$(Configuration) before the app. Building the whole solution does this automatically via the build dependency declared in HIP Toolkit.sln." />
+    <Copy SourceFiles="$(HIPBridgeDll)" DestinationFolder="$(OutDir)" SkipUnchangedFiles="true" />
   </Target>
 
   <Target Name="CopyNativeBridgeToPublish" AfterTargets="Publish">
-    <Copy SourceFiles="$(HIPBridgeDll)"
-          DestinationFolder="$(PublishDir)"
-          SkipUnchangedFiles="true" />
+    <Copy SourceFiles="$(HIPBridgeDll)" DestinationFolder="$(PublishDir)" SkipUnchangedFiles="true" />
   </Target>
 </Project>
