@@ -25,41 +25,80 @@ A development kit for extracting, compiling, and decompiling game archives from 
 - Batch decompilation of archived scripts
 
 🔊 **Audio Support**
-- HIS format wrapper for OGG Vorbis
-- Extract audio from game archives
-- Encode Vorbis to HIS format
+- HIS audio container (OGG Vorbis inside)
+- Encode **MP3 / WAV / OGG → HIS**
+- Decode **HIS → WAV / OGG / MP3** (WAV is the default output)
+- Built-in audio player & export in the preview (macOS and Windows)
 
 ## Requirements
 
+### macOS
 - **macOS 26 (Tahoe)** or later
+- **Apple Silicon only** (arm64). Intel Macs are **not supported** — macOS 26 itself is Apple-Silicon-only.
 - Xcode 26+ for building
-- Windows 10/11 with Visual Studio 2022 for the native Windows solution
-- Windows App Runtime **1.6 or newer** for the WinUI 3 app
-    - Example: **1.8.6** is compatible
-    - Download: https://learn.microsoft.com/en-us/windows/apps/windows-app-sdk/downloads
+
+### Windows
+- **Windows 10/11**, **64-bit only** — both **x64** and **ARM64** are supported.
+- **x86 (32-bit) is not supported.**
+- Self-contained builds bundle everything and need no extra installs.
+- Portable builds additionally require the **.NET 8 Desktop Runtime** (the Windows App SDK runtime is already bundled).
+- For building from source: Visual Studio 2022+ with the **Desktop development with C++** workload.
 
 ## Building
 
-### macOS
+### Release packages (recommended)
+
+Two scripts produce ready-to-ship release artifacts:
+
+**macOS** — builds the app and a distributable `.dmg` (with custom background):
+
+```bash
+python3 -m pip install --user dmgbuild   # one-time
+./scripts/build-macos.sh                 # -> dist/HIP.Toolkit-<ver>-macos.dmg
+```
+
+Optionally place `Extras/dmg-background.png` (705×505) and `Extras/dmg-background@2x.png`
+(1409×1009, Retina) to get a custom DMG background.
+
+**Windows** — builds all four packages (run from a *Developer PowerShell* or any shell with
+Visual Studio installed):
+
+```powershell
+.\scripts\build-windows.ps1
+```
+
+Produces in `dist/`:
+
+| Package | Needs on target machine |
+|---------|--------------------------|
+| `…-windows-win-x64-portable.zip`        | .NET 8 Desktop Runtime (WinAppSDK bundled) |
+| `…-windows-win-x64-self-contained.zip`  | nothing |
+| `…-windows-win-arm64-portable.zip`      | .NET 8 Desktop Runtime (WinAppSDK bundled) |
+| `…-windows-win-arm64-self-contained.zip`| nothing |
+
+The script builds the native C++ (`HIP.Core` + `HIP.Bridge`) for each architecture, then
+publishes the WinUI 3 app — no manual switching of Debug/Release or x64/ARM64 needed.
+
+### Building manually
+
+**macOS:**
 
 ```bash
 git clone https://github.com/loinik/hip-toolkit.git
 cd hip-toolkit
-xcodebuild -scheme hip -configuration Release
+xcodebuild -scheme "HIP Toolkit" -configuration Release
 ```
 
-### Windows
-
-Open `HIP Toolkit.sln` in Visual Studio 2022 and build for `Debug|x64` or `Release|x64`.
-
-If launching the app shows a dialog about missing Windows App Runtime (for example, version 1.6), install a compatible runtime from:
-
-- https://learn.microsoft.com/en-us/windows/apps/windows-app-sdk/downloads
-
-The solution references the shared C++ sources in-place:
+**Windows:** open `HIP Toolkit.sln` in Visual Studio 2022 and build for `Release|x64` or
+`Release|ARM64`. The solution references the shared C++ sources in-place:
 
 - `Sources/Platform/Windows/HIP.Core` — static library wrapping the cross-platform C++ engine.
-- `Sources/App/Windows/` — WinUI 3 / C# + XAML GUI application (planned).
+- `Sources/Platform/Windows/HIP.Bridge` — native wrapper DLL consumed by the C# app via P/Invoke.
+- `Sources/App/Windows/` — WinUI 3 / C# + XAML GUI application.
+
+If launching the app shows a dialog about a missing Windows App Runtime, install a compatible
+runtime (1.6+) from https://learn.microsoft.com/en-us/windows/apps/windows-app-sdk/downloads —
+or use a self-contained build, which bundles it.
 
 ## Usage
 
@@ -127,7 +166,7 @@ Vendor/
 
 This design allows easy porting to Windows/Linux by implementing platform-specific wrappers while keeping the core logic unchanged.
 
-On Windows, `HIP.Core` is built as a C++ static library. The C# GUI in `Sources/App/Windows` will consume it via a native wrapper DLL with P/Invoke.
+On Windows, `HIP.Core` is built as a C++ static library and `HIP.Bridge` exposes it as a native DLL. The C# WinUI 3 GUI in `Sources/App/Windows` consumes that DLL via P/Invoke.
 
 ## Supported File Types
 
@@ -181,9 +220,9 @@ For higher-quality output and more stable symbol reconstruction, it is recommend
 
 ## Future Plans
 
-- [ ] Windows port (using same C++ core)
+- [x] Windows port (using same C++ core)
+- [x] Vorbis encoding from WAV/MP3
 - [ ] Command-line tool for batch operations
-- [ ] Vorbis encoding from WAV/MP3
 - [ ] Linux support
 
 ## Credits

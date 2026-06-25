@@ -9,8 +9,8 @@
       dist/HIP.Toolkit-<ver>-windows-arm64-portable.zip
       dist/HIP.Toolkit-<ver>-windows-arm64-self-contained.zip
 
-    "Portable"       — WinAppSDK bundled, requires .NET 8 Desktop Runtime on the host.
-    "Self-contained" — WinAppSDK + .NET 8 runtime all bundled, no dependencies.
+    "Portable"       - WinAppSDK bundled, requires .NET 8 Desktop Runtime on the host.
+    "Self-contained" - WinAppSDK + .NET 8 runtime all bundled, no dependencies.
 
 .PARAMETER Configuration
     Release (default) or Debug.
@@ -27,7 +27,7 @@ param(
 Set-StrictMode -Version Latest
 $ErrorActionPreference = "Stop"
 
-# ── Paths ─────────────────────────────────────────────────────────────────────
+# --- Paths ---
 
 $RepoRoot    = Split-Path $PSScriptRoot -Parent
 $SolutionDir = $RepoRoot
@@ -39,7 +39,7 @@ $Version     = (Get-Content (Join-Path $RepoRoot "VERSION")).Trim()
 
 New-Item -ItemType Directory -Force -Path $DistDir | Out-Null
 
-# ── Locate MSBuild ─────────────────────────────────────────────────────────────
+# --- Locate MSBuild ---
 
 function Find-MSBuild {
     # Try vswhere first (most reliable on developer machines)
@@ -57,21 +57,27 @@ function Find-MSBuild {
 $MSBuild = Find-MSBuild
 Write-Host "  MSBuild : $MSBuild" -ForegroundColor DarkGray
 
-# ── Helper ────────────────────────────────────────────────────────────────────
+# --- Helper ---
 
 function Invoke-Step([string]$Label, [scriptblock]$Body) {
     Write-Host ""
-    Write-Host "── $Label" -ForegroundColor Cyan
+    Write-Host "--- $Label" -ForegroundColor Cyan
     & $Body
     if ($LASTEXITCODE -and $LASTEXITCODE -ne 0) { throw "Step failed: $Label (exit $LASTEXITCODE)" }
 }
 
 function Build-NativeCpp([string]$Arch) {
+    # SolutionDir MUST be passed explicitly. The vcxproj OutDir is
+    # "$(SolutionDir)build\$(Platform)\$(Configuration)\$(ProjectName)\". When a
+    # .vcxproj is built directly (not via the .sln), MSBuild defaults SolutionDir
+    # to the project's own folder, so output lands in Sources\Platform\Windows\build.
+    # But the C# csproj looks for HIP.Bridge.dll under "$(SolutionDir)build\..." with
+    # SolutionDir = repo root. Pin both to the repo root so the paths line up.
     Invoke-Step "C++ HIP.Core  [$Arch $Configuration]" {
-        & $MSBuild $CoreVcxproj /p:Configuration=$Configuration /p:Platform=$Arch /nologo /v:minimal /m
+        & $MSBuild $CoreVcxproj /p:Configuration=$Configuration /p:Platform=$Arch /p:SolutionDir="$SolutionDir\" /nologo /v:minimal /m
     }
     Invoke-Step "C++ HIP.Bridge [$Arch $Configuration]" {
-        & $MSBuild $BridgeVcxproj /p:Configuration=$Configuration /p:Platform=$Arch /nologo /v:minimal /m
+        & $MSBuild $BridgeVcxproj /p:Configuration=$Configuration /p:Platform=$Arch /p:SolutionDir="$SolutionDir\" /nologo /v:minimal /m
     }
 }
 
@@ -82,31 +88,40 @@ function Publish-App([string]$Arch, [string]$RID, [bool]$SelfContained, [string]
     $scFlag = if ($SelfContained) { "true" } else { "false" }
     $label  = if ($SelfContained) { "self-contained" } else { "portable" }
 
-    Invoke-Step "dotnet publish [$Arch / $label]" {
-        dotnet publish $CsprojFile `
-            --configuration $Configuration `
-            --runtime $RID `
-            -p:Platform=$Arch `
-            -p:SelfContained=$scFlag `
-            -p:PublishDir="$TmpDir" `
-            -p:SolutionDir="$SolutionDir\" `
-            --nologo
+    # Publish with the *Visual Studio* MSBuild, not `dotnet publish`. The .NET SDK
+    # MSBuild cannot load WindowsAppSDK's ExpandPriContent task (MSB4062: the
+    # Microsoft.Build.Packaging.Pri.Tasks.dll only ships with VS), so PRI/resource
+    # generation fails. VS MSBuild has that task. Use forward slashes in PublishDir
+    # to avoid PowerShell's trailing-backslash quoting trap when calling a native exe.
+    $pubDir = ($TmpDir -replace '\\','/') + '/'
+
+    Invoke-Step "publish [$Arch / $label]" {
+        & $MSBuild $CsprojFile `
+            /restore `
+            /t:Publish `
+            /p:Configuration=$Configuration `
+            /p:Platform=$Arch `
+            /p:RuntimeIdentifier=$RID `
+            /p:SelfContained=$scFlag `
+            /p:PublishDir=$pubDir `
+            /p:SolutionDir="$SolutionDir\" `
+            /nologo /v:minimal /m
     }
 
     # For portable builds: add a small runtime README
     if (-not $SelfContained) {
         $readme = @"
-HIP Toolkit $Version — Portable ($RID)
+HIP Toolkit $Version - Portable ($RID)
 
 This build requires the .NET 8 Desktop Runtime to be installed:
   https://dotnet.microsoft.com/en-us/download/dotnet/8.0
 
-The Windows App SDK runtime is already bundled — no separate install needed.
+The Windows App SDK runtime is already bundled - no separate install needed.
 "@
         $readme | Set-Content (Join-Path $TmpDir "RUNTIME-REQUIRED.txt") -Encoding UTF8
     }
 
-    Invoke-Step "ZIP → $OutZip" {
+    Invoke-Step "ZIP -> $OutZip" {
         if (Test-Path $OutZip) { Remove-Item $OutZip -Force }
         Compress-Archive -Path "$TmpDir\*" -DestinationPath $OutZip -CompressionLevel Optimal
         $size = [math]::Round((Get-Item $OutZip).Length / 1MB, 1)
@@ -116,10 +131,10 @@ The Windows App SDK runtime is already bundled — no separate install needed.
     Remove-Item $TmpDir -Recurse -Force
 }
 
-# ── Main ──────────────────────────────────────────────────────────────────────
+# --- Main ---
 
 Write-Host ""
-Write-Host "HIP Toolkit $Version — Windows release build" -ForegroundColor White
+Write-Host "HIP Toolkit $Version - Windows release build" -ForegroundColor White
 Write-Host "Configuration : $Configuration" -ForegroundColor DarkGray
 
 foreach ($arch in @("x64", "ARM64")) {

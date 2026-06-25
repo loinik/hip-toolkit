@@ -6,14 +6,24 @@
 #   ./scripts/build-macos.sh developer-id # Notarised Developer ID build
 #
 # Prerequisites:
-#   • Xcode command-line tools (xcode-select --install)
-#   • Optional: Extras/dmg-background.png  (1400×900 px recommended)
+#   • Xcode (full app — not just Command Line Tools)
+#   • dmgbuild:  python3 -m pip install --user dmgbuild
+#   • Optional: Extras/dmg-background.png      (705×505 px)
+#               Extras/dmg-background@2x.png   (1409×1009 px, Retina)
 #     If absent, the DMG is created without a custom background.
 #
 # Output:
 #   dist/HIP.Toolkit-<ver>-macos.dmg
 
 set -euo pipefail
+
+# Neutralise a contaminated shell environment. A stray CPLUS_INCLUDE_PATH /
+# CPATH / SDKROOT (e.g. pointing at CommandLineTools) gets injected into every
+# clang invocation and collides with Xcode's SDK headers, producing thousands of
+# bogus "unresolved using declaration" / "unknown type name 'uint64_t'" errors.
+# Force the toolchain to come purely from Xcode.
+export DEVELOPER_DIR=/Applications/Xcode.app/Contents/Developer
+unset SDKROOT CPATH C_INCLUDE_PATH CPLUS_INCLUDE_PATH OBJC_INCLUDE_PATH OBJCPLUS_INCLUDE_PATH LIBRARY_PATH
 
 REPO_ROOT="$(cd "$(dirname "$0")/.." && pwd)"
 VERSION="$(cat "$REPO_ROOT/VERSION")"
@@ -41,8 +51,9 @@ xcodebuild archive \
     -configuration Release \
     -archivePath "$ARCHIVE_DIR/HIP Toolkit.xcarchive" \
     CODE_SIGN_STYLE=Automatic \
+    ARCHS=arm64 \
     ONLY_ACTIVE_ARCH=NO \
-    | grep -E "^(Build|error:|warning: |Archive)" || true
+    2>&1 | grep -E "error:|warning:|ARCHIVE|BUILD" || true
 
 [[ -d "$ARCHIVE_DIR/HIP Toolkit.xcarchive" ]] || fail "Archive not found after xcodebuild archive"
 ok "Archive created"
@@ -86,118 +97,64 @@ APP_PATH="$(find "$EXPORT_DIR" -name "*.app" -maxdepth 2 | head -1)"
 [[ -n "$APP_PATH" ]] || fail "Exported .app not found in $EXPORT_DIR"
 ok "Exported: $APP_PATH"
 
-# ── 4. Build DMG ──────────────────────────────────────────────────────────────
+# ── 4. Build DMG (via dmgbuild — deterministic, no Finder/AppleScript) ─────────
 
 log "Building DMG …"
 rm -f "$DMG_OUT"
 
 APP_NAME="$(basename "$APP_PATH")"
 DMG_NAME="${APP_NAME%.app}"   # "HIP Toolkit"
-DMG_TMP="$DIST_DIR/_dmg_tmp"
-rm -rf "$DMG_TMP" && mkdir -p "$DMG_TMP"
 
-# Stage contents
-cp -R "$APP_PATH" "$DMG_TMP/"
-ln -s /Applications "$DMG_TMP/Applications"
+# dmgbuild runs the Finder layout itself, reliably, by writing the .DS_Store
+# directly — no AppleScript, no Automation permission, works headless/CI.
+command -v dmgbuild >/dev/null 2>&1 && DMGBUILD=(dmgbuild) || DMGBUILD=(python3 -m dmgbuild)
+"${DMGBUILD[@]}" --help >/dev/null 2>&1 || \
+    fail "dmgbuild not found. Install with: python3 -m pip install --user dmgbuild"
 
+# Build a retina-aware background: a multi-resolution TIFF so Finder shows the
+# @2x image on Retina displays and the 1x on standard ones.
+BG_FOR_DMG=""
 if [[ -f "$BACKGROUND" ]]; then
-    mkdir -p "$DMG_TMP/.background"
-    cp "$BACKGROUND" "$DMG_TMP/.background/background.png"
-    [[ -f "$BACKGROUND2X" ]] && cp "$BACKGROUND2X" "$DMG_TMP/.background/background@2x.png"
+    if [[ -f "$BACKGROUND2X" ]]; then
+        BG_FOR_DMG="$DIST_DIR/_background.tiff"
+        tiffutil -cathidpicheck "$BACKGROUND" "$BACKGROUND2X" -out "$BG_FOR_DMG" >/dev/null 2>&1 \
+            || BG_FOR_DMG="$BACKGROUND"   # fall back to plain 1x if tiffutil fails
+    else
+        BG_FOR_DMG="$BACKGROUND"
+    fi
 fi
 
-# Create a writable DMG for Finder customisation
-DMG_WORK="$DIST_DIR/_work.dmg"
-hdiutil create -volname "$DMG_NAME" \
-    -srcfolder "$DMG_TMP" \
-    -ov -format UDRW \
-    "$DMG_WORK" > /dev/null
-ok "Writable DMG created"
+# Window is sized to the 1x background (705×505 px == points). Icon positions are
+# in window points, origin top-left.
+SETTINGS="$DIST_DIR/_dmgbuild_settings.py"
+cat > "$SETTINGS" <<'PY'
+import os
+app  = os.environ["DMG_APP_PATH"]
+name = os.path.basename(app)
 
-# Mount it
-MOUNT_POINT="$(hdiutil attach -readwrite -noverify -noautoopen "$DMG_WORK" \
-    | grep /Volumes | awk '{print $NF}')"
-[[ -n "$MOUNT_POINT" ]] || fail "Could not mount writable DMG"
-ok "Mounted at: $MOUNT_POINT"
+files       = [app]
+symlinks    = {"Applications": "/Applications"}
+format      = "UDZO"
+icon_size   = 128
+window_rect = ((400, 100), (705, 505))
+icon_locations = {
+    name:           (175, 240),
+    "Applications": (510, 240),
+}
+_bg = os.environ.get("DMG_BG")
+if _bg:
+    background = _bg
+PY
 
-# ── 5. Finder layout via AppleScript ─────────────────────────────────────────
+DMG_APP_PATH="$APP_PATH" DMG_BG="$BG_FOR_DMG" \
+    "${DMGBUILD[@]}" -s "$SETTINGS" "$DMG_NAME" "$DMG_OUT"
 
-log "Setting Finder layout …"
-
-if [[ -f "$BACKGROUND" ]]; then
-FINDER_SCRIPT="
-tell application \"Finder\"
-    tell disk \"$DMG_NAME\"
-        open
-        set current view of container window to icon view
-        set toolbar visible of container window to false
-        set statusbar visible of container window to false
-        set the bounds of container window to {400, 100, 1104, 604}
-        set viewOptions to the icon view options of container window
-        set arrangement of viewOptions to not arranged
-        set icon size of viewOptions to 128
-        set background picture of viewOptions to file \".background:background.png\"
-        set position of item \"$APP_NAME\" to {185, 275}
-        set position of item \"Applications\" to {520, 275}
-        close
-        open
-        update without registering applications
-        delay 2
-        close
-    end tell
-end tell
-"
-else
-FINDER_SCRIPT="
-tell application \"Finder\"
-    tell disk \"$DMG_NAME\"
-        open
-        set current view of container window to icon view
-        set toolbar visible of container window to false
-        set statusbar visible of container window to false
-        set the bounds of container window to {400, 100, 900, 560}
-        set viewOptions to the icon view options of container window
-        set arrangement of viewOptions to not arranged
-        set icon size of viewOptions to 128
-        set position of item \"$APP_NAME\" to {160, 230}
-        set position of item \"Applications\" to {440, 230}
-        close
-        open
-        update without registering applications
-        delay 2
-        close
-    end tell
-end tell
-"
-fi
-
-osascript <<EOF
-$FINDER_SCRIPT
-EOF
-sleep 2
-
-# ── 6. Finalise ───────────────────────────────────────────────────────────────
-
-log "Finalising …"
-
-# Hide background folder from Finder
-if [[ -f "$BACKGROUND" ]]; then
-    SetFile -a V "$MOUNT_POINT/.background" 2>/dev/null || \
-        xattr -w com.apple.FinderInfo "0000000000000000000C00000000000000000000000000000000000000000000" \
-              "$MOUNT_POINT/.background" 2>/dev/null || true
-fi
-
-# Set DS_Store permissions so Finder picks it up
-chmod -Rf go-w "$MOUNT_POINT" 2>/dev/null || true
-sync
-
-hdiutil detach "$MOUNT_POINT" -quiet
-
-hdiutil convert "$DMG_WORK" -format UDZO -imagekey zlib-level=9 -o "$DMG_OUT" > /dev/null
+[[ -f "$DMG_OUT" ]] || fail "dmgbuild did not produce $DMG_OUT"
 ok "Compressed DMG: $DMG_OUT"
 
 # Cleanup
-rm -rf "$DMG_TMP" "$DMG_WORK" "$EXPORT_PLIST"
+rm -f "$SETTINGS" "$EXPORT_PLIST"
+[[ "$BG_FOR_DMG" == "$DIST_DIR/_background.tiff" ]] && rm -f "$BG_FOR_DMG"
 
 SIZE_MB=$(( $(stat -f%z "$DMG_OUT") / 1048576 ))
 log "Done ✓"
