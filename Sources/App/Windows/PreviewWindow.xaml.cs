@@ -29,6 +29,7 @@ public sealed partial class PreviewWindow : Window
         else
         {
             var w = new PreviewWindow();
+            w.AppWindow.Show();
             w.Activate();
             w.AddFileTab(path);
         }
