@@ -34,7 +34,7 @@ A development kit for extracting, compiling, and decompiling game archives from 
 
 ### macOS
 - **macOS 26 (Tahoe)** or later
-- **Apple Silicon only** (arm64). Intel Macs are **not supported** — macOS 26 itself is Apple-Silicon-only.
+- **Apple Silicon only** (arm64). Intel Macs are **not supported**.
 - Xcode 26+ for building
 
 ### Windows
