@@ -32,7 +32,7 @@ ARCHIVE_DIR="$DIST_DIR/archive"
 EXPORT_DIR="$DIST_DIR/export"
 BACKGROUND="$REPO_ROOT/Extras/dmg-background.png"
 BACKGROUND2X="$REPO_ROOT/Extras/dmg-background@2x.png"
-DMG_OUT="$DIST_DIR/HIP.Toolkit-$VERSION-macos.dmg"
+DMG_OUT="$DIST_DIR/HIP.Toolkit-$VERSION-macos-arm64.dmg"
 SCHEME="HIP Toolkit"
 METHOD="${1:-mac-application}"   # mac-application | developer-id
 
@@ -138,8 +138,8 @@ format      = "UDZO"
 icon_size   = 128
 window_rect = ((400, 100), (705, 505))
 icon_locations = {
-    name:           (175, 240),
-    "Applications": (510, 240),
+    name:           (176, 240),
+    "Applications": (496, 240),
 }
 _bg = os.environ.get("DMG_BG")
 if _bg:
