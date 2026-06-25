@@ -85,8 +85,12 @@
     propagate it to $(PublishDir). Copy it ourselves.
   -->
   <Target Name="CopyPriToPublish" AfterTargets="Publish">
-    <Copy Condition="Exists('$(OutDir)resources.pri')"
-          SourceFiles="$(OutDir)resources.pri"
+    <!-- The PRI is named after the project ("HIP Toolkit.pri"), not "resources.pri",
+         so copy every .pri from the build output to the publish folder. -->
+    <ItemGroup>
+      <_HipPriFiles Include="$(OutDir)*.pri" />
+    </ItemGroup>
+    <Copy SourceFiles="@(_HipPriFiles)"
           DestinationFolder="$(PublishDir)" SkipUnchangedFiles="true" />
   </Target>
 </Project>
