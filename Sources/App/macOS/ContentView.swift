@@ -285,7 +285,8 @@ final class AppViewModel: ObservableObject {
                 data = try HIPWrapper.encodeXSheet(atPath: url.path) as Data
             case "json":
                 guard let jsonData = try? Data(contentsOf: url),
-                      let xsBody  = xsheetFromJSON(jsonData) else {
+                      let jsonStr = String(data: jsonData, encoding: .utf8),
+                      let xsBody = HIPWrapper.xsheetFromJson(jsonStr) else {
                     return fail(name, "Not a valid XSheet JSON (missing \"HerInteractive.XSheet\" marker)")
                 }
                 let tmp = FileManager.default.temporaryDirectory
@@ -329,11 +330,20 @@ final class AppViewModel: ObservableObject {
             switch info.type {
             case 2, 4: outExt = "png"
             case 3:    outExt = "lua"
-            case 6:    outExt = "xsheet"
+            case 6:    outExt = "json"
             default:   outExt = "bin"
             }
 
             let outURL = url.deletingPathExtension().appendingPathExtension(outExt)
+
+            if info.isXSheet {
+                guard let jsonStr = HIPWrapper.xsheetBodyToJson(data),
+                      let jsonData = jsonStr.data(using: .utf8) else {
+                    return [fail(name, "XSheet decode failed")]
+                }
+                try jsonData.write(to: outURL)
+                return [ok(name, "→ .json  \(sizeStr(jsonData.count)) · XSheet")]
+            }
 
             if info.isLua {
                 try data.write(to: outURL)
@@ -365,8 +375,7 @@ final class AppViewModel: ObservableObject {
             try data.write(to: outURL)
             var detail = sizeStr(data.count)
             if info.isPNG || info.isOVL { detail = "\(info.width)×\(info.height) · " + detail }
-            if info.isOVL    { detail += " · OVL" }
-            if info.isXSheet { detail = "XSheet · " + detail }
+            if info.isOVL { detail += " · OVL" }
             return [ok(name, "→ .\(outExt)  " + detail)]
 
         } catch { return [fail(name, error.localizedDescription)] }
@@ -414,7 +423,9 @@ final class AppViewModel: ObservableObject {
                 case "xsheet":
                     cifEntries.append((entryName, try HIPWrapper.encodeXSheet(atPath: file.path) as Data))
                 case "json":
-                    if let jd = try? Data(contentsOf: file), let xsBody = xsheetFromJSON(jd) {
+                    if let jd = try? Data(contentsOf: file),
+                       let jsonStr = String(data: jd, encoding: .utf8),
+                       let xsBody = HIPWrapper.xsheetFromJson(jsonStr) {
                         let tmp = URL(fileURLWithPath: NSTemporaryDirectory())
                             .appendingPathComponent(UUID().uuidString)
                             .appendingPathExtension("xsheet")
@@ -1261,24 +1272,9 @@ private struct BytecodeView: View {
     }
 }
 
-// MARK: - XSheet Format ─────────────────────────────────────────────────────────
-//
-// XSheet body layout (bytes are relative to the raw body, AFTER stripping the 48-byte CIF header):
-//
-//  [0..21]   "XSHEET HerInteractive\0"  magic + null (22 bytes)
-//  [22..29]  header fields (always 00 00 02 00 00 00 00 00 in known files)
-//  [30..31]  LE uint16 = frame count  ← KEY FIELD
-//  [32..33]  LE uint16 = 0x0001 (always 1 in known files)
-//  [34..]    CNV name (null-terminated ASCII), always starts at byte 34
-//  [after null..dataStart-1]  zero padding
-//
-//  Data section (at bodyEnd - dataSectionSize, where dataSectionSize = 28 + frameCount*24):
-//  [+0..+15]  bounding rect: x1, y1, x2, y2 (4 × LE uint32)
-//  [+16..+23] 8 bytes padding (zeros)
-//  [+24..+27] unknown LE uint32 field — value 0x0F (15) in all known samples
-//  [+28..]    frameCount × 24-byte frame records; each record is 6 × LE uint32
-//             record[0] = sequential frame index (0, 1, 2, ...)
-//             record[1..5] = animation/positioning data (all zeros in known Nancy Drew files)
+// MARK: - XSheet Display ────────────────────────────────────────────────────────
+
+private let kXSheetFrameDataOffset = 0x16c
 
 private struct ParsedXSheet {
     let cnvName:    String
@@ -1290,146 +1286,29 @@ private struct ParsedXSheet {
 // Fast parser used for display only.
 private func parseXSheet(_ data: Data) -> ParsedXSheet? {
     let magic = [UInt8]("XSHEET HerInteractive".utf8)
-    guard data.count >= 80, data.prefix(21).elementsEqual(magic) else { return nil }
+    guard data.count >= kXSheetFrameDataOffset, data.prefix(21).elementsEqual(magic) else { return nil }
 
-    // Frame count is a LE uint16 at bytes [30..31]
-    let frameCount = Int(data[30]) | (Int(data[31]) << 8)
-    guard frameCount > 0, frameCount < 2000 else { return nil }
+    let celCount = Int(data[0x22]) | (Int(data[0x23]) << 8)
+    guard celCount > 0, celCount < 2000 else { return nil }
 
-    // Data section is at the very end of the body
-    let dataSectionSize = 28 + frameCount * 24   // rect(16) + pad(8) + unknown(4) + frames
-    guard data.count >= 80 + dataSectionSize else { return nil }
-    let dataStart = data.count - dataSectionSize
+    let x1 = Int(data.le32(at: 0x128))
+    let y1 = Int(data.le32(at: 0x12c))
+    let x2 = Int(data.le32(at: 0x130))
+    let y2 = Int(data.le32(at: 0x134))
 
-    let x1 = Int(data.le32(at: dataStart))
-    let y1 = Int(data.le32(at: dataStart + 4))
-    let x2 = Int(data.le32(at: dataStart + 8))
-    let y2 = Int(data.le32(at: dataStart + 12))
-
-    // CNV name starts at byte 34 (null-terminated)
     var cnvName = ""
-    var i = 34
-    while i < min(data.count, 300), data[i] != 0 {
+    var i = 0x26
+    while i < min(data.count, 0x128), data[i] != 0 {
         if data[i] >= 0x20 { cnvName.append(Character(UnicodeScalar(data[i]))) }
         i += 1
     }
 
+    let actualFrameCount = (data.count - kXSheetFrameDataOffset) / 24
+
     guard x2 > x1, y2 > y1, x2 < 8192, y2 < 8192 else {
-        return ParsedXSheet(cnvName: cnvName, x1: 0, y1: 0, x2: 0, y2: 0, frameCount: frameCount)
+        return ParsedXSheet(cnvName: cnvName, x1: 0, y1: 0, x2: 0, y2: 0, frameCount: actualFrameCount)
     }
-    return ParsedXSheet(cnvName: cnvName, x1: x1, y1: y1, x2: x2, y2: y2, frameCount: frameCount)
-}
-
-// Full parser for lossless JSON round-trip.
-private struct XSheetFull {
-    let cnvName:      String
-    let x1, y1, x2, y2: Int
-    let unknownField: UInt32   // value 0x0F in all known Nancy Drew files; stored for exact roundtrip
-    let frames:       [[UInt32]]
-    let preamble:     Data     // bytes [0..<nameNullByte+1]  (header + name + null byte)
-    let zeroPad:      Data     // zero bytes between name and data section
-}
-
-private func parseXSheetFull(_ data: Data) -> XSheetFull? {
-    let magic = [UInt8]("XSHEET HerInteractive".utf8)
-    guard data.count >= 80, data.prefix(21).elementsEqual(magic) else { return nil }
-
-    let frameCount = Int(data[30]) | (Int(data[31]) << 8)
-    guard frameCount > 0, frameCount < 2000 else { return nil }
-
-    let dataSectionSize = 28 + frameCount * 24
-    guard data.count >= 80 + dataSectionSize else { return nil }
-    let dataStart = data.count - dataSectionSize
-
-    let x1 = Int(data.le32(at: dataStart))
-    let y1 = Int(data.le32(at: dataStart + 4))
-    let x2 = Int(data.le32(at: dataStart + 8))
-    let y2 = Int(data.le32(at: dataStart + 12))
-
-    let unknownField = data.le32(at: dataStart + 24)
-
-    var frames: [[UInt32]] = []
-    for f in 0..<frameCount {
-        let base = dataStart + 28 + f * 24
-        guard base + 24 <= data.count else { break }
-        frames.append((0..<6).map { data.le32(at: base + $0 * 4) })
-    }
-
-    // Name ends at the first 0x00 after byte 34
-    var nameNullByte = 34
-    var i = 34
-    while i < min(data.count, 300) {
-        if data[i] == 0 { nameNullByte = i; break }
-        i += 1
-    }
-
-    let preamble = Data(data[0...nameNullByte])
-    let zeroPad  = nameNullByte + 1 < dataStart
-        ? Data(data[(nameNullByte + 1)..<dataStart]) : Data()
-
-    // CNV name for JSON
-    var cnvName = ""
-    for b in data[34..<nameNullByte] where b >= 0x20 {
-        cnvName.append(Character(UnicodeScalar(b)))
-    }
-
-    return XSheetFull(cnvName: cnvName, x1: x1, y1: y1, x2: x2, y2: y2,
-                      unknownField: unknownField, frames: frames,
-                      preamble: preamble, zeroPad: zeroPad)
-}
-
-private func xsheetToJSON(_ data: Data) -> Data? {
-    guard let full = parseXSheetFull(data) else { return nil }
-    let dict: [String: Any] = [
-        "format":        "HerInteractive.XSheet",
-        "version":       1,
-        "cnv_name":      full.cnvName,
-        "bounds":        ["x1": full.x1, "y1": full.y1, "x2": full.x2, "y2": full.y2],
-        "unknown_field": Int(full.unknownField),
-        "frames":        full.frames.map { $0.map { Int($0) } },
-        "preamble":      full.preamble.base64EncodedString(),
-        "zero_pad":      full.zeroPad.base64EncodedString(),
-    ]
-    return try? JSONSerialization.data(withJSONObject: dict, options: [.prettyPrinted, .sortedKeys])
-}
-
-private func xsheetFromJSON(_ jsonData: Data) -> Data? {
-    guard let obj = try? JSONSerialization.jsonObject(with: jsonData) as? [String: Any],
-          (obj["format"] as? String) == "HerInteractive.XSheet" else { return nil }
-
-    let preamble = (obj["preamble"] as? String).flatMap { Data(base64Encoded: $0) } ?? Data()
-    // Accept both "zero_pad" (new) and "midblock" (legacy key from earlier versions)
-    let zeroPad  = (obj["zero_pad"] as? String).flatMap  { Data(base64Encoded: $0) }
-              ?? (obj["midblock"]  as? String).flatMap  { Data(base64Encoded: $0) }
-              ?? Data()
-    let unknownField = UInt32((obj["unknown_field"] as? Int) ?? 15)
-
-    let bd = obj["bounds"] as? [String: Any]
-    let x1 = bd?["x1"] as? Int ?? 0
-    let y1 = bd?["y1"] as? Int ?? 0
-    let x2 = bd?["x2"] as? Int ?? 0
-    let y2 = bd?["y2"] as? Int ?? 0
-
-    let framesRaw = obj["frames"] as? [[Any]] ?? []
-
-    var result = Data()
-    result.append(preamble)
-    result.append(zeroPad)
-    [x1, y1, x2, y2].forEach { xsheetAppendLE32(&result, UInt32($0)) }
-    result.append(contentsOf: [UInt8](repeating: 0, count: 8))
-    xsheetAppendLE32(&result, unknownField)
-    for (idx, frame) in framesRaw.enumerated() {
-        let raw = frame.compactMap { $0 as? Int }
-        var rec = (0..<6).map { i in i < raw.count ? UInt32(raw[i]) : 0 }
-        rec[0] = UInt32(idx)
-        rec.forEach { xsheetAppendLE32(&result, $0) }
-    }
-    return result
-}
-
-private func xsheetAppendLE32(_ data: inout Data, _ v: UInt32) {
-    data.append(UInt8(v & 0xFF)); data.append(UInt8((v >> 8) & 0xFF))
-    data.append(UInt8((v >> 16) & 0xFF)); data.append(UInt8((v >> 24) & 0xFF))
+    return ParsedXSheet(cnvName: cnvName, x1: x1, y1: y1, x2: x2, y2: y2, frameCount: actualFrameCount)
 }
 
 // XSheet body view — used from both CIF preview (body already decoded) and standalone .xsheet files.
@@ -1499,7 +1378,8 @@ struct XSheetBodyView: View {
         if panel.runModal() == .OK, let dest = panel.url { try? data.write(to: dest) }
     }
     private func exportJSON() {
-        guard let json = xsheetToJSON(data) else { return }
+        guard let jsonStr = HIPWrapper.xsheetBodyToJson(data),
+              let json = jsonStr.data(using: .utf8) else { return }
         let panel = NSSavePanel()
         panel.nameFieldStringValue = sourceURL.deletingPathExtension().lastPathComponent + ".json"
         panel.allowedContentTypes  = [.json]
@@ -1893,7 +1773,8 @@ struct JSONXSheetPreviewView: View {
         .frame(minWidth: 420, minHeight: 300)
         .task {
             if let jsonData = try? Data(contentsOf: url),
-               let body = xsheetFromJSON(jsonData) { xsheetBody = body }
+               let jsonStr = String(data: jsonData, encoding: .utf8),
+               let body = HIPWrapper.xsheetFromJson(jsonStr) { xsheetBody = body }
             else { rawText = try? String(contentsOf: url, encoding: .utf8) }
             loaded = true
         }

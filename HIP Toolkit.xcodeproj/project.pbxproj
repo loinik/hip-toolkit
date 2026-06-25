@@ -11,6 +11,7 @@
 		EE6186752F82969000EB6D27 /* CiftreeArchive.cpp in Sources */ = {isa = PBXBuildFile; fileRef = EE61866B2F82969000EB6D27 /* CiftreeArchive.cpp */; };
 		EE6186782F82969000EB6D27 /* HIPWrapper.mm in Sources */ = {isa = PBXBuildFile; fileRef = EE6186702F82969000EB6D27 /* HIPWrapper.mm */; };
 		EE6186792F82969000EB6D27 /* HISArchive.cpp in Sources */ = {isa = PBXBuildFile; fileRef = EE6186722F82969000EB6D27 /* HISArchive.cpp */; };
+		EE618703AA000001DEADBEEF /* XSheetArchive.cpp in Sources */ = {isa = PBXBuildFile; fileRef = EE618701AA000001DEADBEEF /* XSheetArchive.cpp */; };
 		EE6186C52F829A4600EB6D27 /* stb_vorbis.c in Sources */ = {isa = PBXBuildFile; fileRef = EE6186BD2F829A4600EB6D27 /* stb_vorbis.c */; };
 		EE6187172F829A8100EB6D27 /* ldebug.c in Sources */ = {isa = PBXBuildFile; fileRef = EE6186EA2F829A8100EB6D27 /* ldebug.c */; };
 		EE6187182F829A8100EB6D27 /* loadlib.c in Sources */ = {isa = PBXBuildFile; fileRef = EE6186FA2F829A8100EB6D27 /* loadlib.c */; };
@@ -88,6 +89,9 @@
 		EE6186702F82969000EB6D27 /* HIPWrapper.mm */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.cpp.objcpp; path = HIPWrapper.mm; sourceTree = "<group>"; };
 		EE6186712F82969000EB6D27 /* HISArchive.hpp */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.cpp.h; path = HISArchive.hpp; sourceTree = "<group>"; };
 		EE6186722F82969000EB6D27 /* HISArchive.cpp */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.cpp.cpp; path = HISArchive.cpp; sourceTree = "<group>"; };
+		EE618700AA000001DEADBEEF /* XSheetArchive.hpp */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.cpp.h; path = XSheetArchive.hpp; sourceTree = "<group>"; };
+		EE618701AA000001DEADBEEF /* XSheetArchive.cpp */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.cpp.cpp; path = XSheetArchive.cpp; sourceTree = "<group>"; };
+		EE618702AA000001DEADBEEF /* nlohmann_json.hpp */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.cpp.h; path = nlohmann_json.hpp; sourceTree = "<group>"; };
 		EE6186BD2F829A4600EB6D27 /* stb_vorbis.c */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.c; path = stb_vorbis.c; sourceTree = "<group>"; };
 		EE6186E12F829A8100EB6D27 /* lapi.h */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.h; path = lapi.h; sourceTree = "<group>"; };
 		EE6186E22F829A8100EB6D27 /* lapi.c */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.c; path = lapi.c; sourceTree = "<group>"; };
@@ -259,6 +263,7 @@
 				EE6186BC2F829A4600EB6D27 /* lua */,
 				EE6186BD2F829A4600EB6D27 /* stb_vorbis.c */,
 				EE6187362F82A42800EB6D27 /* luadec-macos-arm64 */,
+				EE618702AA000001DEADBEEF /* nlohmann_json.hpp */,
 			);
 			path = Vendor;
 			sourceTree = "<group>";
@@ -291,6 +296,8 @@
 				EE61866B2F82969000EB6D27 /* CiftreeArchive.cpp */,
 				EE6186712F82969000EB6D27 /* HISArchive.hpp */,
 				EE6186722F82969000EB6D27 /* HISArchive.cpp */,
+				EE618700AA000001DEADBEEF /* XSheetArchive.hpp */,
+				EE618701AA000001DEADBEEF /* XSheetArchive.cpp */,
 			);
 			path = Core;
 			sourceTree = "<group>";
@@ -485,6 +492,7 @@
 				EE6186782F82969000EB6D27 /* HIPWrapper.mm in Sources */,
 				EE6186C52F829A4600EB6D27 /* stb_vorbis.c in Sources */,
 				EE6186792F82969000EB6D27 /* HISArchive.cpp in Sources */,
+				EE618703AA000001DEADBEEF /* XSheetArchive.cpp in Sources */,
 				EE6187172F829A8100EB6D27 /* ldebug.c in Sources */,
 				EE6187182F829A8100EB6D27 /* loadlib.c in Sources */,
 				EE6187192F829A8100EB6D27 /* lfunc.c in Sources */,
@@ -735,6 +743,7 @@
 				ENABLE_INCOMING_NETWORK_CONNECTIONS = NO;
 				ENABLE_OUTGOING_NETWORK_CONNECTIONS = NO;
 				ENABLE_PREVIEWS = YES;
+				HEADER_SEARCH_PATHS = "$(SRCROOT)/Vendor";
 				ENABLE_RESOURCE_ACCESS_AUDIO_INPUT = NO;
 				ENABLE_RESOURCE_ACCESS_BLUETOOTH = NO;
 				ENABLE_RESOURCE_ACCESS_CALENDARS = NO;
@@ -790,6 +799,7 @@
 				ENABLE_INCOMING_NETWORK_CONNECTIONS = NO;
 				ENABLE_OUTGOING_NETWORK_CONNECTIONS = NO;
 				ENABLE_PREVIEWS = YES;
+				HEADER_SEARCH_PATHS = "$(SRCROOT)/Vendor";
 				ENABLE_RESOURCE_ACCESS_AUDIO_INPUT = NO;
 				ENABLE_RESOURCE_ACCESS_BLUETOOTH = NO;
 				ENABLE_RESOURCE_ACCESS_CALENDARS = NO;

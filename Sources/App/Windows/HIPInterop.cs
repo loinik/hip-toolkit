@@ -96,6 +96,16 @@ internal static class HIPInterop
         out nint data,
         out uint size);
 
+    [DllImport(DllName, EntryPoint = "HIP_XSheetBodyToJson")]
+    private static extern int XSheetBodyToJsonRaw(
+        [In] byte[] body, uint bodyLen,
+        out nint outJson, out uint outJsonLen);
+
+    [DllImport(DllName, EntryPoint = "HIP_XSheetJsonToBody")]
+    private static extern int XSheetJsonToBodyRaw(
+        [MarshalAs(UnmanagedType.LPUTF8Str)] string json,
+        out nint outBody, out uint outBodyLen);
+
     // ── Raw header struct ────────────────────────────────────────────────
 
     [StructLayout(LayoutKind.Sequential)]
@@ -220,6 +230,21 @@ internal static class HIPInterop
     public static byte[] DecodeHIS(string hisPath)
     {
         ThrowIfFailed(DecodeHISRaw(hisPath, out var ptr, out var size));
+        return ExtractBytes(ptr, size);
+    }
+
+    public static string XSheetBodyToJson(byte[] body)
+    {
+        ThrowIfFailed(XSheetBodyToJsonRaw(body, (uint)body.Length, out var ptr, out var size));
+        var json = Marshal.PtrToStringUTF8(ptr, (int)size);
+        Free(ptr);
+        return json ?? "";
+    }
+
+    public static byte[]? XSheetJsonToBody(string json)
+    {
+        int rc = XSheetJsonToBodyRaw(json, out var ptr, out var size);
+        if (rc != 0) return null;
         return ExtractBytes(ptr, size);
     }
 

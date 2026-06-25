@@ -214,6 +214,16 @@ public sealed class MainViewModel : INotifyPropertyChanged
                 case ".xsheet":
                     data = HIPInterop.EncodeXSheet(path);
                     break;
+                case ".json":
+                {
+                    var body = HIPInterop.XSheetJsonToBody(File.ReadAllText(path));
+                    if (body == null) return [Fail(name, "Not a valid XSheet JSON")];
+                    var tmpPath = Path.ChangeExtension(path, ".xsheet");
+                    File.WriteAllBytes(tmpPath, body);
+                    try { data = HIPInterop.EncodeXSheet(tmpPath); }
+                    finally { try { File.Delete(tmpPath); } catch { } }
+                    break;
+                }
                 default:
                     return [Fail(name, $"Unsupported: {ext}")];
             }
@@ -236,7 +246,7 @@ public sealed class MainViewModel : INotifyPropertyChanged
             {
                 detail += HIPInterop.IsCompiledLua(path) ? " · pre-compiled" : " · source";
             }
-            if (ext is ".xsheet") detail += " · XSheet";
+            if (ext is ".xsheet" or ".json") detail += " · XSheet";
 
             return [Ok(name, detail)];
         }
@@ -259,7 +269,7 @@ public sealed class MainViewModel : INotifyPropertyChanged
             {
                 2 or 4 => ".png",
                 3 => ".lua",
-                6 => ".xsheet",
+                6 => ".json",
                 _ => ".bin"
             };
 
@@ -293,12 +303,19 @@ public sealed class MainViewModel : INotifyPropertyChanged
                 }
             }
 
-            // ── PNG / OVL / XSheet / other ──
+            // ── XSheet → JSON ──
+            if (info.IsXSheet)
+            {
+                var json = HIPInterop.XSheetBodyToJson(data);
+                File.WriteAllText(outPath, json, System.Text.Encoding.UTF8);
+                return [Ok(name, $"→ .json  {FormatSize(json.Length)} · XSheet")];
+            }
+
+            // ── PNG / OVL / other ──
             File.WriteAllBytes(outPath, data);
             var detail = FormatSize(data.Length);
             if (info.IsPNG || info.IsOVL) detail = $"{info.Width}×{info.Height} · {detail}";
-            if (info.IsOVL)    detail += " · OVL";
-            if (info.IsXSheet) detail = $"XSheet · {detail}";
+            if (info.IsOVL) detail += " · OVL";
             return [Ok(name, $"→ {outExt}  {detail}")];
         }
         catch (Exception ex) { return [Fail(name, ex.Message)]; }
@@ -390,6 +407,25 @@ public sealed class MainViewModel : INotifyPropertyChanged
                 {
                     Ok(name, $"→ {files.Length} files extracted to {Path.GetFileName(outDir)}/")
                 };
+
+                if (extractContents)
+                {
+                    foreach (var file in files)
+                    {
+                        if (!file.EndsWith(".xsheet", StringComparison.OrdinalIgnoreCase)) continue;
+                        try
+                        {
+                            var json = HIPInterop.XSheetBodyToJson(File.ReadAllBytes(file));
+                            var jsonPath = Path.ChangeExtension(file, ".json");
+                            File.WriteAllText(jsonPath, json, System.Text.Encoding.UTF8);
+                            File.Delete(file);
+                        }
+                        catch { /* leave .xsheet as-is on error */ }
+                    }
+                    // Refresh file list after xsheet→json conversion
+                    files = Directory.GetFiles(outDir, "*", SearchOption.TopDirectoryOnly);
+                    results[0] = Ok(name, $"→ {files.Length} files extracted to {Path.GetFileName(outDir)}/");
+                }
 
                 if (decompileLua && extractContents)
                 {

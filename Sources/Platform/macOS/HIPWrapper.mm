@@ -5,6 +5,7 @@
 #include "CIFArchive.hpp"
 #include "CiftreeArchive.hpp"
 #include "HISArchive.hpp"
+#include "XSheetArchive.hpp"
 
 // MARK: - Helpers
 
@@ -420,6 +421,23 @@ extern "C" int stb_vorbis_decode_memory(const unsigned char *mem, int len,
 
     free(pcm);
     return [wav copy];
+}
+
+// MARK: - XSheet JSON
+
++ (nullable NSString *)xsheetBodyToJson:(NSData *)body {
+    std::vector<uint8_t> vec(static_cast<const uint8_t*>(body.bytes),
+                              static_cast<const uint8_t*>(body.bytes) + body.length);
+    auto json = XSheet::toJson(vec);
+    if (json.empty()) return nil;
+    return [NSString stringWithUTF8String:json.c_str()];
+}
+
++ (nullable NSData *)xsheetFromJson:(NSString *)json {
+    std::string s = json.UTF8String ? json.UTF8String : "";
+    auto body = XSheet::fromJson(s);
+    if (body.empty()) return nil;
+    return [NSData dataWithBytes:body.data() length:body.size()];
 }
 
 @end

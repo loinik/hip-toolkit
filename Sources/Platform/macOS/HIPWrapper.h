@@ -90,6 +90,16 @@ NS_ASSUME_NONNULL_BEGIN
           extractContents:(BOOL)extractContents
                     error:(NSError **)error;
 
+// ── XSheet JSON ─────────────────────────────────────────────────────────
+
+/// Raw .xsheet body bytes → JSON string. Returns nil if not a valid XSheet binary.
++ (nullable NSString *)xsheetBodyToJson:(NSData *)body
+    NS_SWIFT_NAME(xsheetBodyToJson(_:));
+
+/// JSON string → raw .xsheet body bytes. Returns nil if not a valid XSheet JSON.
++ (nullable NSData *)xsheetFromJson:(NSString *)json
+    NS_SWIFT_NAME(xsheetFromJson(_:));
+
 // ── HIS audio ───────────────────────────────────────────────────────────
 
 /// OGG → HIS  (builds HIS header from OGG Vorbis metadata)

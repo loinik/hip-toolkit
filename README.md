@@ -192,6 +192,7 @@ For higher-quality output and more stable symbol reconstruction, it is recommend
 - **LuaDec** — Lua decompiler
 - **Lua 5.1.5** — Included for script compilation
 - **stb_vorbis** — Audio decoding library
+- **nlohmann/json v3.11.3** — JSON for Modern C++ (MIT License)
 
 ## Disclaimer
 

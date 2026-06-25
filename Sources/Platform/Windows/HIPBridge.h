@@ -91,6 +91,16 @@ HIP_API int HIP_EncodeHIS(const char* oggPath,
 HIP_API int HIP_DecodeHIS(const char* hisPath,
                            uint8_t** outData, uint32_t* outSize);
 
+// ── XSheet JSON ──────────────────────────────────────────────────────────
+
+/// Raw .xsheet body bytes → JSON string (null-terminated, free with HIP_Free).
+HIP_API int HIP_XSheetBodyToJson(const uint8_t* body, uint32_t bodyLen,
+                                  char** outJson, uint32_t* outJsonLen);
+
+/// JSON string → raw .xsheet body bytes (free with HIP_Free).
+HIP_API int HIP_XSheetJsonToBody(const char* json,
+                                  uint8_t** outBody, uint32_t* outBodyLen);
+
 // ── Error info ───────────────────────────────────────────────────────────
 
 /// After any function returns non-zero, call this to get the error message.

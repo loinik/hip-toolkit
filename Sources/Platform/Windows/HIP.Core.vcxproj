@@ -171,6 +171,7 @@
     <ClCompile Include="..\..\Core\CIFArchive.cpp" />
     <ClCompile Include="..\..\Core\CiftreeArchive.cpp" />
     <ClCompile Include="..\..\Core\HISArchive.cpp" />
+    <ClCompile Include="..\..\Core\XSheetArchive.cpp" />
     <ClCompile Include="..\..\..\Vendor\lua\*.c" Exclude="..\..\..\Vendor\lua\print.c">
       <!-- Suppress warnings in Lua C source that are noise for third-party code -->
       <DisableSpecificWarnings>4324;4334;4244;4267;4310;4701;4703</DisableSpecificWarnings>
@@ -181,6 +182,8 @@
     <ClInclude Include="..\..\Core\CIFArchive.hpp" />
     <ClInclude Include="..\..\Core\CiftreeArchive.hpp" />
     <ClInclude Include="..\..\Core\HISArchive.hpp" />
+    <ClInclude Include="..\..\Core\XSheetArchive.hpp" />
+    <ClInclude Include="..\..\..\Vendor\nlohmann_json.hpp" />
     <ClInclude Include="..\..\..\Vendor\lua\*.h" />
   </ItemGroup>
 

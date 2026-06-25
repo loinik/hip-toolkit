@@ -6,6 +6,7 @@
 #include "CIFArchive.hpp"
 #include "CiftreeArchive.hpp"
 #include "HISArchive.hpp"
+#include "XSheetArchive.hpp"
 
 #include <cstring>
 #include <filesystem>
@@ -191,6 +192,32 @@ extern "C" HIP_API int HIP_DecodeHIS(const char* hisPath,
         auto v = CIF::decodeHIS(toPath(hisPath));
         *outData = copyToHeap(v, outSize);
         return *outData ? 0 : 1;
+    } catch (const std::exception& e) { setError(e.what()); return 1; }
+}
+
+// ── XSheet JSON ──────────────────────────────────────────────────────────
+
+extern "C" HIP_API int HIP_XSheetBodyToJson(const uint8_t* body, uint32_t bodyLen,
+                                             char** outJson, uint32_t* outJsonLen) {
+    try {
+        auto json = XSheet::toJson({body, body + bodyLen});
+        if (json.empty()) { setError("Not a valid XSheet binary"); return 1; }
+        auto* buf = static_cast<char*>(std::malloc(json.size() + 1));
+        if (!buf) { setError("Out of memory"); return 1; }
+        std::memcpy(buf, json.data(), json.size() + 1);
+        *outJson    = buf;
+        *outJsonLen = static_cast<uint32_t>(json.size());
+        return 0;
+    } catch (const std::exception& e) { setError(e.what()); return 1; }
+}
+
+extern "C" HIP_API int HIP_XSheetJsonToBody(const char* jsonStr,
+                                             uint8_t** outBody, uint32_t* outBodyLen) {
+    try {
+        auto body = XSheet::fromJson(jsonStr ? jsonStr : "");
+        if (body.empty()) { setError("Not a valid XSheet JSON"); return 1; }
+        *outBody = copyToHeap(body, outBodyLen);
+        return *outBody ? 0 : 1;
     } catch (const std::exception& e) { setError(e.what()); return 1; }
 }
 
