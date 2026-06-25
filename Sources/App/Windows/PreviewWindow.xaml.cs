@@ -130,7 +130,8 @@ public sealed partial class PreviewWindow : Window
         string?               Text    = null,
         uint                  EntryCount = 0,
         long                  FileSize   = 0,
-        string?               Error   = null
+        string?               Error   = null,
+        List<HIPInterop.CiftreeEntry>? Entries = null
     );
 
     // Creates a spinner-containing Grid that lives as tab.Content for the whole lifetime of the load.
@@ -205,9 +206,16 @@ public sealed partial class PreviewWindow : Window
                 }
                 case ".dat":
                 {
-                    uint count = 0;
-                    try { count = HIPInterop.GetCiftreeEntryCount(path); } catch { /* ignore */ }
-                    return new DataResult("dat", EntryCount: count, FileSize: new FileInfo(path).Length);
+                    List<HIPInterop.CiftreeEntry>? entries = null;
+                    string? readError = null;
+                    try { entries = HIPInterop.GetCiftreeEntries(path); }
+                    catch (Exception ex) { readError = ex.Message; }
+                    if (readError != null)
+                        return new DataResult("dat-error", Error: readError, FileSize: new FileInfo(path).Length);
+                    return new DataResult("dat",
+                        EntryCount: (uint)(entries?.Count ?? 0),
+                        FileSize:   new FileInfo(path).Length,
+                        Entries:    entries);
                 }
                 case ".his":
                     return new DataResult("his", FileSize: new FileInfo(path).Length);
@@ -241,10 +249,13 @@ public sealed partial class PreviewWindow : Window
             "cif-xsheet" =>
                 InfoPanel("", "XSheet Sprite Data", $"Frame data  ·  {FormatSize(r.FileSize)}"),
 
-            "dat" => InfoPanel("", "Ciftree Archive",
-                r.EntryCount > 0
-                    ? $"{r.EntryCount} entries  ·  {FormatSize(r.FileSize)}\n\nUse the converter (Unpack) to extract all files."
-                    : $"{FormatSize(r.FileSize)}\n\nUse the converter (Unpack) to extract all files."),
+            "dat-error" => InfoPanel("", "Cannot Read Archive",
+                $"{r.Error}\n\nThis file may not be a valid Ciftree archive."),
+
+            "dat" => r.Entries is { Count: > 0 }
+                ? CiftreeEntriesPanel(r.Entries, r.FileSize)
+                : InfoPanel("", "Ciftree Archive",
+                    $"{FormatSize(r.FileSize)}\n\nEmpty archive or no entries found."),
 
             "his" => InfoPanel("", "HIS Audio File",
                 $"Use the converter (HIS → OGG) to extract audio.\n\n{FormatSize(r.FileSize)}"),
@@ -585,6 +596,66 @@ public sealed partial class PreviewWindow : Window
             Margin = new Thickness(16, 0, 0, 0)
         };
         return RowLayout(scroll, bar);
+    }
+
+    private UIElement CiftreeEntriesPanel(List<HIPInterop.CiftreeEntry> entries, long fileSize)
+    {
+        var header = new TextBlock
+        {
+            Text = $"{entries.Count} entries  ·  {FormatSize(fileSize)}",
+            VerticalAlignment = VerticalAlignment.Center,
+            Foreground = (Brush)Application.Current.Resources["TextFillColorSecondaryBrush"],
+            Margin = new Thickness(16, 0, 0, 0)
+        };
+
+        var list = new ListView { SelectionMode = ListViewSelectionMode.None, IsItemClickEnabled = false };
+        foreach (var entry in entries)
+        {
+            var glyph = entry.CIFType switch
+            {
+                2 or 4 => "",  // Photo (Segoe MDL2)
+                6      => "",  // Table
+                _      => ""   // Document
+            };
+            var icon = new FontIcon
+            {
+                Glyph = glyph, FontSize = 14, Width = 20,
+                Foreground = (Brush)Application.Current.Resources["AccentTextFillColorPrimaryBrush"]
+            };
+            var nameBlock = new TextBlock
+            {
+                Text = entry.Name + ".cif",
+                FontFamily = new FontFamily("Consolas"),
+                VerticalAlignment = VerticalAlignment.Center
+            };
+            var sizeBlock = new TextBlock
+            {
+                Text = FormatSize(entry.CIFSize),
+                VerticalAlignment = VerticalAlignment.Center,
+                HorizontalAlignment = HorizontalAlignment.Right,
+                Foreground = (Brush)Application.Current.Resources["TextFillColorSecondaryBrush"]
+            };
+            var row = new Grid { Padding = new Thickness(0, 3, 0, 3) };
+            row.ColumnDefinitions.Add(new ColumnDefinition { Width = GridLength.Auto });
+            row.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(1, GridUnitType.Star) });
+            row.ColumnDefinitions.Add(new ColumnDefinition { Width = GridLength.Auto });
+            Grid.SetColumn(icon,      0);
+            Grid.SetColumn(nameBlock, 1);
+            Grid.SetColumn(sizeBlock, 2);
+            row.Children.Add(icon);
+            row.Children.Add(nameBlock);
+            row.Children.Add(sizeBlock);
+            list.Items.Add(new ListViewItem { Content = row, Padding = new Thickness(8, 2, 8, 2) });
+        }
+
+        var scroll = new ScrollViewer
+        {
+            Content = list,
+            VerticalScrollBarVisibility = ScrollBarVisibility.Auto,
+            HorizontalScrollBarVisibility = ScrollBarVisibility.Disabled
+        };
+
+        return RowLayout(scroll, header);
     }
 
     private static UIElement InfoPanel(string glyph, string title, string message)

@@ -113,24 +113,28 @@ extern "C" HIP_API int HIP_DecodeCIF(const char* path,
 // ── Ciftree ──────────────────────────────────────────────────────────────
 
 extern "C" HIP_API int HIP_PackFolder(const char* folderPath, uint32_t flags,
-                                       uint8_t** outData, uint32_t* outSize) {
+                                       uint8_t** outData, uint32_t* outSize,
+                                       HIP_ProgressCallback progress) {
     try {
         CIF::PackOptions opts;
         opts.capitalizeNames = (flags & 1) != 0;
         opts.compileLua      = (flags & 2) != 0;
         opts.useOVLForPNG    = (flags & 4) != 0;
-        auto v = CIF::packFolder(toPath(folderPath), opts);
+        auto v = CIF::packFolder(toPath(folderPath), opts,
+            [&](int cur, int tot) { if (progress) progress(cur, tot); });
         *outData = copyToHeap(v, outSize);
         return *outData ? 0 : 1;
     } catch (const std::exception& e) { setError(e.what()); return 1; }
 }
 
 extern "C" HIP_API int HIP_UnpackToFolder(const char* datPath, const char* outDir,
-                                            int extractContents) {
+                                            int extractContents,
+                                            HIP_ProgressCallback progress) {
     try {
         CIF::UnpackOptions opts;
         opts.extractContents = extractContents != 0;
-        CIF::unpackToFolder(toPath(datPath), toPath(outDir), opts);
+        CIF::unpackToFolder(toPath(datPath), toPath(outDir), opts,
+            [&](int cur, int tot) { if (progress) progress(cur, tot); });
         return 0;
     } catch (const std::exception& e) { setError(e.what()); return 1; }
 }

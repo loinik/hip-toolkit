@@ -3,6 +3,7 @@
 //  Created by Mike Lucyšyn on 3/30/26.
 
 import SwiftUI
+import AppKit
 
 // MARK: - Shared notification names
 
@@ -13,10 +14,32 @@ extension Notification.Name {
     static let hipShowPreview = Notification.Name("hip.showPreview")
 }
 
+// MARK: - App Delegate (Cmd+Q interception)
+
+class AppDelegate: NSObject, NSApplicationDelegate {
+    func applicationShouldTerminate(_ sender: NSApplication) -> NSApplication.TerminateReply {
+        guard let vm = AppViewModel.shared, vm.isProcessing else { return .terminateNow }
+        let alert = NSAlert()
+        alert.messageText = "Processing in Progress"
+        alert.informativeText = "A conversion is still running. Quit anyway? The partial output will be deleted."
+        alert.addButton(withTitle: "Quit & Delete Output")
+        alert.addButton(withTitle: "Keep Running")
+        alert.alertStyle = .warning
+        let response = alert.runModal()
+        if response == .alertFirstButtonReturn {
+            MainActor.assumeIsolated { AppViewModel.shared?.cancelAndCleanup() }
+            return .terminateNow
+        }
+        return .terminateCancel
+    }
+}
+
 // MARK: - App
 
 @main
 struct hipApp: App {
+    @NSApplicationDelegateAdaptor(AppDelegate.self) var appDelegate
+
     var body: some Scene {
 
         // ── Main converter window ─────────────────────────────────────

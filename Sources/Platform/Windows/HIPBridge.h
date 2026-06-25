@@ -59,15 +59,19 @@ HIP_API int HIP_DecodeCIF(const char* path,
 
 // ── Ciftree ──────────────────────────────────────────────────────────────
 
+typedef void(__stdcall* HIP_ProgressCallback)(int current, int total);
+
 /// Pack a folder into a Ciftree .dat archive.
 /// flags: bit 0 = capitalizeNames, bit 1 = compileLua, bit 2 = useOVLForPNG
 HIP_API int HIP_PackFolder(const char* folderPath, uint32_t flags,
-                            uint8_t** outData, uint32_t* outSize);
+                            uint8_t** outData, uint32_t* outSize,
+                            HIP_ProgressCallback progress);
 
 /// Unpack a Ciftree .dat to a folder.
 /// extractContents: if non-zero, CIF entries are decoded to native format.
 HIP_API int HIP_UnpackToFolder(const char* datPath, const char* outDir,
-                                int extractContents);
+                                int extractContents,
+                                HIP_ProgressCallback progress);
 
 /// Get entry count from a Ciftree .dat (for preview).
 HIP_API int HIP_CiftreeEntryCount(const char* datPath, uint32_t* outCount);

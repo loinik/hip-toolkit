@@ -15,7 +15,10 @@ public enum AppMode
     HisEncode, HisDecode
 }
 
-public record ConversionResult(string Icon, string Title, string Detail, bool IsError);
+public record ConversionResult(string Icon, string Title, string Detail, bool IsError, bool IsExpandable = false, string? RevealPath = null)
+{
+    public bool HasRevealPath => RevealPath != null;
+}
 
 public sealed class MainViewModel : INotifyPropertyChanged
 {
@@ -127,32 +130,59 @@ public sealed class MainViewModel : INotifyPropertyChanged
         }
     }
 
+    // ── Cancellation ─────────────────────────────────────────────────────
+
+    private CancellationTokenSource? _cts;
+    private string? _pendingOutputPath;
+
+    public void RequestCancellation()
+    {
+        _cts?.Cancel();
+        if (_pendingOutputPath != null)
+        {
+            var path = _pendingOutputPath;
+            _pendingOutputPath = null;
+            Task.Run(() =>
+            {
+                try
+                {
+                    if (File.Exists(path)) File.Delete(path);
+                    else if (Directory.Exists(path)) Directory.Delete(path, recursive: true);
+                }
+                catch { /* best-effort cleanup */ }
+            });
+        }
+    }
+
     // ── Processing ───────────────────────────────────────────────────────
 
-    public async Task ProcessFilesAsync(IReadOnlyList<string> paths)
+    public async Task ProcessFilesAsync(IReadOnlyList<string> paths, Action<int, int>? onProgress = null)
     {
+        _cts = new CancellationTokenSource();
+        var token = _cts.Token;
         IsProcessing = true;
         try
         {
             foreach (var path in paths)
             {
-                await Task.Run(() =>
-                {
-                    var results = Mode switch
+                if (token.IsCancellationRequested) break;
+                List<ConversionResult> results;
+                if (Mode == AppMode.CiftreePack)
+                    results = await PackCiftreeAsync(path, onProgress, token);
+                else if (Mode == AppMode.CiftreeUnpack)
+                    results = await UnpackCiftreeAsync(path, onProgress, token);
+                else
+                    results = await Task.Run(() => Mode switch
                     {
-                        AppMode.CifEncode     => EncodeCIF(path),
-                        AppMode.CifDecode     => DecodeCIF(path),
-                        AppMode.CiftreePack   => PackCiftree(path),
-                        AppMode.CiftreeUnpack => UnpackCiftree(path),
-                        AppMode.HisEncode     => EncodeHIS(path),
-                        AppMode.HisDecode     => DecodeHIS(path),
+                        AppMode.CifEncode => EncodeCIF(path),
+                        AppMode.CifDecode => DecodeCIF(path),
+                        AppMode.HisEncode => EncodeHIS(path),
+                        AppMode.HisDecode => DecodeHIS(path),
                         _ => [Fail(Path.GetFileName(path), "Unknown mode")]
-                    };
+                    }, token);
 
-                    // Must update ObservableCollection on UI thread
-                    foreach (var r in results)
-                        _uiQueue.TryEnqueue(() => Results.Insert(0, r));
-                });
+                foreach (var r in results)
+                    _uiQueue.TryEnqueue(() => Results.Insert(0, r));
             }
         }
         finally
@@ -253,19 +283,13 @@ public sealed class MainViewModel : INotifyPropertyChanged
                 {
                     var source = HIPInterop.DecompileLua(outPath);
                     if (string.IsNullOrEmpty(source))
-                        return [
-                            Ok(name,   $"→ .lua  {FormatSize(data.Length)} · bytecode saved"),
-                            Warn(name, "Decompilation failed: empty output")
-                        ];
+                        return [Warn(name, $"→ .lua  {FormatSize(data.Length)} · bytecode saved — decompilation failed: empty output")];
                     File.WriteAllText(outPath, source, System.Text.Encoding.UTF8);
                     return [Ok(name, $"→ .lua  {FormatSize(source.Length)} · decompiled")];
                 }
                 catch (Exception ex)
                 {
-                    return [
-                        Ok(name,   $"→ .lua  {FormatSize(data.Length)} · bytecode saved"),
-                        Warn(name, $"Decompilation failed: {ex.Message}")
-                    ];
+                    return [Warn(name, $"→ .lua  {FormatSize(data.Length)} · bytecode saved — {ex.Message}")];
                 }
             }
 
@@ -280,29 +304,60 @@ public sealed class MainViewModel : INotifyPropertyChanged
         catch (Exception ex) { return [Fail(name, ex.Message)]; }
     }
 
+    // Called by MainWindow to provide an alternate save path when access is denied.
+    // Set before calling ProcessFilesAsync. Returns null → user cancelled.
+    public Func<string, Task<string?>>? RequestAlternateSavePath { get; set; }
+
     // ── Ciftree pack ─────────────────────────────────────────────────────
 
-    private List<ConversionResult> PackCiftree(string folderPath)
+    private async Task<List<ConversionResult>> PackCiftreeAsync(string folderPath, Action<int, int>? onProgress = null,
+                                                                  CancellationToken token = default)
     {
         var name = Path.GetFileName(folderPath);
         if (!Directory.Exists(folderPath))
             return [Fail(name, "Expected a folder")];
         try
         {
-            var data = HIPInterop.PackFolder(folderPath, CapitalizeNames, CompileLua, UseType4PNG);
+            // Pack on background thread; progress callback already dispatches to UI via DispatcherQueue
+            var data = await Task.Run(() =>
+            {
+                return HIPInterop.PackFolder(folderPath, CapitalizeNames, CompileLua, UseType4PNG,
+                    (cur, tot) => { if (!token.IsCancellationRequested) onProgress?.Invoke(cur, tot); });
+            }, token);
 
-            // Save next to the folder with .dat extension
+            if (token.IsCancellationRequested) return [];
+
             var outPath = folderPath.TrimEnd(Path.DirectorySeparatorChar) + ".dat";
-            File.WriteAllBytes(outPath, data);
+            _pendingOutputPath = outPath;
 
-            return [Ok(name, $"→ .dat  {FormatSize(data.Length)}")];
+            try
+            {
+                File.WriteAllBytes(outPath, data);
+            }
+            catch (UnauthorizedAccessException)
+            {
+                var alt = RequestAlternateSavePath != null
+                    ? await RequestAlternateSavePath(outPath)
+                    : null;
+                if (alt == null) return [Fail(name, "Access denied — save cancelled")];
+                _pendingOutputPath = alt;
+                File.WriteAllBytes(alt, data);
+                outPath = alt;
+            }
+
+            _pendingOutputPath = null;
+            var fileCount = Directory.GetFiles(folderPath, "*", SearchOption.AllDirectories).Length;
+            var outName = Path.GetFileName(outPath);
+            return [new ConversionResult("", outName, $"{fileCount} files · {FormatSize(data.Length)}", false, RevealPath: outPath)];
         }
+        catch (OperationCanceledException) { return []; }
         catch (Exception ex) { return [Fail(name, ex.Message)]; }
     }
 
     // ── Ciftree unpack ───────────────────────────────────────────────────
 
-    private List<ConversionResult> UnpackCiftree(string path)
+    private async Task<List<ConversionResult>> UnpackCiftreeAsync(string path, Action<int, int>? onProgress = null,
+                                                                    CancellationToken token = default)
     {
         var name = Path.GetFileName(path);
         if (!path.EndsWith(".dat", StringComparison.OrdinalIgnoreCase))
@@ -310,41 +365,79 @@ public sealed class MainViewModel : INotifyPropertyChanged
         try
         {
             var outDir = Path.ChangeExtension(path, null);
-            Directory.CreateDirectory(outDir);
-            HIPInterop.UnpackToFolder(path, outDir, ExtractCifContents);
 
-            var files = Directory.GetFiles(outDir, "*", SearchOption.TopDirectoryOnly);
-            var results = new List<ConversionResult>
+            try { Directory.CreateDirectory(outDir); }
+            catch (UnauthorizedAccessException)
             {
-                Ok(name, $"→ {files.Length} files extracted to {Path.GetFileName(outDir)}/")
-            };
-
-            if (DecompileLua && ExtractCifContents)
-            {
-                foreach (var file in files)
-                {
-                    if (!file.EndsWith(".lua", StringComparison.OrdinalIgnoreCase)) continue;
-                    var bytes = File.ReadAllBytes(file);
-                    if (bytes.Length < 4 || bytes[0] != 0x1B || bytes[1] != 0x4C
-                        || bytes[2] != 0x75 || bytes[3] != 0x61) continue;
-                    try
-                    {
-                        var source = HIPInterop.DecompileLua(file);
-                        if (!string.IsNullOrEmpty(source))
-                        {
-                            File.WriteAllText(file, source, System.Text.Encoding.UTF8);
-                            results.Add(Ok(Path.GetFileName(file), "decompiled"));
-                        }
-                    }
-                    catch (Exception ex)
-                    {
-                        results.Add(Warn(Path.GetFileName(file), $"Decompilation failed: {ex.Message}"));
-                    }
-                }
+                var alt = RequestAlternateSavePath != null
+                    ? await RequestAlternateSavePath(outDir)
+                    : null;
+                if (alt == null) return [Fail(name, "Access denied — save cancelled")];
+                outDir = alt;
+                Directory.CreateDirectory(outDir);
             }
 
-            return results;
+            _pendingOutputPath = outDir;
+            bool decompileLua = DecompileLua, extractContents = ExtractCifContents;
+            var taskResult = await Task.Run(() =>
+            {
+                HIPInterop.UnpackToFolder(path, outDir, extractContents,
+                    (cur, tot) => { if (!token.IsCancellationRequested) onProgress?.Invoke(cur, tot); });
+                if (token.IsCancellationRequested) return [];
+
+                var files = Directory.GetFiles(outDir, "*", SearchOption.TopDirectoryOnly);
+                var results = new List<ConversionResult>
+                {
+                    Ok(name, $"→ {files.Length} files extracted to {Path.GetFileName(outDir)}/")
+                };
+
+                if (decompileLua && extractContents)
+                {
+                    var failedDecompile = new List<string>();
+                    foreach (var file in files)
+                    {
+                        if (!file.EndsWith(".lua", StringComparison.OrdinalIgnoreCase)) continue;
+                        var bytes = File.ReadAllBytes(file);
+                        if (bytes.Length < 4 || bytes[0] != 0x1B || bytes[1] != 0x4C
+                            || bytes[2] != 0x75 || bytes[3] != 0x61) continue;
+                        var fname = Path.GetFileName(file);
+                        System.Diagnostics.Debug.WriteLine($"[luadec] → {fname}");
+                        try
+                        {
+                            var source = HIPInterop.DecompileLua(file);
+                            if (!string.IsNullOrEmpty(source))
+                            {
+                                File.WriteAllText(file, source, System.Text.Encoding.UTF8);
+                                System.Diagnostics.Debug.WriteLine($"[luadec] ✓ {fname}");
+                                results.Add(Ok(fname, "decompiled"));
+                            }
+                            else
+                            {
+                                System.Diagnostics.Debug.WriteLine($"[luadec] ✗ {fname}: empty output");
+                                failedDecompile.Add(fname);
+                            }
+                        }
+                        catch (Exception ex)
+                        {
+                            System.Diagnostics.Debug.WriteLine($"[luadec] ✗ {fname}: {ex.Message}");
+                            failedDecompile.Add(fname);
+                        }
+                    }
+                    if (failedDecompile.Count > 0)
+                    {
+                        results.Insert(1, Warn(
+                            $"Decompilation failed for {failedDecompile.Count} file(s) — saved as bytecode",
+                            string.Join("\n", failedDecompile),
+                            expandable: true));
+                    }
+                }
+
+                return results;
+            }, token);
+            _pendingOutputPath = null;
+            return taskResult;
         }
+        catch (OperationCanceledException) { return []; }
         catch (Exception ex) { return [Fail(name, ex.Message)]; }
     }
 
@@ -387,8 +480,8 @@ public sealed class MainViewModel : INotifyPropertyChanged
     private static ConversionResult Ok(string title, string detail) =>
         new("\uE73E", title, detail, false);      // ✓ checkmark glyph
 
-    private static ConversionResult Warn(string title, string detail) =>
-        new("\uE7BA", title, detail, false);      // ⚠ warning glyph
+    private static ConversionResult Warn(string title, string detail, bool expandable = false) =>
+        new("\uE7BA", title, detail, false, expandable);   // ⚠ warning glyph
     private static ConversionResult Fail(string title, string detail) =>
         new("\uEA39", title, detail, true);        // ✗ error glyph
 

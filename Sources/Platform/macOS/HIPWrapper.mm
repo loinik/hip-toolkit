@@ -150,7 +150,26 @@ static NSData *vecToData(const std::vector<uint8_t>& v) {
     if (![task launchAndReturnError:error]) {
         return nil;
     }
+
+    // Kill luadec if it hasn't finished within 15 seconds — some bytecode causes it to loop.
+    __block BOOL timedOut = NO;
+    dispatch_after(dispatch_time(DISPATCH_TIME_NOW, (int64_t)(15 * NSEC_PER_SEC)),
+                   dispatch_get_global_queue(QOS_CLASS_UTILITY, 0), ^{
+        if (task.isRunning) {
+            timedOut = YES;
+            [task terminate];
+        }
+    });
+
     [task waitUntilExit];
+
+    if (timedOut) {
+        if (error) {
+            *error = [NSError errorWithDomain:@"HIPErrorDomain" code:4
+                                   userInfo:@{NSLocalizedDescriptionKey: @"Decompilation timed out — luadec got stuck on this bytecode"}];
+        }
+        return nil;
+    }
 
     NSData *outputData = [[outputPipe fileHandleForReading] readDataToEndOfFile];
     NSString *outputString = [[NSString alloc] initWithData:outputData encoding:NSUTF8StringEncoding];

@@ -6,6 +6,10 @@
     Title="HIP Toolkit">
 
     <Grid>
+        <Grid.Resources>
+            <local:BoolToVisibilityConverter x:Key="BoolToVis"/>
+            <local:BoolToVisibilityConverter x:Key="InvBoolToVis" Invert="True"/>
+        </Grid.Resources>
         <Grid.RowDefinitions>
             <RowDefinition Height="Auto"/>  <!-- Custom title bar -->
             <RowDefinition Height="*"/>     <!-- Drop zone -->
@@ -70,8 +74,22 @@
                     <Button x:Name="BtnChoose" Content="Choose Files…" Click="ChooseFiles_Click"
                             HorizontalAlignment="Center" />
                 </StackPanel>
-                <!-- Busy indicator -->
-                <ProgressRing x:Name="BusyRing" IsActive="False" Visibility="Collapsed" />
+                <!-- Busy panel (shown during processing) -->
+                <StackPanel x:Name="BusyPanel" Visibility="Collapsed"
+                            VerticalAlignment="Center" HorizontalAlignment="Stretch"
+                            Spacing="10" Margin="40,0">
+                    <ProgressBar x:Name="ConvProgressBar" Value="0" Maximum="100"
+                                 HorizontalAlignment="Stretch"/>
+                    <TextBlock x:Name="ConvProgressLabel" Text=""
+                               HorizontalAlignment="Center"
+                               Style="{StaticResource CaptionTextBlockStyle}"
+                               Foreground="{ThemeResource TextFillColorSecondaryBrush}"/>
+                    <Button x:Name="BtnCancelConv" Content="Cancel"
+                            HorizontalAlignment="Center"
+                            Click="CancelConv_Click"
+                            Padding="16,4"
+                            Foreground="{ThemeResource SystemFillColorCriticalBrush}"/>
+                </StackPanel>
             </Grid>
         </Border>
 
@@ -130,20 +148,58 @@
                       SelectionMode="None" IsItemClickEnabled="False">
                 <ListView.ItemTemplate>
                     <DataTemplate x:DataType="local:ConversionResult">
-                        <Grid Padding="8,6" ColumnSpacing="12">
-                            <Grid.ColumnDefinitions>
-                                <ColumnDefinition Width="Auto"/>
-                                <ColumnDefinition Width="*"/>
-                            </Grid.ColumnDefinitions>
-                            <FontIcon Grid.Column="0" Glyph="{x:Bind Icon}" FontSize="16"
-                                      Foreground="{ThemeResource SystemFillColorSuccessBrush}" />
-                            <StackPanel Grid.Column="1" Spacing="2">
-                                <TextBlock Text="{x:Bind Title}" FontFamily="Consolas"
-                                           TextTrimming="CharacterEllipsis" />
-                                <TextBlock Text="{x:Bind Detail}"
-                                           Style="{StaticResource CaptionTextBlockStyle}"
-                                           Foreground="{ThemeResource TextFillColorSecondaryBrush}" />
-                            </StackPanel>
+                        <Grid>
+                            <!-- Normal (non-expandable) row -->
+                            <Grid Padding="8,6" ColumnSpacing="12"
+                                  Visibility="{Binding IsExpandable, Converter={StaticResource InvBoolToVis}}">
+                                <Grid.ColumnDefinitions>
+                                    <ColumnDefinition Width="Auto"/>
+                                    <ColumnDefinition Width="*"/>
+                                    <ColumnDefinition Width="Auto"/>
+                                </Grid.ColumnDefinitions>
+                                <FontIcon Grid.Column="0" Glyph="{x:Bind Icon}" FontSize="16"
+                                          Foreground="{ThemeResource SystemFillColorSuccessBrush}" />
+                                <StackPanel Grid.Column="1" Spacing="2">
+                                    <TextBlock Text="{x:Bind Title}" FontFamily="Consolas"
+                                               TextTrimming="CharacterEllipsis" />
+                                    <TextBlock Text="{x:Bind Detail}"
+                                               Style="{StaticResource CaptionTextBlockStyle}"
+                                               Foreground="{ThemeResource TextFillColorSecondaryBrush}" />
+                                </StackPanel>
+                                <Button Grid.Column="2"
+                                        Tag="{x:Bind RevealPath}"
+                                        Click="RevealInExplorer_Click"
+                                        Visibility="{Binding HasRevealPath, Converter={StaticResource BoolToVis}}"
+                                        Background="Transparent" BorderBrush="Transparent" Padding="6"
+                                        ToolTipService.ToolTip="Show in Explorer">
+                                    <FontIcon Glyph="&#xEC50;" FontSize="14"/>
+                                </Button>
+                            </Grid>
+                            <!-- Expandable (disclosure) row -->
+                            <Expander HorizontalAlignment="Stretch" Padding="4,2"
+                                      Visibility="{Binding IsExpandable, Converter={StaticResource BoolToVis}}">
+                                <Expander.Header>
+                                    <Grid ColumnSpacing="12">
+                                        <Grid.ColumnDefinitions>
+                                            <ColumnDefinition Width="Auto"/>
+                                            <ColumnDefinition Width="*"/>
+                                        </Grid.ColumnDefinitions>
+                                        <FontIcon Grid.Column="0" Glyph="{x:Bind Icon}" FontSize="16"
+                                                  Foreground="{ThemeResource SystemFillColorCautionBrush}" />
+                                        <TextBlock Grid.Column="1" Text="{x:Bind Title}"
+                                                   FontFamily="Consolas"
+                                                   TextTrimming="CharacterEllipsis"
+                                                   VerticalAlignment="Center"/>
+                                    </Grid>
+                                </Expander.Header>
+                                <ScrollViewer MaxHeight="130">
+                                    <TextBlock Text="{x:Bind Detail}"
+                                               FontFamily="Consolas" FontSize="11"
+                                               Foreground="{ThemeResource TextFillColorSecondaryBrush}"
+                                               IsTextSelectionEnabled="True"
+                                               TextWrapping="Wrap" Padding="4"/>
+                                </ScrollViewer>
+                            </Expander>
                         </Grid>
                     </DataTemplate>
                 </ListView.ItemTemplate>

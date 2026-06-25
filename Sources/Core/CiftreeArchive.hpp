@@ -2,6 +2,7 @@
 
 #include <cstdint>
 #include <filesystem>
+#include <functional>
 #include <string>
 #include <vector>
 
@@ -51,6 +52,11 @@ std::vector<uint8_t> packCiftree(const std::vector<std::filesystem::path>& cifPa
 /// Unpack a Ciftree .dat archive into individual CIF entries.
 std::vector<CiftreeEntry> unpackCiftree(const std::filesystem::path& datPath);
 
+// ── Progress callback ─────────────────────────────────────────────────────
+
+/// Called after each item is processed: progress(itemsDone, totalItems).
+using ProgressFn = std::function<void(int, int)>;
+
 // ── High-level folder operations (for portability) ────────────────────────
 
 /// Pack all supported files from a folder (recursively) into a Ciftree .dat.
@@ -58,11 +64,13 @@ std::vector<CiftreeEntry> unpackCiftree(const std::filesystem::path& datPath);
 /// .xsheet → CIF type 6.  Other formats are silently skipped.
 /// Note: .jpg/.jpeg conversion requires AppKit and is not handled here.
 std::vector<uint8_t> packFolder(const std::filesystem::path& folderPath,
-                                 const PackOptions& options = {});
+                                 const PackOptions& options = {},
+                                 ProgressFn progress = nullptr);
 
 /// Unpack a Ciftree .dat to outDir, optionally decoding each CIF entry.
 void unpackToFolder(const std::filesystem::path& datPath,
                     const std::filesystem::path& outDir,
-                    const UnpackOptions& options = {});
+                    const UnpackOptions& options = {},
+                    ProgressFn progress = nullptr);
 
 } // namespace CIF

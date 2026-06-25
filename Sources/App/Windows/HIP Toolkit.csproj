@@ -12,6 +12,11 @@
     <ImplicitUsings>enable</ImplicitUsings>
     <WindowsPackageType>None</WindowsPackageType>
     <WindowsAppSDKSelfContained>true</WindowsAppSDKSelfContained>
+    <!-- Read version from shared VERSION file in repo root -->
+    <Version>$([System.IO.File]::ReadAllText('$(SolutionDir)VERSION').Trim())</Version>
+    <AssemblyVersion>$(Version).0</AssemblyVersion>
+    <FileVersion>$(Version).0</FileVersion>
+    <ApplicationIcon>$(SolutionDir)Toolkit.ico</ApplicationIcon>
   </PropertyGroup>
 
   <ItemGroup>

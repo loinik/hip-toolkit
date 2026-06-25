@@ -1,3 +1,4 @@
+using Microsoft.UI.Windowing;
 using Microsoft.UI.Xaml;
 using Microsoft.UI.Xaml.Controls;
 using Microsoft.UI.Xaml.Input;
@@ -11,6 +12,8 @@ public sealed partial class MainWindow : Window
 {
     private readonly MainViewModel _vm;
 
+    private bool _allowClose = false;
+
     public MainWindow()
     {
         InitializeComponent();
@@ -18,6 +21,8 @@ public sealed partial class MainWindow : Window
         ExtendsContentIntoTitleBar = true;
         SetTitleBar(AppTitleBar);
         _vm = new MainViewModel(Microsoft.UI.Dispatching.DispatcherQueue.GetForCurrentThread());
+        _vm.RequestAlternateSavePath = PickAlternativeSavePathAsync;
+        AppWindow.Closing += OnWindowClosing;
 
         ResultsList.ItemsSource = _vm.Results;
         _vm.Results.CollectionChanged += (_, _) =>
@@ -84,8 +89,8 @@ public sealed partial class MainWindow : Window
 
     private void DropZone_Click(object sender, PointerRoutedEventArgs e)
     {
-        // Only fire on left-click, not during drag
-        if (e.GetCurrentPoint(null).Properties.IsLeftButtonPressed)
+        // Only fire on left-click, not during drag, and not while processing
+        if (!_vm.IsProcessing && e.GetCurrentPoint(null).Properties.IsLeftButtonPressed)
             _ = PickAndConvert();
     }
 
@@ -209,15 +214,115 @@ public sealed partial class MainWindow : Window
         }
     }
 
+    // ── Cancel processing ────────────────────────────────────────────────
+
+    private async void CancelConv_Click(object sender, RoutedEventArgs e)
+    {
+        if (!await ShowProcessingConfirmDialog(
+            "Cancel Processing?",
+            "The conversion will stop and the partial output will be deleted."))
+            return;
+        _vm.RequestCancellation();
+    }
+
+    private async void OnWindowClosing(Microsoft.UI.Windowing.AppWindow sender,
+                                       Microsoft.UI.Windowing.AppWindowClosingEventArgs args)
+    {
+        if (_allowClose || !_vm.IsProcessing) return;
+        args.Cancel = true;
+        if (!await ShowProcessingConfirmDialog(
+            "Processing in Progress",
+            "A conversion is still running. Close the window? The partial output will be deleted."))
+            return;
+        _vm.RequestCancellation();
+        _allowClose = true;
+        Close();
+    }
+
+    private async Task<bool> ShowProcessingConfirmDialog(string title, string message)
+    {
+        var dialog = new ContentDialog
+        {
+            Title = title,
+            Content = message,
+            PrimaryButtonText = "Confirm",
+            CloseButtonText = "Keep Running",
+            DefaultButton = ContentDialogButton.Close,
+            XamlRoot = Content.XamlRoot
+        };
+        return await dialog.ShowAsync() == ContentDialogResult.Primary;
+    }
+
+    // ── Alternate save path picker (called when access is denied) ────────
+
+    private async Task<string?> PickAlternativeSavePathAsync(string defaultPath)
+    {
+        var hwnd = WinRT.Interop.WindowNative.GetWindowHandle(this);
+        var ext  = Path.GetExtension(defaultPath).ToLowerInvariant();
+
+        if (ext == ".dat")
+        {
+            // Pack: save single .dat file
+            var picker = new FileSavePicker();
+            picker.SuggestedStartLocation = PickerLocationId.DocumentsLibrary;
+            picker.SuggestedFileName = Path.GetFileName(defaultPath);
+            picker.FileTypeChoices.Add("Ciftree Archive", [".dat"]);
+            WinRT.Interop.InitializeWithWindow.Initialize(picker, hwnd);
+            var file = await picker.PickSaveFileAsync();
+            return file?.Path;
+        }
+        else
+        {
+            // Unpack: choose output folder
+            var picker = new FolderPicker();
+            picker.SuggestedStartLocation = PickerLocationId.DocumentsLibrary;
+            picker.FileTypeFilter.Add("*");
+            WinRT.Interop.InitializeWithWindow.Initialize(picker, hwnd);
+            var folder = await picker.PickSingleFolderAsync();
+            return folder == null ? null
+                : Path.Combine(folder.Path, Path.GetFileName(defaultPath));
+        }
+    }
+
     // ── Conversion execution ─────────────────────────────────────────────
 
     private async Task RunConversion(IReadOnlyList<string> paths)
     {
-        BusyRing.IsActive = true;
-        BusyRing.Visibility = Visibility.Visible;
-        await _vm.ProcessFilesAsync(paths);
-        BusyRing.IsActive = false;
-        BusyRing.Visibility = Visibility.Collapsed;
+        var hwnd = WinRT.Interop.WindowNative.GetWindowHandle(this);
+        DropHint.Visibility = Visibility.Collapsed;
+        BusyPanel.Visibility = Visibility.Visible;
+        ConvProgressBar.Value = 0;
+        ConvProgressLabel.Text = "";
+        CategoryBar.IsEnabled = false;
+        RadioForward.IsEnabled = false;
+        RadioBackward.IsEnabled = false;
+
+        void OnProgress(int cur, int tot)
+        {
+            DispatcherQueue.TryEnqueue(() =>
+            {
+                ConvProgressBar.IsIndeterminate = false;
+                ConvProgressBar.Value = tot > 0 ? (double)cur / tot * 100.0 : 0;
+                ConvProgressLabel.Text = tot > 0 ? $"{cur} of {tot} · {cur * 100 / tot}%" : "";
+                TaskbarProgress.Set(hwnd, cur, tot);
+            });
+        }
+
+        await _vm.ProcessFilesAsync(paths, OnProgress);
+
+        BusyPanel.Visibility = Visibility.Collapsed;
+        DropHint.Visibility = Visibility.Visible;
+        ConvProgressBar.Value = 0;
+        CategoryBar.IsEnabled = true;
+        RadioForward.IsEnabled = true;
+        RadioBackward.IsEnabled = true;
+        TaskbarProgress.Clear(hwnd);
+    }
+
+    private void RevealInExplorer_Click(object sender, RoutedEventArgs e)
+    {
+        if (sender is FrameworkElement { Tag: string path } && !string.IsNullOrEmpty(path))
+            System.Diagnostics.Process.Start("explorer.exe", $"/select,\"{path}\"");
     }
 
     // ── UI state helpers ─────────────────────────────────────────────────

@@ -226,7 +226,8 @@ std::vector<CiftreeEntry> unpackCiftree(const std::filesystem::path& datPath) {
 // ── packFolder ────────────────────────────────────────────────────────────
 
 std::vector<uint8_t> packFolder(const std::filesystem::path& folderPath,
-                                 const PackOptions& opts) {
+                                 const PackOptions& opts,
+                                 ProgressFn progress) {
     namespace fs = std::filesystem;
 
     std::vector<fs::path> filePaths;
@@ -239,6 +240,9 @@ std::vector<uint8_t> packFolder(const std::filesystem::path& folderPath,
 
     std::vector<CiftreeEntry> entries;
     entries.reserve(filePaths.size());
+
+    int total = static_cast<int>(filePaths.size());
+    int done  = 0;
 
     for (const auto& path : filePaths) {
         std::string rawExt = path.extension().string();
@@ -268,12 +272,18 @@ std::vector<uint8_t> packFolder(const std::filesystem::path& folderPath,
             } else if (ext == ".xsheet") {
                 cifData = encodeXSheet(path);
             } else {
+                ++done;
+                if (progress) progress(done, total);
                 continue;  // unsupported — skip silently
             }
             entries.push_back({std::move(stem), std::move(cifData)});
         } catch (const std::exception&) {
+            ++done;
+            if (progress) progress(done, total);
             continue;  // encoding failed — skip silently
         }
+        ++done;
+        if (progress) progress(done, total);
     }
 
     return packCiftree(entries);
@@ -284,9 +294,13 @@ std::vector<uint8_t> packFolder(const std::filesystem::path& folderPath,
 
 void unpackToFolder(const std::filesystem::path& datPath,
                     const std::filesystem::path& outDir,
-                    const UnpackOptions& opts) {
+                    const UnpackOptions& opts,
+                    ProgressFn progress) {
     auto entries = unpackCiftree(datPath);
     std::filesystem::create_directories(outDir);
+
+    int total = static_cast<int>(entries.size());
+    int done  = 0;
 
     for (const auto& entry : entries) {
         if (!opts.extractContents) {
@@ -316,6 +330,8 @@ void unpackToFolder(const std::filesystem::path& datPath,
         } else {
             writeFile(outDir / (entry.name + ext), decodeFromBytes(entry.cifData));
         }
+        ++done;
+        if (progress) progress(done, total);
     }
 }
 

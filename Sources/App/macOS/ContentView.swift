@@ -69,11 +69,13 @@ enum HIPFileKind {
 // MARK: - Result model
 
 struct ConversionResult: Identifiable {
-    let id      = UUID()
-    let icon:   String
-    let tint:   Color
-    let title:  String
-    let detail: String
+    let id          = UUID()
+    let icon:       String
+    let tint:       Color
+    let title:      String
+    let detail:     String
+    var isExpandable: Bool = false
+    var revealURL:  URL? = nil
 }
 
 // MARK: - ViewModel
@@ -81,10 +83,14 @@ struct ConversionResult: Identifiable {
 @MainActor
 final class AppViewModel: ObservableObject {
 
+    // Weak shared ref used by AppDelegate / window delegate (set in init)
+    static weak var shared: AppViewModel?
+
     @Published var category:    AppCategory  = .cif
     @Published var direction:   AppDirection = .forward
     @Published var results:     [ConversionResult] = []
     @Published var isProcessing = false
+    @Published var progress: (current: Int, total: Int)? = nil
     @Published var isDragging   = false
     @Published var compileLua         = true
     @Published var decompileLua       = false
@@ -92,8 +98,32 @@ final class AppViewModel: ObservableObject {
     @Published var capitalizeNames    = false  // uppercase entry names when packing (not extension)
     /// Sea of Darkness: encode PNG as CIF type 4 (OVL) instead of type 2.
     @Published var useType4PNG        = false
+    @Published var showCancelConfirmation = false
+
+    // Cancellation handles
+    private var processingTask: Task<Void, Never>? = nil
+    private var cancelWorkTask: (() -> Void)? = nil
+    private var currentOutputURL: URL? = nil
+
+    init() { AppViewModel.shared = self }
 
     func clearResults() { withAnimation { results = [] } }
+
+    func requestCancel() { showCancelConfirmation = true }
+
+    func cancelAndCleanup() {
+        cancelWorkTask?()
+        cancelWorkTask = nil
+        processingTask?.cancel()
+        processingTask = nil
+        if let url = currentOutputURL {
+            try? FileManager.default.removeItem(at: url)
+            currentOutputURL = nil
+        }
+        isProcessing = false
+        progress = nil
+        showCancelConfirmation = false
+    }
 
     var mode: AppMode {
         switch category {
@@ -117,26 +147,129 @@ final class AppViewModel: ObservableObject {
 
     func processURLs(_ urls: [URL]) {
         isProcessing = true
-        Task {
+        progress = (current: 0, total: urls.count)
+
+        // Capture all config before handing off to background tasks
+        let mode               = self.mode
+        let compileLua         = self.compileLua
+        let decompileLua       = self.decompileLua
+        let extractCifContents = self.extractCifContents
+        let capitalizeNames    = self.capitalizeNames
+        let useType4PNG        = self.useType4PNG
+
+        let t = Task {
             var batch: [ConversionResult] = []
-            for url in urls {
+            for (i, url) in urls.enumerated() {
+                guard !Task.isCancelled else { break }
+                let items: [ConversionResult]
                 switch mode {
-                case .cifEncode:     batch.append(encodeCIF(url))
-                case .cifDecode:     batch.append(contentsOf: decodeCIF(url))
-                case .ciftreePack:   batch.append(contentsOf: packCiftree(url))
-                case .ciftreeUnpack: batch.append(contentsOf: unpackCiftree(url))
-                case .hisEncode:     batch.append(encodeHIS(url))
-                case .hisDecode:     batch.append(decodeHIS(url))
+                case .ciftreePack:
+                    // NSSavePanel must stay on main; heavy encoding goes to background inside
+                    items = await packCiftreeAsync(url, compileLua: compileLua,
+                                                   capitalizeNames: capitalizeNames,
+                                                   useType4PNG: useType4PNG)
+                case .ciftreeUnpack:
+                    items = await unpackCiftreeAsync(url, extractContents: extractCifContents,
+                                                     decompileLua: decompileLua)
+                default:
+                    items = await Task.detached(priority: .userInitiated) { [mode, compileLua, decompileLua, useType4PNG] in
+                        switch mode {
+                        case .cifEncode: return [AppViewModel.encodeCIF(url, compileLua: compileLua, useType4PNG: useType4PNG)]
+                        case .cifDecode: return AppViewModel.decodeCIF(url, decompileLua: decompileLua)
+                        case .hisEncode: return [AppViewModel.encodeHIS(url)]
+                        case .hisDecode: return [AppViewModel.decodeHIS(url)]
+                        default: return []
+                        }
+                    }.value
                 }
+                batch.append(contentsOf: items)
+                progress = (current: i + 1, total: urls.count)
             }
-            results = batch + results
+            if !batch.isEmpty { withAnimation { results = batch + results } }
             isProcessing = false
+            progress = nil
+            processingTask = nil
         }
+        processingTask = t
+    }
+
+    // Pack: enumerate + encode on background, NSSavePanel on main, write on background
+    private func packCiftreeAsync(_ url: URL, compileLua: Bool,
+                                   capitalizeNames: Bool, useType4PNG: Bool) async -> [ConversionResult] {
+        guard url.hasDirectoryPath else {
+            return [AppViewModel.fail(url.lastPathComponent, "Expected a folder")]
+        }
+        let onProgress: @Sendable (Int, Int) -> Void = { [weak self] cur, tot in
+            Task { @MainActor [weak self] in self?.progress = (current: cur, total: tot) }
+        }
+        let encodeTask = Task.detached(priority: .userInitiated) { [compileLua, capitalizeNames, useType4PNG] in
+            AppViewModel.enumerateAndEncode(url, compileLua: compileLua,
+                                            capitalizeNames: capitalizeNames,
+                                            useType4PNG: useType4PNG,
+                                            onProgress: onProgress)
+        }
+        cancelWorkTask = { encodeTask.cancel() }
+        let (entries, warnings) = await encodeTask.value
+        cancelWorkTask = nil
+        guard !Task.isCancelled else { return [] }
+        guard !entries.isEmpty else {
+            return warnings + [AppViewModel.fail(url.lastPathComponent, "No supported files found in folder")]
+        }
+        let panel = NSSavePanel()
+        panel.nameFieldStringValue = url.deletingPathExtension().lastPathComponent + ".dat"
+        panel.directoryURL         = url.deletingLastPathComponent()
+        guard panel.runModal() == .OK, let dest = panel.url else {
+            return [AppViewModel.fail(url.lastPathComponent, "Save cancelled")]
+        }
+        currentOutputURL = dest
+        let writeTask = Task.detached(priority: .userInitiated) {
+            AppViewModel.packAndWrite(entries: entries, dest: dest, sourceName: url.lastPathComponent)
+        }
+        cancelWorkTask = { writeTask.cancel() }
+        let packResult = await writeTask.value
+        cancelWorkTask = nil
+        currentOutputURL = nil
+        return packResult + warnings
+    }
+
+    // Unpack: check write access on main, show NSOpenPanel if denied, do work on background
+    private func unpackCiftreeAsync(_ url: URL, extractContents: Bool, decompileLua: Bool) async -> [ConversionResult] {
+        guard url.pathExtension.lowercased() == "dat" else {
+            return [AppViewModel.fail(url.lastPathComponent, "Expected .dat archive")]
+        }
+        var outDir = url.deletingPathExtension()
+        let parentWritable = FileManager.default.isWritableFile(atPath: outDir.deletingLastPathComponent().path)
+        if !parentWritable {
+            let panel = NSOpenPanel()
+            panel.canChooseDirectories    = true
+            panel.canChooseFiles          = false
+            panel.allowsMultipleSelection = false
+            panel.prompt  = "Choose Output Folder"
+            panel.message = "Can't write next to the archive. Choose where to extract files."
+            guard panel.runModal() == .OK, let dest = panel.url else {
+                return [AppViewModel.fail(url.lastPathComponent, "Export cancelled")]
+            }
+            outDir = dest.appendingPathComponent(url.deletingPathExtension().lastPathComponent)
+        }
+        let finalOut = outDir
+        currentOutputURL = finalOut
+        let onProgress: @Sendable (Int, Int) -> Void = { [weak self] cur, tot in
+            Task { @MainActor [weak self] in self?.progress = (current: cur, total: tot) }
+        }
+        let workTask = Task.detached(priority: .userInitiated) { [extractContents, decompileLua] in
+            AppViewModel.unpackWork(url, to: finalOut, extractContents: extractContents,
+                                    decompileLua: decompileLua, onProgress: onProgress)
+        }
+        cancelWorkTask = { workTask.cancel() }
+        let result = await workTask.value
+        cancelWorkTask = nil
+        currentOutputURL = nil
+        return result
     }
 
     // ── CIF encode ───────────────────────────────────────────────────────
 
-    private func encodeCIF(_ url: URL) -> ConversionResult {
+    nonisolated static func encodeCIF(_ url: URL, compileLua: Bool, useType4PNG: Bool) -> ConversionResult {
         let name = url.lastPathComponent
         let ext  = url.pathExtension.lowercased()
         do {
@@ -183,7 +316,7 @@ final class AppViewModel: ObservableObject {
 
     // ── CIF decode ───────────────────────────────────────────────────────
 
-    private func decodeCIF(_ url: URL) -> [ConversionResult] {
+    nonisolated static func decodeCIF(_ url: URL, decompileLua: Bool) -> [ConversionResult] {
         let name = url.lastPathComponent
         guard url.pathExtension.lowercased() == "cif" else {
             return [fail(name, "Expected .cif")]
@@ -192,18 +325,16 @@ final class AppViewModel: ObservableObject {
             let info = try HIPWrapper.readHeader(atPath: url.path)
             let data = try HIPWrapper.decode(atPath: url.path) as Data
 
-            // Determine output extension
             let outExt: String
             switch info.type {
-            case 2, 4: outExt = "png"       // type 2 = standard PNG, type 4 = OVL overlay
+            case 2, 4: outExt = "png"
             case 3:    outExt = "lua"
-            case 6:    outExt = "xsheet"    // always export raw XSheet body; JSON available from preview
+            case 6:    outExt = "xsheet"
             default:   outExt = "bin"
             }
 
             let outURL = url.deletingPathExtension().appendingPathExtension(outExt)
 
-            // ── Lua ──
             if info.isLua {
                 try data.write(to: outURL)
                 let isCompiled = data.count >= 4
@@ -215,25 +346,22 @@ final class AppViewModel: ObservableObject {
                 guard decompileLua else {
                     return [ok(name, "→ .lua  \(sizeStr(data.count)) · bytecode")]
                 }
+                print("[luadec] → \(url.lastPathComponent)")
                 do {
                     let source = try HIPWrapper.decompileLua(atPath: outURL.path)
                     guard !source.isEmpty else {
-                        return [
-                            ok(name,   "→ .lua  \(sizeStr(data.count)) · bytecode saved"),
-                            warn(name, "Decompilation failed: unknown error")
-                        ]
+                        print("[luadec] ✗ \(url.lastPathComponent): empty output")
+                        return [warn(name, "→ .lua  \(sizeStr(data.count)) · bytecode saved — decompilation failed: empty output")]
                     }
                     try source.write(to: outURL, atomically: true, encoding: .utf8)
+                    print("[luadec] ✓ \(url.lastPathComponent)")
                     return [ok(name, "→ .lua  \(sizeStr(source.utf8.count)) · decompiled")]
                 } catch {
-                    return [
-                        ok(name,   "→ .lua  \(sizeStr(data.count)) · bytecode saved"),
-                        warn(name, "Decompilation failed: \(error.localizedDescription)")
-                    ]
+                    print("[luadec] ✗ \(url.lastPathComponent): \(error.localizedDescription)")
+                    return [warn(name, "→ .lua  \(sizeStr(data.count)) · bytecode saved — \(error.localizedDescription)")]
                 }
             }
 
-            // ── PNG / OVL / XSheet / other ──
             try data.write(to: outURL)
             var detail = sizeStr(data.count)
             if info.isPNG || info.isOVL { detail = "\(info.width)×\(info.height) · " + detail }
@@ -244,18 +372,20 @@ final class AppViewModel: ObservableObject {
         } catch { return [fail(name, error.localizedDescription)] }
     }
 
-    // ── Ciftree pack ─────────────────────────────────────────────────────
+    // ── Ciftree pack helpers ─────────────────────────────────────────────
 
-    private func packCiftree(_ url: URL) -> [ConversionResult] {
-        guard url.hasDirectoryPath else {
-            return [fail(url.lastPathComponent, "Expected a folder")]
-        }
+    nonisolated static func enumerateAndEncode(_ url: URL, compileLua: Bool,
+                                                capitalizeNames: Bool,
+                                                useType4PNG: Bool,
+                                                onProgress: (@Sendable (Int, Int) -> Void)? = nil)
+        -> (entries: [(name: String, data: Data)], warnings: [ConversionResult])
+    {
         let fm = FileManager.default
         guard let enumerator = fm.enumerator(
             at: url,
             includingPropertiesForKeys: [.isRegularFileKey],
             options: [.skipsHiddenFiles, .skipsPackageDescendants]) else {
-            return [fail(url.lastPathComponent, "Cannot enumerate folder")]
+            return ([], [fail(url.lastPathComponent, "Cannot enumerate folder")])
         }
         var allFiles: [URL] = []
         for case let fileURL as URL in enumerator {
@@ -264,7 +394,10 @@ final class AppViewModel: ObservableObject {
         }
         var cifEntries: [(name: String, data: Data)] = []
         var warnings:   [ConversionResult] = []
-        for file in allFiles.sorted(by: { $0.lastPathComponent < $1.lastPathComponent }) {
+        let sortedFiles = allFiles.sorted(by: { $0.lastPathComponent < $1.lastPathComponent })
+        for (i, file) in sortedFiles.enumerated() {
+            guard !Task.isCancelled else { break }
+            onProgress?(i + 1, sortedFiles.count)
             let ext  = file.pathExtension.lowercased()
             let stem = file.deletingPathExtension().lastPathComponent
             let entryName = capitalizeNames ? stem.uppercased() : stem
@@ -302,9 +435,12 @@ final class AppViewModel: ObservableObject {
                 warnings.append(fail(file.lastPathComponent, error.localizedDescription))
             }
         }
-        guard !cifEntries.isEmpty else {
-            return [fail(url.lastPathComponent, "No supported files found in folder")]
-        }
+        return (cifEntries, warnings)
+    }
+
+    nonisolated static func packAndWrite(entries cifEntries: [(name: String, data: Data)],
+                                          dest: URL, sourceName: String) -> [ConversionResult] {
+        let fm = FileManager.default
         do {
             let tmpDir = URL(fileURLWithPath: NSTemporaryDirectory())
                 .appendingPathComponent(UUID().uuidString)
@@ -317,42 +453,40 @@ final class AppViewModel: ObservableObject {
                 tmpPaths.append(f.path)
             }
             let packed = try HIPWrapper.packCiftree(fromPaths: tmpPaths) as Data
-            let panel  = NSSavePanel()
-            panel.nameFieldStringValue = url.deletingPathExtension().lastPathComponent + ".dat"
-            panel.directoryURL         = url.deletingLastPathComponent()
-            guard panel.runModal() == .OK, let dest = panel.url else {
-                return [fail(url.lastPathComponent, "Save cancelled")]
-            }
             try packed.write(to: dest)
-            return cifEntries.map {
-                ConversionResult(icon: "archivebox.fill", tint: .blue,
-                                 title: $0.name + ".cif",
-                                 detail: sizeStr($0.data.count) + " packed")
-            } + warnings
-        } catch { return [fail(url.lastPathComponent, error.localizedDescription)] }
+            return [ConversionResult(icon: "archivebox.fill", tint: .blue,
+                                     title: dest.lastPathComponent,
+                                     detail: "\(cifEntries.count) files · \(sizeStr(packed.count))",
+                                     revealURL: dest)]
+        } catch { return [fail(sourceName, error.localizedDescription)] }
     }
 
     // ── Ciftree unpack ───────────────────────────────────────────────────
 
-    private func unpackCiftree(_ url: URL) -> [ConversionResult] {
-        guard url.pathExtension.lowercased() == "dat" else {
-            return [fail(url.lastPathComponent, "Expected .dat archive")]
-        }
+    nonisolated static func unpackWork(_ url: URL, to outDir: URL,
+                                        extractContents: Bool, decompileLua: Bool,
+                                        onProgress: (@Sendable (Int, Int) -> Void)? = nil) -> [ConversionResult] {
         do {
             let entries = try HIPWrapper.unpackCiftree(atPath: url.path)
-            let outDir  = url.deletingPathExtension()
             try FileManager.default.createDirectory(at: outDir, withIntermediateDirectories: true)
             var rows: [ConversionResult] = []
-            for entry in entries {
+            var failedDecompile: [String] = []
+            for (i, entry) in entries.enumerated() {
+                guard !Task.isCancelled else { break }
+                onProgress?(i + 1, entries.count)
                 let outURL = outDir.appendingPathComponent(entry.name + ".cif")
                 try entry.cifData.write(to: outURL)
-                if extractCifContents {
-                    let decResults = decodeCIF(outURL)
-                    // Remove the intermediate .cif only when decoding produced at least one successful result
-                    if decResults.contains(where: { $0.icon == "checkmark.circle.fill" }) {
-                        try? FileManager.default.removeItem(at: outURL)
+                if extractContents {
+                    let decResults = decodeCIF(outURL, decompileLua: decompileLua)
+                    // Always remove the raw .cif — we want decoded content, not the container
+                    try? FileManager.default.removeItem(at: outURL)
+                    // Track failures for the expandable summary; skip individual warn rows
+                    if decResults.contains(where: { $0.icon == "exclamationmark.triangle.fill" }) {
+                        failedDecompile.append(entry.name + ".lua")
+                        rows.append(contentsOf: decResults.filter { $0.icon != "exclamationmark.triangle.fill" })
+                    } else {
+                        rows.append(contentsOf: decResults)
                     }
-                    rows.append(contentsOf: decResults)
                 } else {
                     rows.append(ConversionResult(
                         icon: "doc.fill", tint: .green,
@@ -360,13 +494,20 @@ final class AppViewModel: ObservableObject {
                         detail: sizeStr(entry.cifData.count)))
                 }
             }
+            if !failedDecompile.isEmpty {
+                rows.insert(warn(
+                    "Decompilation failed for \(failedDecompile.count) file(s) — saved as bytecode",
+                    failedDecompile.joined(separator: "\n"),
+                    expandable: true
+                ), at: 0)
+            }
             return rows
         } catch { return [fail(url.lastPathComponent, error.localizedDescription)] }
     }
 
     // ── HIS encode ───────────────────────────────────────────────────────
 
-    private func encodeHIS(_ url: URL) -> ConversionResult {
+    nonisolated static func encodeHIS(_ url: URL) -> ConversionResult {
         let name = url.lastPathComponent
         guard url.pathExtension.lowercased() == "ogg" else {
             return fail(name, "Expected .ogg (OGG Vorbis)")
@@ -381,7 +522,7 @@ final class AppViewModel: ObservableObject {
 
     // ── HIS decode ───────────────────────────────────────────────────────
 
-    private func decodeHIS(_ url: URL) -> ConversionResult {
+    nonisolated static func decodeHIS(_ url: URL) -> ConversionResult {
         let name = url.lastPathComponent
         guard url.pathExtension.lowercased() == "his" else {
             return fail(name, "Expected .his")
@@ -396,16 +537,16 @@ final class AppViewModel: ObservableObject {
 
     // ── Helpers ──────────────────────────────────────────────────────────
 
-    private func ok(_ t: String, _ d: String) -> ConversionResult {
+    nonisolated static func ok(_ t: String, _ d: String) -> ConversionResult {
         ConversionResult(icon: "checkmark.circle.fill",         tint: .green,  title: t, detail: d)
     }
-    private func fail(_ t: String, _ d: String) -> ConversionResult {
+    nonisolated static func fail(_ t: String, _ d: String) -> ConversionResult {
         ConversionResult(icon: "xmark.circle.fill",             tint: .red,    title: t, detail: d)
     }
-    private func warn(_ t: String, _ d: String) -> ConversionResult {
-        ConversionResult(icon: "exclamationmark.triangle.fill", tint: .yellow, title: t, detail: d)
+    nonisolated static func warn(_ t: String, _ d: String, expandable: Bool = false) -> ConversionResult {
+        ConversionResult(icon: "exclamationmark.triangle.fill", tint: .yellow, title: t, detail: d, isExpandable: expandable)
     }
-    private func sizeStr(_ bytes: Int) -> String {
+    nonisolated static func sizeStr(_ bytes: Int) -> String {
         ByteCountFormatter.string(fromByteCount: Int64(bytes), countStyle: .file)
     }
 }
@@ -428,6 +569,13 @@ struct ContentView: View {
         .toolbar { toolbarContent }
         .toolbar(removing: .title)
         .background(WindowTabbingDisabler())
+        .background(WindowCloseInterceptor.installer)
+        .alert("Cancel Processing?", isPresented: $vm.showCancelConfirmation) {
+            Button("Cancel & Delete Output", role: .destructive) { vm.cancelAndCleanup() }
+            Button("Keep Running", role: .cancel) { }
+        } message: {
+            Text("The conversion will stop and the partial output will be deleted.")
+        }
         .alert("Support Us", isPresented: $showSupportAlert) {
             Button("Donate on Ko-Fi") {
                 NSWorkspace.shared.open(URL(string: "https://ko-fi.com/nancydrewhub")!)
@@ -456,6 +604,7 @@ struct ContentView: View {
                 ForEach(AppCategory.allCases) { c in Text(c.rawValue).tag(c) }
             }
             .pickerStyle(.segmented)
+            .disabled(vm.isProcessing)
         }
         ToolbarItem(placement: .primaryAction) {
             Button { showSupportAlert = true } label: {
@@ -481,6 +630,7 @@ struct ContentView: View {
             }
             .pickerStyle(.segmented)
             .fixedSize()
+            .disabled(vm.isProcessing)
 
             switch vm.mode {
             case .cifEncode:
@@ -550,15 +700,32 @@ struct ContentView: View {
                     style: StrokeStyle(lineWidth: 1.5, dash: [6]))
                 .animation(.easeInOut(duration: 0.15), value: vm.isDragging)
             if vm.isProcessing {
-                ProgressView("Processing…").controlSize(.large)
+                VStack(spacing: 14) {
+                    if let p = vm.progress, p.total > 0 {
+                        let pct = Int(Double(p.current) / Double(p.total) * 100)
+                        VStack(spacing: 10) {
+                            ProgressView(value: Double(p.current), total: Double(p.total))
+                                .progressViewStyle(.linear)
+                                .frame(maxWidth: 280)
+                            Text("\(p.current) of \(p.total) · \(pct)%")
+                                .font(.subheadline).foregroundStyle(.secondary)
+                        }
+                    } else {
+                        ProgressView("Processing…").controlSize(.large)
+                    }
+                    Button("Cancel") { vm.requestCancel() }
+                        .buttonStyle(.borderless)
+                        .foregroundStyle(.red)
+                        .font(.subheadline)
+                }
             } else {
                 dropHint
             }
         }
         .frame(maxWidth: .infinity, maxHeight: .infinity)
         .contentShape(Rectangle())
-        .onTapGesture { openPanel() }
-        .onDrop(of: [.fileURL], isTargeted: $vm.isDragging) { handleDrop($0) }
+        .onTapGesture { if !vm.isProcessing { openPanel() } }
+        .onDrop(of: [.fileURL], isTargeted: $vm.isDragging) { vm.isProcessing ? false : handleDrop($0) }
     }
 
     private var dropHint: some View {
@@ -748,19 +915,58 @@ struct ContentView: View {
 
 struct ResultRow: View {
     let result: ConversionResult
+    @State private var isExpanded = false
+
     var body: some View {
-        HStack(spacing: 12) {
-            Image(systemName: result.icon)
-                .foregroundStyle(result.tint)
-                .font(.system(size: 17, weight: .medium))
-                .frame(width: 28, height: 28, alignment: .center)
-            VStack(alignment: .leading, spacing: 2) {
-                Text(result.title).font(.system(.body, design: .monospaced)).lineLimit(1)
-                Text(result.detail).font(.caption).foregroundStyle(.secondary)
+        if result.isExpandable {
+            DisclosureGroup(isExpanded: $isExpanded) {
+                ScrollView {
+                    Text(result.detail)
+                        .font(.system(.caption, design: .monospaced))
+                        .foregroundStyle(.secondary)
+                        .textSelection(.enabled)
+                        .frame(maxWidth: .infinity, alignment: .leading)
+                        .padding(.leading, 44)
+                        .padding(.bottom, 6)
+                }
+                .frame(maxHeight: 140)
+            } label: {
+                HStack(spacing: 12) {
+                    Image(systemName: result.icon)
+                        .foregroundStyle(result.tint)
+                        .font(.system(size: 17, weight: .medium))
+                        .frame(width: 28, height: 28, alignment: .center)
+                    Text(result.title)
+                        .font(.system(.body, design: .monospaced))
+                        .lineLimit(1)
+                    Spacer()
+                }
             }
-            Spacer()
+            .padding(.horizontal, 16).padding(.vertical, 9)
+        } else {
+            HStack(spacing: 12) {
+                Image(systemName: result.icon)
+                    .foregroundStyle(result.tint)
+                    .font(.system(size: 17, weight: .medium))
+                    .frame(width: 28, height: 28, alignment: .center)
+                VStack(alignment: .leading, spacing: 2) {
+                    Text(result.title).font(.system(.body, design: .monospaced)).lineLimit(1)
+                    Text(result.detail).font(.caption).foregroundStyle(.secondary)
+                }
+                Spacer()
+                if let url = result.revealURL {
+                    Button {
+                        NSWorkspace.shared.activateFileViewerSelecting([url])
+                    } label: {
+                        Image(systemName: "folder")
+                            .font(.system(size: 13))
+                    }
+                    .buttonStyle(.borderless)
+                    .help("Show in Finder")
+                }
+            }
+            .padding(.horizontal, 16).padding(.vertical, 9)
         }
-        .padding(.horizontal, 16).padding(.vertical, 9)
     }
 }
 
@@ -1766,6 +1972,41 @@ struct WindowTabbingDisabler: NSViewRepresentable {
             super.viewDidMoveToWindow()
             window?.tabbingMode = .disallowed
         }
+    }
+}
+
+// MARK: - Window close interception
+
+final class WindowCloseInterceptor: NSObject, NSWindowDelegate {
+    static let shared = WindowCloseInterceptor()
+
+    static var installer: some View { _Installer() }
+
+    func windowShouldClose(_ sender: NSWindow) -> Bool {
+        guard let vm = AppViewModel.shared, vm.isProcessing else { return true }
+        let alert = NSAlert()
+        alert.messageText = "Processing in Progress"
+        alert.informativeText = "A conversion is still running. Close anyway? The partial output will be deleted."
+        alert.addButton(withTitle: "Close & Delete Output")
+        alert.addButton(withTitle: "Keep Running")
+        alert.alertStyle = .warning
+        let response = alert.runModal()
+        if response == .alertFirstButtonReturn {
+            MainActor.assumeIsolated { AppViewModel.shared?.cancelAndCleanup() }
+            return true
+        }
+        return false
+    }
+
+    private struct _Installer: NSViewRepresentable {
+        func makeNSView(context: Context) -> NSView {
+            let v = NSView()
+            DispatchQueue.main.async {
+                v.window?.delegate = WindowCloseInterceptor.shared
+            }
+            return v
+        }
+        func updateNSView(_ nsView: NSView, context: Context) {}
     }
 }
 

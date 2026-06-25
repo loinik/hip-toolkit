@@ -52,23 +52,37 @@ internal static class HIPInterop
         out nint data,
         out uint size);
 
+    [UnmanagedFunctionPointer(CallingConvention.StdCall)]
+    public delegate void ProgressCallback(int current, int total);
+
     [DllImport(DllName, EntryPoint = "HIP_PackFolder")]
     private static extern int PackFolderRaw(
         [MarshalAs(UnmanagedType.LPUTF8Str)] string folderPath,
         uint flags,
         out nint data,
-        out uint size);
+        out uint size,
+        ProgressCallback? progress);
 
     [DllImport(DllName, EntryPoint = "HIP_UnpackToFolder")]
     private static extern int UnpackToFolderRaw(
         [MarshalAs(UnmanagedType.LPUTF8Str)] string datPath,
         [MarshalAs(UnmanagedType.LPUTF8Str)] string outDir,
-        int extractContents);
+        int extractContents,
+        ProgressCallback? progress);
 
     [DllImport(DllName, EntryPoint = "HIP_CiftreeEntryCount")]
     private static extern int CiftreeEntryCountRaw(
         [MarshalAs(UnmanagedType.LPUTF8Str)] string datPath,
         out uint count);
+
+    [DllImport(DllName, EntryPoint = "HIP_CiftreeEntryInfo")]
+    private static extern int CiftreeEntryInfoRaw(
+        [MarshalAs(UnmanagedType.LPUTF8Str)] string datPath,
+        uint index,
+        [Out] byte[] outName,
+        uint nameSize,
+        out uint outCIFSize,
+        out uint outCIFType);
 
     [DllImport(DllName, EntryPoint = "HIP_EncodeHIS")]
     private static extern int EncodeHISRaw(
@@ -153,25 +167,48 @@ internal static class HIPInterop
         return ExtractBytes(ptr, size);
     }
 
-    public static byte[] PackFolder(string folderPath, bool capitalizeNames, bool compileLua, bool useOVL)
+    public static byte[] PackFolder(string folderPath, bool capitalizeNames, bool compileLua, bool useOVL,
+                                     Action<int, int>? onProgress = null)
     {
         uint flags = 0;
         if (capitalizeNames) flags |= 1;
         if (compileLua)      flags |= 2;
         if (useOVL)          flags |= 4;
-        ThrowIfFailed(PackFolderRaw(folderPath, flags, out var ptr, out var size));
+        ProgressCallback? cb = onProgress != null ? (cur, tot) => onProgress(cur, tot) : null;
+        ThrowIfFailed(PackFolderRaw(folderPath, flags, out var ptr, out var size, cb));
+        GC.KeepAlive(cb);
         return ExtractBytes(ptr, size);
     }
 
-    public static void UnpackToFolder(string datPath, string outDir, bool extractContents)
+    public static void UnpackToFolder(string datPath, string outDir, bool extractContents,
+                                       Action<int, int>? onProgress = null)
     {
-        ThrowIfFailed(UnpackToFolderRaw(datPath, outDir, extractContents ? 1 : 0));
+        ProgressCallback? cb = onProgress != null ? (cur, tot) => onProgress(cur, tot) : null;
+        ThrowIfFailed(UnpackToFolderRaw(datPath, outDir, extractContents ? 1 : 0, cb));
+        GC.KeepAlive(cb);
     }
+
+    public record CiftreeEntry(string Name, uint CIFSize, uint CIFType);
 
     public static uint GetCiftreeEntryCount(string datPath)
     {
         ThrowIfFailed(CiftreeEntryCountRaw(datPath, out var count));
         return count;
+    }
+
+    public static List<CiftreeEntry> GetCiftreeEntries(string datPath)
+    {
+        ThrowIfFailed(CiftreeEntryCountRaw(datPath, out var count));
+        var entries = new List<CiftreeEntry>((int)count);
+        var nameBuf = new byte[256];
+        for (uint i = 0; i < count; i++)
+        {
+            ThrowIfFailed(CiftreeEntryInfoRaw(datPath, i, nameBuf, (uint)nameBuf.Length,
+                                               out var cifSize, out var cifType));
+            var name = System.Text.Encoding.UTF8.GetString(nameBuf).TrimEnd('\0');
+            entries.Add(new CiftreeEntry(name, cifSize, cifType));
+        }
+        return entries;
     }
 
     public static byte[] EncodeHIS(string oggPath)
@@ -211,10 +248,19 @@ internal static class HIPInterop
             }
         };
 
+        System.Diagnostics.Debug.WriteLine($"[luadec] launching: {luadecPath} \"{luacPath}\"");
         proc.Start();
-        var stdout = proc.StandardOutput.ReadToEnd();
-        var stderr = proc.StandardError.ReadToEnd();
-        proc.WaitForExit();
+        // Read async to avoid pipe-buffer deadlock, kill if luadec hangs on bad bytecode
+        var stdoutTask = proc.StandardOutput.ReadToEndAsync();
+        var stderrTask = proc.StandardError.ReadToEndAsync();
+        bool finished  = proc.WaitForExit(15_000); // 15-second timeout
+        if (!finished)
+        {
+            try { proc.Kill(); } catch { /* ignore */ }
+            throw new InvalidOperationException("Decompilation timed out — luadec got stuck on this bytecode");
+        }
+        var stdout = stdoutTask.GetAwaiter().GetResult();
+        var stderr = stderrTask.GetAwaiter().GetResult();
 
         if (proc.ExitCode != 0)
             throw new InvalidOperationException(
