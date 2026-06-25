@@ -1118,7 +1118,8 @@ struct CIFPreviewView: View {
                              exportName: url.deletingPathExtension().lastPathComponent)
                 case .luaBytecode(let bytes, let data):
                     BytecodeView(bytes: bytes, exportData: data,
-                                 exportName: url.deletingPathExtension().lastPathComponent)
+                                 exportName: url.deletingPathExtension().lastPathComponent,
+                                 sourcePath: url.path)
                 case .xsheet(let data):
                     XSheetBodyView(data: data, sourceURL: url)
                 case .raw(let type, let size):
@@ -1273,30 +1274,91 @@ private struct BytecodeView: View {
     let bytes:      Int
     var exportData: Data?   = nil
     var exportName: String? = nil
+    var sourcePath: String? = nil   // temp .lua path to decompile
+
+    @State private var isDecompiling = false
+    @State private var decompiled: String? = nil
+    @State private var decompileError: String? = nil
 
     var body: some View {
-        VStack(spacing: 16) {
-            Spacer()
-            Image(systemName: "lock.doc.fill").font(.system(size: 52)).foregroundStyle(.secondary)
-            VStack(spacing: 4) {
-                Text("Compiled Lua bytecode").font(.headline)
-                Text(ByteCountFormatter.string(fromByteCount: Int64(bytes), countStyle: .file))
-                    .font(.subheadline).foregroundStyle(.secondary)
-            }
-            Text("Use the converter (CIF → File) with **Decompile Lua** enabled\nto extract readable source code.")
-                .font(.callout).foregroundStyle(.secondary).multilineTextAlignment(.center)
-            if let data = exportData, let name = exportName {
-                Button("Save Bytecode (.lua)…") {
-                    let panel = NSSavePanel()
-                    panel.nameFieldStringValue = name + ".lua"
-                    panel.allowedContentTypes  = [UTType(filenameExtension: "lua") ?? .data]
-                    if panel.runModal() == .OK, let dest = panel.url { try? data.write(to: dest) }
+        Group {
+            if let src = decompiled {
+                CodeView(text: src, badge: "Decompiled Lua", icon: "doc.text",
+                         exportData: src.data(using: .utf8),
+                         exportName: exportName)
+            } else {
+                VStack(spacing: 16) {
+                    Spacer()
+                    Image(systemName: "lock.doc.fill").font(.system(size: 52)).foregroundStyle(.secondary)
+                    VStack(spacing: 4) {
+                        Text("Compiled Lua bytecode").font(.headline)
+                        Text(ByteCountFormatter.string(fromByteCount: Int64(bytes), countStyle: .file))
+                            .font(.subheadline).foregroundStyle(.secondary)
+                    }
+                    Text("Use the converter (CIF → File) with **Decompile Lua** enabled\nto extract readable source code.")
+                        .font(.callout).foregroundStyle(.secondary).multilineTextAlignment(.center)
+                    if let err = decompileError {
+                        Text(err).font(.caption).foregroundStyle(.red).multilineTextAlignment(.center)
+                            .frame(maxWidth: 340)
+                    }
+                    HStack(spacing: 12) {
+                        if let data = exportData, let name = exportName {
+                            Button("Save Bytecode (.lua)…") {
+                                let panel = NSSavePanel()
+                                panel.nameFieldStringValue = name + ".lua"
+                                panel.allowedContentTypes  = [UTType(filenameExtension: "lua") ?? .data]
+                                if panel.runModal() == .OK, let dest = panel.url { try? data.write(to: dest) }
+                            }
+                            .buttonStyle(.glass).buttonBorderShape(.capsule)
+                        }
+                        if sourcePath != nil {
+                            Button {
+                                runDecompile()
+                            } label: {
+                                HStack(spacing: 4) {
+                                    if isDecompiling {
+                                        ProgressView().scaleEffect(0.7).frame(width: 14, height: 14)
+                                        Text("Decompiling…")
+                                    } else {
+                                        Text("Decompile")
+                                        Text("β").font(.caption).foregroundStyle(.secondary)
+                                    }
+                                }
+                            }
+                            .buttonStyle(.glass).buttonBorderShape(.capsule)
+                            .disabled(isDecompiling)
+                        }
+                    }
+                    Spacer()
                 }
-                .buttonStyle(.glass).buttonBorderShape(.capsule)
+                .padding()
             }
-            Spacer()
         }
-        .padding()
+    }
+
+    private func runDecompile() {
+        guard let path = sourcePath, let data = exportData else { return }
+        isDecompiling = true
+        decompileError = nil
+        Task.detached(priority: .userInitiated) {
+            do {
+                let tmp = FileManager.default.temporaryDirectory
+                    .appendingPathComponent(UUID().uuidString + ".lua")
+                try data.write(to: tmp)
+                let src = try HIPWrapper.decompileLua(atPath: tmp.path)
+                try? FileManager.default.removeItem(at: tmp)
+                await MainActor.run {
+                    isDecompiling = false
+                    if let s = src as String?, !s.isEmpty { decompiled = s }
+                    else { decompileError = "Decompiler returned empty output" }
+                }
+            } catch {
+                await MainActor.run {
+                    isDecompiling = false
+                    decompileError = error.localizedDescription
+                }
+            }
+        }
     }
 }
 
@@ -1494,11 +1556,17 @@ final class HISAudioController: ObservableObject {
         p.currentTime = fraction * p.duration; currentTime = p.currentTime
     }
 
-    func exportOGG(suggestedName: String) {
-        guard let data = oggData else { return }
+    func export(format: String, hisURL: URL, suggestedName: String) {
+        let data: Data?
+        if format == "ogg" {
+            data = oggData
+        } else {
+            data = try? HIPWrapper.decodeHIS(atPath: hisURL.path, toFormat: format) as Data
+        }
+        guard let data else { return }
         let save = NSSavePanel()
-        save.nameFieldStringValue = suggestedName + ".ogg"
-        save.allowedContentTypes  = [UTType(filenameExtension: "ogg") ?? .data]
+        save.nameFieldStringValue = suggestedName + "." + format
+        save.allowedContentTypes  = [UTType(filenameExtension: format) ?? .data]
         if save.runModal() == .OK, let dest = save.url { try? data.write(to: dest) }
     }
 
@@ -1564,10 +1632,15 @@ struct HISPreviewView: View {
             .foregroundStyle(ctrl.canPlay ? Color.accentColor : .secondary)
             .disabled(!ctrl.canPlay)
             .help(ctrl.canPlay ? "Play / Pause" : "Decoding audio…")
-            Button("Export as OGG…") {
-                ctrl.exportOGG(suggestedName: url.deletingPathExtension().lastPathComponent)
+            Menu("Export…") {
+                let name = url.deletingPathExtension().lastPathComponent
+                Button("Export as OGG…") { ctrl.export(format: "ogg", hisURL: url, suggestedName: name) }
+                Button("Export as WAV…") { ctrl.export(format: "wav", hisURL: url, suggestedName: name) }
+                Button("Export as MP3…") { ctrl.export(format: "mp3", hisURL: url, suggestedName: name) }
             }
-            .buttonStyle(.glass).buttonBorderShape(.capsule)
+            .menuStyle(.button)
+            .buttonStyle(.glass)
+            .fixedSize()
             .disabled(ctrl.decodedBytes == nil)
             Spacer()
         }

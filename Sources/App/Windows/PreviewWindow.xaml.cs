@@ -1,9 +1,12 @@
 using Microsoft.UI;
 using Microsoft.UI.Xaml;
 using Microsoft.UI.Xaml.Controls;
+using Microsoft.UI.Xaml.Controls.Primitives;
 using Microsoft.UI.Xaml.Media;
 using Microsoft.UI.Xaml.Media.Imaging;
 using Windows.ApplicationModel.DataTransfer;
+using Windows.Media.Core;
+using Windows.Media.Playback;
 using Windows.Storage;
 using Windows.Storage.Pickers;
 using Windows.UI;
@@ -152,11 +155,16 @@ public sealed partial class PreviewWindow : Window
         var dq = DispatcherQueue;
         _ = Task.Run(() =>
         {
-            var result  = GatherData(path);
-            var content = null as UIElement; // placeholder; built on UI thread below
+            DataResult result;
+            try { result = GatherData(path); }
+            catch (Exception ex) { result = new DataResult("error", Error: ex.Message); }
+
             dq.TryEnqueue(() =>
             {
-                content = BuildContent(result, path, tab);
+                UIElement content;
+                try { content = BuildContent(result, path, tab); }
+                catch (Exception ex) { content = InfoPanel("", "Render Error", ex.Message); }
+
                 wrapper.Background = (Brush)Application.Current.Resources["SolidBackgroundFillColorBaseBrush"];
                 wrapper.Children.Clear();
                 wrapper.Children.Add(content);
@@ -218,7 +226,19 @@ public sealed partial class PreviewWindow : Window
                         Entries:    entries);
                 }
                 case ".his":
-                    return new DataResult("his", FileSize: new FileInfo(path).Length);
+                {
+                    try
+                    {
+                        var wav = HIPInterop.DecodeHISToFormat(path, "wav");
+                        var tmp = Path.Combine(Path.GetTempPath(), $"hip_{Guid.NewGuid():N}.wav");
+                        File.WriteAllBytes(tmp, wav);
+                        return new DataResult("his-audio", TmpPath: tmp, FileSize: new FileInfo(path).Length);
+                    }
+                    catch (Exception ex)
+                    {
+                        return new DataResult("his", FileSize: new FileInfo(path).Length, Error: ex.Message);
+                    }
+                }
                 default:
                     return new DataResult("unknown", FileSize: new FileInfo(path).Length);
             }
@@ -257,8 +277,10 @@ public sealed partial class PreviewWindow : Window
                 : InfoPanel("", "Ciftree Archive",
                     $"{FormatSize(r.FileSize)}\n\nEmpty archive or no entries found."),
 
+            "his-audio" => HISAudioPanel(r.TmpPath!, path, r.FileSize),
+
             "his" => InfoPanel("", "HIS Audio File",
-                $"Use the converter (HIS → OGG) to extract audio.\n\n{FormatSize(r.FileSize)}"),
+                $"{(r.Error != null ? r.Error + "\n\n" : "")}Cannot decode audio.\n{FormatSize(r.FileSize)}"),
 
             _ => InfoPanel("", Path.GetFileName(path),
                 $"No preview for {Path.GetExtension(path).ToUpperInvariant()} files.")
@@ -711,6 +733,191 @@ public sealed partial class PreviewWindow : Window
         root.Children.Add(top);
         root.Children.Add(bar);
         return root;
+    }
+
+    // ── HIS Audio Player ─────────────────────────────────────────────────
+
+    private UIElement HISAudioPanel(string tmpWavPath, string hisPath, long fileSize)
+    {
+        var player = new MediaPlayer { AutoPlay = false };
+        player.Source = MediaSource.CreateFromUri(new Uri(tmpWavPath));
+        player.MediaOpened += (_, _) => { };
+
+        // ── Icons ──
+        var waveIcon = new FontIcon
+        {
+            Glyph = "",   // Segoe MDL2: WaveformAudio
+            FontSize = 56,
+            Foreground = (Brush)Application.Current.Resources["AccentTextFillColorPrimaryBrush"],
+            HorizontalAlignment = HorizontalAlignment.Center,
+            Margin = new Thickness(0, 0, 0, 12)
+        };
+        var nameBlock = new TextBlock
+        {
+            Text = Path.GetFileNameWithoutExtension(hisPath),
+            Style = (Style)Application.Current.Resources["SubtitleTextBlockStyle"],
+            HorizontalAlignment = HorizontalAlignment.Center,
+            Margin = new Thickness(0, 0, 0, 4)
+        };
+        var sizeBlock = new TextBlock
+        {
+            Text = $"HIS · {FormatSize(fileSize)}",
+            Foreground = (Brush)Application.Current.Resources["TextFillColorSecondaryBrush"],
+            HorizontalAlignment = HorizontalAlignment.Center,
+            Margin = new Thickness(0, 0, 0, 20)
+        };
+
+        // ── Seek slider + time labels ──
+        var slider = new Slider { Minimum = 0, Maximum = 1, Value = 0,
+                                   HorizontalAlignment = HorizontalAlignment.Stretch };
+        var posLabel  = new TextBlock { Text = "0:00", FontFamily = new FontFamily("Consolas"), FontSize = 11 };
+        var durLabel  = new TextBlock { Text = "0:00", FontFamily = new FontFamily("Consolas"), FontSize = 11,
+                                         HorizontalAlignment = HorizontalAlignment.Right };
+        var timeRow = new Grid();
+        timeRow.ColumnDefinitions.Add(new ColumnDefinition { Width = GridLength.Auto });
+        timeRow.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(1, GridUnitType.Star) });
+        timeRow.ColumnDefinitions.Add(new ColumnDefinition { Width = GridLength.Auto });
+        Grid.SetColumn(posLabel, 0);
+        Grid.SetColumn(durLabel, 2);
+        timeRow.Children.Add(posLabel);
+        timeRow.Children.Add(durLabel);
+        var seekPanel = new StackPanel { Margin = new Thickness(0, 0, 0, 12) };
+        seekPanel.Children.Add(slider);
+        seekPanel.Children.Add(timeRow);
+
+        // ── Play/Pause button ──
+        var playIcon  = new FontIcon { Glyph = "", FontSize = 40 };  // Play
+        var pauseIcon = new FontIcon { Glyph = "", FontSize = 40 };  // Pause
+        var playBtn = new Button
+        {
+            Content = playIcon,
+            Background = new SolidColorBrush(Colors.Transparent),
+            BorderBrush = new SolidColorBrush(Colors.Transparent),
+            Padding = new Thickness(8),
+            HorizontalAlignment = HorizontalAlignment.Center,
+            Margin = new Thickness(0, 0, 0, 16)
+        };
+
+        // ── Export button with flyout ──
+        var exportFlyout = new MenuFlyout();
+        void AddExportItem(string label, string fmt, string ext)
+        {
+            var item = new MenuFlyoutItem { Text = label };
+            item.Click += async (_, _) =>
+            {
+                byte[]? data = null;
+                try { data = HIPInterop.DecodeHISToFormat(hisPath, fmt); }
+                catch { return; }
+                if (data != null) await ExportFileAsync(data, hisPath, label, "." + ext);
+            };
+            exportFlyout.Items.Add(item);
+        }
+        AddExportItem("OGG Vorbis", "ogg", "ogg");
+        AddExportItem("WAV Audio", "wav", "wav");
+        AddExportItem("MP3 Audio", "mp3", "mp3");
+
+        var exportBtn = new Button
+        {
+            Content = "Export…",
+            VerticalAlignment = VerticalAlignment.Center,
+            Margin = new Thickness(0, 0, 8, 0),
+            Flyout = exportFlyout
+        };
+
+        // ── Timer for position updates ──
+        bool isSeeking = false;
+        var timer = DispatcherQueue.CreateTimer();
+        timer.Interval = TimeSpan.FromMilliseconds(100);
+
+        static string FmtDur(TimeSpan t) =>
+            $"{(int)t.TotalMinutes}:{t.Seconds:D2}";
+
+        timer.Tick += (_, _) =>
+        {
+            if (player.PlaybackSession is not { } sess) return;
+            if (sess.NaturalDuration == TimeSpan.Zero) return;
+            var pos = sess.Position;
+            var dur = sess.NaturalDuration;
+            posLabel.Text = FmtDur(pos);
+            durLabel.Text = FmtDur(dur);
+            if (!isSeeking && dur.TotalSeconds > 0)
+                slider.Value = pos.TotalSeconds / dur.TotalSeconds;
+        };
+
+        bool isPlaying = false;
+        void UpdatePlayBtn() =>
+            playIcon.Glyph = isPlaying ? "" : "";
+
+        playBtn.Click += (_, _) =>
+        {
+            if (isPlaying) { player.Pause(); timer.Stop(); isPlaying = false; }
+            else           { player.Play();  timer.Start(); isPlaying = true;  }
+            UpdatePlayBtn();
+        };
+
+        slider.AddHandler(UIElement.PointerPressedEvent,
+            new Microsoft.UI.Xaml.Input.PointerEventHandler((_, _) => { isSeeking = true; }),
+            handledEventsToo: true);
+        slider.AddHandler(UIElement.PointerReleasedEvent,
+            new Microsoft.UI.Xaml.Input.PointerEventHandler((_, _) =>
+            {
+                isSeeking = false;
+                if (player.PlaybackSession is { } sess2 && sess2.NaturalDuration.TotalSeconds > 0)
+                    sess2.Position = TimeSpan.FromSeconds(slider.Value * sess2.NaturalDuration.TotalSeconds);
+            }), handledEventsToo: true);
+
+        player.MediaEnded += (_, _) =>
+        {
+            DispatcherQueue.TryEnqueue(() =>
+            {
+                isPlaying = false; timer.Stop();
+                UpdatePlayBtn();
+                slider.Value = 0;
+                posLabel.Text = FmtDur(TimeSpan.Zero);
+                player.PlaybackSession.Position = TimeSpan.Zero;
+            });
+        };
+
+        // ── Bottom status bar ──
+        var fileLabel = new TextBlock
+        {
+            Text = Path.GetFileName(hisPath),
+            VerticalAlignment = VerticalAlignment.Center,
+            Foreground = (Brush)Application.Current.Resources["TextFillColorTertiaryBrush"],
+            Margin = new Thickness(0, 0, 16, 0)
+        };
+        var barRow = new Grid { Height = 44 };
+        barRow.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(1, GridUnitType.Star) });
+        barRow.ColumnDefinitions.Add(new ColumnDefinition { Width = GridLength.Auto });
+        barRow.ColumnDefinitions.Add(new ColumnDefinition { Width = GridLength.Auto });
+        Grid.SetColumn(exportBtn, 1); Grid.SetColumn(fileLabel, 2);
+        barRow.Children.Add(exportBtn); barRow.Children.Add(fileLabel);
+
+        var playerPanel = new StackPanel
+        {
+            VerticalAlignment   = VerticalAlignment.Center,
+            HorizontalAlignment = HorizontalAlignment.Center,
+            MinWidth = 320, MaxWidth = 480
+        };
+        playerPanel.Children.Add(waveIcon);
+        playerPanel.Children.Add(nameBlock);
+        playerPanel.Children.Add(sizeBlock);
+        playerPanel.Children.Add(seekPanel);
+        playerPanel.Children.Add(playBtn);
+
+        var content = RowLayout(playerPanel, barRow);
+
+        // Cleanup temp file when tab is closed
+        if (content is FrameworkElement fe)
+            fe.Unloaded += (_, _) =>
+            {
+                player.Pause();
+                timer.Stop();
+                player.Source = null;
+                try { File.Delete(tmpWavPath); } catch { /* ignore */ }
+            };
+
+        return content;
     }
 
     // ── Export ────────────────────────────────────────────────────────────
