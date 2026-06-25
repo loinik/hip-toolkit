@@ -75,4 +75,18 @@
   <Target Name="CopyNativeBridgeToPublish" AfterTargets="Publish">
     <Copy SourceFiles="$(HIPBridgeDll)" DestinationFolder="$(PublishDir)" SkipUnchangedFiles="true" />
   </Target>
+
+  <!--
+    Copy resources.pri into the publish folder. WinUI 3 loads its XAML metadata
+    from resources.pri at startup; without it the app dies immediately with
+    STATUS_STOWED_EXCEPTION (0xc000027b) in combase.dll. `dotnet publish` copies
+    it automatically, but `msbuild /t:Publish` (which we must use so WindowsAppSDK's
+    PRI task loads from VS, not the .NET SDK) leaves it in $(OutDir) and does not
+    propagate it to $(PublishDir). Copy it ourselves.
+  -->
+  <Target Name="CopyPriToPublish" AfterTargets="Publish">
+    <Copy Condition="Exists('$(OutDir)resources.pri')"
+          SourceFiles="$(OutDir)resources.pri"
+          DestinationFolder="$(PublishDir)" SkipUnchangedFiles="true" />
+  </Target>
 </Project>
