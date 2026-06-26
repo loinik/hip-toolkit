@@ -245,6 +245,11 @@ For higher-quality output and more stable symbol reconstruction, it is recommend
 ## Future Plans
 
 - [ ] BIK video conversion (via FFmpeg)
+- [ ] AVF video format support
+- [ ] Built-in BIK / AVF video player
+- [ ] TGA-based CIF support
+- [ ] Broader HIS compatibility testing with older titles
+- [ ] Full support for pre-*Trail of the Twister* game archives
 - [ ] Localization into additional languages
 
 ## Credits
