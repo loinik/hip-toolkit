@@ -12,6 +12,8 @@ extension Notification.Name {
     static let hipOpenFile    = Notification.Name("hip.openFile")
     /// Posted when "Window → Show Preview Window" fires.
     static let hipShowPreview = Notification.Name("hip.showPreview")
+    /// Posted when "HIP Toolkit → Check for Updates…" fires.
+    static let hipCheckUpdates = Notification.Name("hip.checkUpdates")
 }
 
 // MARK: - App Delegate (Cmd+Q interception)
@@ -20,10 +22,10 @@ class AppDelegate: NSObject, NSApplicationDelegate {
     func applicationShouldTerminate(_ sender: NSApplication) -> NSApplication.TerminateReply {
         guard let vm = AppViewModel.shared, vm.isProcessing else { return .terminateNow }
         let alert = NSAlert()
-        alert.messageText = "Processing in Progress"
-        alert.informativeText = "A conversion is still running. Quit anyway? The partial output will be deleted."
-        alert.addButton(withTitle: "Quit & Delete Output")
-        alert.addButton(withTitle: "Keep Running")
+        alert.messageText = S.get("alert_quit_title")
+        alert.informativeText = S.get("alert_quit_message")
+        alert.addButton(withTitle: S.get("alert_quit_confirm"))
+        alert.addButton(withTitle: S.get("alert_quit_keep"))
         alert.alertStyle = .warning
         let response = alert.runModal()
         if response == .alertFirstButtonReturn {
@@ -48,6 +50,14 @@ struct hipApp: App {
         }
         .handlesExternalEvents(matching: [])
         .commands {
+
+            // ── App menu ───────────────────────────────────────────────
+            // Add "Check for Updates…" just below "About".
+            CommandGroup(after: .appInfo) {
+                Button(S.get("menu_check_updates")) {
+                    NotificationCenter.default.post(name: .hipCheckUpdates, object: nil)
+                }
+            }
 
             // ── File menu ──────────────────────────────────────────────
             // Remove the built-in "New Window" item entirely.

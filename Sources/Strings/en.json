@@ -3,6 +3,22 @@
   "category_ciftree": "Ciftree",
   "category_his":     "HIS",
 
+  "menu_check_updates":  "Check for Updates…",
+  "update_title":        "Update Available",
+  "update_message":      "Version {0} is now available — you have {1}.",
+  "update_view":         "View Release",
+  "update_later":        "Later",
+  "update_none_title":   "You're Up to Date",
+  "update_none_message": "You have the latest version ({0}).",
+  "update_failed_title":   "Couldn't Check for Updates",
+  "update_failed_message": "Please check your internet connection and try again.",
+  "update_ok":           "OK",
+
+  "alert_quit_title":   "Processing in Progress",
+  "alert_quit_message": "A conversion is still running. Quit anyway? The partial output will be deleted.",
+  "alert_quit_confirm": "Quit & Delete Output",
+  "alert_quit_keep":    "Keep Running",
+
   "dir_file_to_cif": "File → CIF",
   "dir_cif_to_file": "CIF → File",
   "dir_pack":        "Pack",

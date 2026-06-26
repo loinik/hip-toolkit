@@ -34,6 +34,33 @@ public sealed partial class MainWindow : Window
 
         CategoryBar.SelectedItem = ItemCIF;
         UpdateUI();
+
+        // Check for a newer version once, after the UI is ready (needs XamlRoot).
+        if (Content is FrameworkElement fe)
+            fe.Loaded += OnContentLoadedCheckUpdates;
+    }
+
+    private bool _updateChecked;
+    private async void OnContentLoadedCheckUpdates(object sender, RoutedEventArgs e)
+    {
+        if (_updateChecked) return;
+        _updateChecked = true;
+        if (sender is FrameworkElement fe) fe.Loaded -= OnContentLoadedCheckUpdates;
+
+        var newer = await UpdateChecker.CheckAsync();
+        if (newer == null) return;
+
+        var dialog = new ContentDialog
+        {
+            Title = S.Get("update_title"),
+            Content = S.Fmt("update_message", newer, UpdateChecker.CurrentVersion),
+            PrimaryButtonText = S.Get("update_view"),
+            CloseButtonText = S.Get("update_later"),
+            DefaultButton = ContentDialogButton.Primary,
+            XamlRoot = Content.XamlRoot
+        };
+        if (await dialog.ShowAsync() == ContentDialogResult.Primary)
+            await Windows.System.Launcher.LaunchUriAsync(new Uri(UpdateChecker.ReleasesUrl));
     }
 
     // ── Category / Direction selection ────────────────────────────────────
@@ -233,7 +260,9 @@ public sealed partial class MainWindow : Window
     {
         if (!await ShowProcessingConfirmDialog(
             S.Get("alert_cancel_title"),
-            S.Get("alert_cancel_message")))
+            S.Get("alert_cancel_message"),
+            S.Get("alert_cancel_confirm"),
+            S.Get("alert_cancel_keep")))
             return;
         _vm.RequestCancellation();
     }
@@ -245,21 +274,24 @@ public sealed partial class MainWindow : Window
         args.Cancel = true;
         if (!await ShowProcessingConfirmDialog(
             S.Get("alert_close_title"),
-            S.Get("alert_close_message")))
+            S.Get("alert_close_message"),
+            S.Get("alert_close_confirm"),
+            S.Get("alert_close_keep")))
             return;
         _vm.RequestCancellation();
         _allowClose = true;
         Close();
     }
 
-    private async Task<bool> ShowProcessingConfirmDialog(string title, string message)
+    private async Task<bool> ShowProcessingConfirmDialog(
+        string title, string message, string confirmText, string keepText)
     {
         var dialog = new ContentDialog
         {
             Title = title,
             Content = message,
-            PrimaryButtonText = "Confirm",
-            CloseButtonText = "Keep Running",
+            PrimaryButtonText = confirmText,
+            CloseButtonText = keepText,
             DefaultButton = ContentDialogButton.Close,
             XamlRoot = Content.XamlRoot
         };

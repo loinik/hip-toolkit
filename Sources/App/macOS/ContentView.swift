@@ -578,6 +578,9 @@ struct ContentView: View {
     @StateObject private var vm = AppViewModel()
     @Environment(\.openWindow) private var openWindow
     @State private var showSupportAlert = false
+    @State private var availableUpdate: String?
+    @State private var showNoUpdate = false
+    @State private var showUpdateFailed = false
 
     var body: some View {
         VStack(spacing: 10) {
@@ -591,6 +594,40 @@ struct ContentView: View {
         .toolbar(removing: .title)
         .background(WindowTabbingDisabler())
         .background(WindowCloseInterceptor.installer)
+        .task {
+            if case let .available(v) = await UpdateChecker.check() { availableUpdate = v }
+        }
+        .alert(S.get("update_title"), isPresented: Binding(
+            get: { availableUpdate != nil },
+            set: { if !$0 { availableUpdate = nil } }
+        )) {
+            Button(S.get("update_view")) {
+                NSWorkspace.shared.open(UpdateChecker.releasesURL)
+                availableUpdate = nil
+            }
+            Button(S.get("update_later"), role: .cancel) { availableUpdate = nil }
+        } message: {
+            Text(S.fmt("update_message", availableUpdate ?? "", UpdateChecker.currentVersion))
+        }
+        .alert(S.get("update_none_title"), isPresented: $showNoUpdate) {
+            Button(S.get("update_ok"), role: .cancel) { }
+        } message: {
+            Text(S.fmt("update_none_message", UpdateChecker.currentVersion))
+        }
+        .alert(S.get("update_failed_title"), isPresented: $showUpdateFailed) {
+            Button(S.get("update_ok"), role: .cancel) { }
+        } message: {
+            Text(S.get("update_failed_message"))
+        }
+        .onReceive(NotificationCenter.default.publisher(for: .hipCheckUpdates)) { _ in
+            Task {
+                switch await UpdateChecker.check() {
+                case .available(let v): availableUpdate = v
+                case .upToDate:         showNoUpdate = true
+                case .failed:           showUpdateFailed = true
+                }
+            }
+        }
         .alert(S.get("alert_cancel_title"), isPresented: $vm.showCancelConfirmation) {
             Button(S.get("alert_cancel_confirm"), role: .destructive) { vm.cancelAndCleanup() }
             Button(S.get("alert_cancel_keep"), role: .cancel) { }
