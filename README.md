@@ -27,7 +27,7 @@ A development kit for extracting, compiling, and decompiling game archives from 
 🔊 **Audio Support**
 - HIS audio container (OGG Vorbis inside)
 - Encode **MP3 / WAV / OGG → HIS**
-- Decode **HIS → WAV / OGG / MP3** (WAV is the default output)
+- Decode **HIS → WAV / OGG / MP3**
 - Built-in audio player & export in the preview (macOS and Windows)
 
 ## Requirements
@@ -54,7 +54,7 @@ Two scripts produce ready-to-ship release artifacts:
 
 ```bash
 python3 -m pip install --user dmgbuild   # one-time
-./scripts/build-macos.sh                 # -> dist/HIP.Toolkit-<ver>-macos.dmg
+./scripts/build-macos.sh                 # -> dist/HIP.Toolkit-<ver>-macos-arm64.dmg
 ```
 
 Optionally place `Extras/dmg-background.png` (705×505) and `Extras/dmg-background@2x.png`
@@ -135,27 +135,51 @@ HIPWrapper.autoDecompileLua(in: archiveDirectory)
 
 ```
 Sources/
-├── Core/                # Cross-platform C++ engine
+├── Core/                    # Cross-platform C++ engine
 │   ├── CIFArchive.hpp/.cpp
 │   ├── CiftreeArchive.hpp/.cpp
-│   └── HISArchive.hpp/.cpp
+│   ├── HISArchive.hpp/.cpp
+│   └── XSheetArchive.hpp/.cpp
 │
 ├── Platform/
 │   ├── macOS/
-│   │   ├── HIPWrapper.h/.mm    # Objective-C++ wrapper
+│   │   ├── HIPWrapper.h/.mm      # Objective-C++ wrapper
 │   │   └── hip-Bridging-Header.h
 │   └── Windows/
-│       ├── HIP.Core.vcxproj    # C++ static library (VS 2022)
-│       └── HIP.Common.props    # Shared MSBuild properties
+│       ├── HIP.Core.vcxproj      # C++ static library (VS 2022)
+│       ├── HIP.Bridge.vcxproj    # Native DLL wrapper
+│       ├── HIPBridge.h/.cpp
+│       └── HIP.Common.props      # Shared MSBuild properties
 │
 ├── App/
-│   ├── macOS/           # SwiftUI macOS interface
-│   └── Windows/         # C# + XAML (WinUI 3) GUI application
+│   ├── macOS/                # SwiftUI macOS interface
+│   │   ├── hipApp.swift
+│   │   ├── ContentView.swift
+│   │   └── Strings.swift     # Localization + UpdateChecker
+│   └── Windows/              # C# + XAML (WinUI 3) GUI application
+│       ├── MainWindow.xaml/.cs
+│       ├── PreviewWindow.xaml/.cs
+│       ├── MainViewModel.cs
+│       ├── HIPInterop.cs     # P/Invoke bindings
+│       ├── Strings.cs        # Localization loader
+│       └── UpdateChecker.cs
 │
+├── Assets/                   # App icons and assets (xcassets)
+└── Strings/
+    └── en.json               # All UI strings (shared by both platforms)
+
 Vendor/
-    ├── lua/           # Lua 5.1.5 source (compilation)
-    ├── luadec/        # Lua decompiler binary
-    └── stb_vorbis.c   # Audio decoding
+├── lua/                  # Lua 5.1.5 source (compilation)
+├── luadec-macos-arm64    # Lua decompiler binary (macOS)
+├── luadec-win-x64.exe    # Lua decompiler binary (Windows x64)
+├── luadec-win-arm64.exe  # Lua decompiler binary (Windows ARM64)
+├── libogg/               # Ogg container (encoding)
+├── libvorbis/            # Vorbis encoder
+├── libshine/             # MP3 encoder (shine)
+├── stb_vorbis.c          # Vorbis decoder (single-header)
+├── dr_wav.h              # WAV decoder (single-header)
+├── minimp3.h / minimp3_ex.h  # MP3 decoder (single-header)
+└── nlohmann_json.hpp     # JSON for Modern C++ (MIT)
 ```
 
 ## Architecture
@@ -220,17 +244,19 @@ For higher-quality output and more stable symbol reconstruction, it is recommend
 
 ## Future Plans
 
-- [x] Windows port (using same C++ core)
-- [x] Vorbis encoding from WAV/MP3
-- [ ] Command-line tool for batch operations
-- [ ] Linux support
+- [ ] BIK video conversion (via FFmpeg)
+- [ ] Localization into additional languages
 
 ## Credits
 
 - **HeR Interactive** — Original game engine and format specifications
-- **LuaDec** — Lua decompiler
 - **Lua 5.1.5** — Included for script compilation
-- **stb_vorbis** — Audio decoding library
+- **LuaDec** — Lua decompiler
+- **libogg / libvorbis** — Ogg container and Vorbis audio encoding
+- **libshine** — MP3 encoding library
+- **stb_vorbis** — Single-header Vorbis decoding
+- **dr_wav** — Single-header WAV decoding
+- **minimp3** — Single-header MP3 decoding
 - **nlohmann/json v3.11.3** — JSON for Modern C++ (MIT License)
 
 ## Disclaimer
