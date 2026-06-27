@@ -9,6 +9,7 @@
 /* Begin PBXBuildFile section */
 		EE000001VORBISCOMPILE0001 /* vorbis_compile.c in Sources */ = {isa = PBXBuildFile; fileRef = EE000001VORBISCOMPILE0000 /* vorbis_compile.c */; settings = {COMPILER_FLAGS = "-w"; }; };
 		EE000002SHINECOMPILE0001 /* shine_compile.c in Sources */ = {isa = PBXBuildFile; fileRef = EE000002SHINECOMPILE0000 /* shine_compile.c */; settings = {COMPILER_FLAGS = "-w"; }; };
+		EE000003STBIMAGEIMPL0001 /* stb_image_impl.c in Sources */ = {isa = PBXBuildFile; fileRef = EE000003STBIMAGEIMPL0000 /* stb_image_impl.c */; settings = {COMPILER_FLAGS = "-w"; }; };
 		EE6186742F82969000EB6D27 /* CIFArchive.cpp in Sources */ = {isa = PBXBuildFile; fileRef = EE6186692F82969000EB6D27 /* CIFArchive.cpp */; };
 		EE6186752F82969000EB6D27 /* CiftreeArchive.cpp in Sources */ = {isa = PBXBuildFile; fileRef = EE61866B2F82969000EB6D27 /* CiftreeArchive.cpp */; };
 		EE6186782F82969000EB6D27 /* HIPWrapper.mm in Sources */ = {isa = PBXBuildFile; fileRef = EE6186702F82969000EB6D27 /* HIPWrapper.mm */; };
@@ -87,6 +88,7 @@
 /* Begin PBXFileReference section */
 		EE000001VORBISCOMPILE0000 /* vorbis_compile.c */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.c; name = vorbis_compile.c; path = Vendor/libvorbis/src/vorbis_compile.c; sourceTree = SOURCE_ROOT; };
 		EE000002SHINECOMPILE0000 /* shine_compile.c */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.c; name = shine_compile.c; path = Vendor/libshine/src/shine_compile.c; sourceTree = SOURCE_ROOT; };
+		EE000003STBIMAGEIMPL0000 /* stb_image_impl.c */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.c; name = stb_image_impl.c; path = Vendor/stb_image_impl.c; sourceTree = SOURCE_ROOT; };
 		EE6186682F82969000EB6D27 /* CIFArchive.hpp */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.cpp.h; path = CIFArchive.hpp; sourceTree = "<group>"; };
 		EE6186692F82969000EB6D27 /* CIFArchive.cpp */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.cpp.cpp; path = CIFArchive.cpp; sourceTree = "<group>"; };
 		EE61866A2F82969000EB6D27 /* CiftreeArchive.hpp */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.cpp.h; path = CiftreeArchive.hpp; sourceTree = "<group>"; };
@@ -274,6 +276,7 @@
 				EE618702AA000001DEADBEEF /* nlohmann_json.hpp */,
 				EE000001VORBISCOMPILE0000 /* vorbis_compile.c */,
 				EE000002SHINECOMPILE0000 /* shine_compile.c */,
+				EE000003STBIMAGEIMPL0000 /* stb_image_impl.c */,
 			);
 			path = Vendor;
 			sourceTree = "<group>";
@@ -506,6 +509,7 @@
 				EE6186C52F829A4600EB6D27 /* stb_vorbis.c in Sources */,
 				EE000001VORBISCOMPILE0001 /* vorbis_compile.c in Sources */,
 				EE000002SHINECOMPILE0001 /* shine_compile.c in Sources */,
+				EE000003STBIMAGEIMPL0001 /* stb_image_impl.c in Sources */,
 				EE6186792F82969000EB6D27 /* HISArchive.cpp in Sources */,
 				EE618703AA000001DEADBEEF /* XSheetArchive.cpp in Sources */,
 				EE6187172F829A8100EB6D27 /* ldebug.c in Sources */,

@@ -70,11 +70,25 @@ std::vector<uint8_t> packLegacyCiftree(const std::vector<LegacyEntry>& entries,
 // ── High-level folder extraction ──────────────────────────────────────────
 // Saves each entry to outDir. Image entries (ftype 0x02) are written as
 // raw pixel files (.rgb555 / .rgb888) alongside a sidecar .meta JSON.
-// Non-image entries are saved as .bin. A platform layer can convert the
-// raw pixel files to PNG separately.
+// Non-image entries are saved as .bin. The original archive's header, hash
+// and entry-table blobs are saved to outDir/_meta/ so the archive can be
+// rebuilt later with packLegacyFromFolder().
 void unpackLegacyToFolder(const std::filesystem::path& datPath,
                            GameVersion version,
                            const std::filesystem::path& outDir,
+                           ProgressFn progress = nullptr);
+
+// ── High-level folder repacking ───────────────────────────────────────────
+// Reads the metadata blobs saved by unpackLegacyToFolder() from inDir/_meta/
+// and reassembles a CIFTREE.DAT at outDatPath. For each entry in the entry
+// table the repacker looks for a file in inDir in this priority order:
+//   <name>.png, .jpg, .jpeg, .tga, .bmp, .gif    (image; converted via stb_image)
+//   <name>.rgb555 or <name>.rgb888               (raw pixels; used as-is)
+//   <name>.bin                                   (non-image data; used as-is)
+// Image dimensions must match the entry's stored width/height. The entry's
+// pixel format (RGB555 vs RGB888) is preserved from the original archive.
+void packLegacyFromFolder(const std::filesystem::path& inDir,
+                           const std::filesystem::path& outDatPath,
                            ProgressFn progress = nullptr);
 
 } // namespace Legacy
