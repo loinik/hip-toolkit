@@ -74,6 +74,18 @@
 //  or a live DOSBox session to behaviourally verify flag bytes) — treat
 //  anything not listed above as opaque.
 //
+//  BOOT (the game's boot/resource DATA container, as opposed to a SCEN)
+//  has a completely different — and much larger — set of top-level
+//  sub-chunks: BSUM, PCAL, QUOT (loading-screen tips), CD, INTR, FONT,
+//  MENU, HELP, CRED (credits), LOAD, SDLG, CLOK, TBOX, INV, CURS, VIEW,
+//  SPEC, MSND, BUOK/BUDE/BULS/GLOB/CURT/TH1/TH2 (button sound refs),
+//  SET, TMOD, HINT, DSND, RCPR, RCLB (theme names), SPUZ, PLGO, and a
+//  nested DATA. None of these are individually modelled — instead, every
+//  one of them gets the same generic text-run treatment as ACT records
+//  (see SceneChunk), which is what actually surfaces their UI strings
+//  (credits text, loading tips, theme names, etc.) without needing a
+//  bespoke parser per chunk type.
+//
 
 #pragma once
 
@@ -117,12 +129,23 @@ struct SceneHotspot {
     std::vector<SceneText> texts;
 };
 
+/// Any top-level sub-chunk other than SSUM/ACT — e.g. BOOT's QUOT (loading
+/// tips), CRED (credits), MENU/HELP/LOAD/SDLG (UI labels), RCLB (theme
+/// names). These aren't individually modelled (unlike SSUM/ACT), so the
+/// same generic printable-ASCII-run extraction used inside ACT records is
+/// applied to the whole chunk body instead.
+struct SceneChunk {
+    std::string tag;
+    std::vector<SceneText> texts;
+};
+
 struct SceneInfo {
     std::string formType;          ///< e.g. "SCEN"; empty if not a scene container
     std::string sceneName;
     std::string transitionName;
     std::string soundName;
     std::vector<SceneHotspot> hotspots;
+    std::vector<SceneChunk> otherChunks;
 };
 
 /// Parses an already-decompressed scene .bin blob (LegacyEntry::data for an
@@ -142,18 +165,25 @@ std::string sceneInfoToJson(const SceneInfo& info);
 //
 //  sceneToEditableJson() embeds the original bytes (base64, under "_raw")
 //  alongside the structured SceneInfo fields, tagged
-//  "container": "WayneSikes.Scene". sceneFromEditableJson() decodes "_raw"
-//  and patches sceneName/transitionName/soundName and each hotspot's
-//  name/rect back into a COPY of those original bytes, in place — every
-//  field this parser doesn't understand (SSUM's unidentified tail, ACT's
-//  unidentified mid-section, any unknown chunk types) survives untouched,
-//  because the byte layout is never rebuilt from scratch.
+//  "container": "WayneSikes.Scene". The JSON key order is deliberate
+//  (container/version first, _raw last) so the binary blob doesn't bury
+//  the readable fields when skimming the file. sceneFromEditableJson()
+//  decodes "_raw" and patches sceneName/transitionName/soundName and each
+//  hotspot's name/rect back into a COPY of those original bytes, in
+//  place — every field this parser doesn't understand (SSUM's
+//  unidentified tail, ACT's unidentified mid-section, any unknown chunk
+//  types) survives untouched, because the byte layout is never rebuilt
+//  from scratch.
 //
 //  Name fields are NUL-padded to their original fixed width and silently
 //  truncated if the edited value is too long to fit (50/37/33 bytes for
 //  scene/transition/sound names, 48 bytes for hotspot names).
 
-std::string sceneToEditableJson(const std::vector<uint8_t>& raw);
+/// @param gameVersion  optional GameVersion tag (e.g. "N3to5") inserted
+///                     right after "container" — lets packLegacyFromFolder()
+///                     detect the version from this file alone.
+std::string sceneToEditableJson(const std::vector<uint8_t>& raw,
+                                 const std::string& gameVersion = {});
 
 /// Throws std::runtime_error if json has no "_raw" field or it doesn't
 /// decode to a valid DATA/SCEN container.

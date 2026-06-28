@@ -384,8 +384,7 @@ static NSData *vecToData(const std::vector<uint8_t>& v) {
 }
 
 + (BOOL)isLegacyUnpackFolderAtPath:(NSString *)folderPath {
-    NSString *versionPath = [folderPath stringByAppendingPathComponent:@"_meta/version.txt"];
-    return [NSFileManager.defaultManager fileExistsAtPath:versionPath];
+    return CIF::Legacy::isLegacyUnpackFolder(folderPath.fileSystemRepresentation);
 }
 
 + (BOOL)unpackLegacyCiftreeAtPath:(NSString *)datPath

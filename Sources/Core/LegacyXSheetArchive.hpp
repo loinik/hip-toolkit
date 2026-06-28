@@ -60,8 +60,11 @@ struct XS1Info {
 /// magic, or size doesn't match header + celCount*140 exactly).
 XS1Info parseXS1(const std::vector<uint8_t>& data);
 
-/// XS1Info → JSON string, tagged "container": "WayneSikes.XSheet".
-std::string xs1ToJson(const XS1Info& info);
+/// XS1Info → JSON string, tagged "container": "WayneSikes.XSheet". Key
+/// order is deliberate (container/version first) — see gameVersion.
+/// @param gameVersion  optional GameVersion tag (e.g. "N3to5") inserted
+///                     right after "container".
+std::string xs1ToJson(const XS1Info& info, const std::string& gameVersion = {});
 
 /// JSON string → binary, rebuilt from scratch (see header comment above).
 /// Throws std::runtime_error on malformed/missing-field JSON.

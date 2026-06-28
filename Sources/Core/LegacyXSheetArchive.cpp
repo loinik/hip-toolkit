@@ -76,9 +76,10 @@ XS1Info parseXS1(const std::vector<uint8_t>& data) {
     return info;
 }
 
-std::string xs1ToJson(const XS1Info& info) {
-    nlohmann::json j;
-    j["container"]    = "WayneSikes.XSheet";
+std::string xs1ToJson(const XS1Info& info, const std::string& gameVersion) {
+    nlohmann::ordered_json j;
+    j["container"] = "WayneSikes.XSheet";
+    if (!gameVersion.empty()) j["version"] = gameVersion;
     j["formatVersion"] = info.version;  // XS1's own internal version field
                                           // (always 1) — NOT the Ciftree
                                           // GameVersion, which the Ciftree
@@ -86,18 +87,18 @@ std::string xs1ToJson(const XS1Info& info) {
     j["unknown"]    = info.unknown;
     j["layerCount"] = info.layerCount;
     j["code"]       = std::string(1, static_cast<char>(info.code));
-    j["cels"]       = nlohmann::json::array();
+    j["cels"]       = nlohmann::ordered_json::array();
     for (const auto& c : info.cels)
         j["cels"].push_back({{"tag1", c.tag1}, {"tag2", c.tag2}});
     return j.dump(2);
 }
 
 std::vector<uint8_t> xs1FromJson(const std::string& jsonStr) {
-    nlohmann::json j = nlohmann::json::parse(jsonStr, nullptr, false);
+    nlohmann::ordered_json j = nlohmann::ordered_json::parse(jsonStr, nullptr, false);
     if (j.is_discarded() || j.value("container", std::string{}) != "WayneSikes.XSheet")
         throw std::runtime_error("LegacyXSheet: not a WayneSikes.XSheet JSON");
 
-    const auto cels = j.value("cels", nlohmann::json::array());
+    const auto cels = j.value("cels", nlohmann::ordered_json::array());
     std::vector<uint8_t> out(HEADER_SIZE + cels.size() * REC_SIZE, 0x00);
 
     std::memcpy(out.data(), kMagic, kMagicLen);

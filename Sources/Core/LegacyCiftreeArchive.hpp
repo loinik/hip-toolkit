@@ -51,6 +51,13 @@ using ProgressFn = std::function<void(int, int)>;
 // requests transparently, before any version-specific parsing is attempted.
 bool isLegacyCiftreeBytes(const std::vector<uint8_t>& data);
 
+// True if folderPath looks like it was produced by unpackLegacyToFolder()
+// — i.e. packLegacyFromFolder() should be used to repack it instead of the
+// modern Ciftree packer. Non-throwing. Checks for any .json tagged
+// "container": "WayneSikes.*" (the normal case — no shared marker file is
+// written anymore) or, for backward compat, a donor _meta/version.txt.
+bool isLegacyUnpackFolder(const std::filesystem::path& folder);
+
 // ── Version detection ─────────────────────────────────────────────────────
 // Infers the game version by examining the archive's internal structure.
 // Throws std::runtime_error if the file is not a recognisable legacy Ciftree.

@@ -18,6 +18,7 @@
 #include <cstring>
 #include <fstream>
 #include <optional>
+#include <sstream>
 #include <stdexcept>
 #include <unordered_map>
 
@@ -91,23 +92,46 @@ struct Layout {
     uint32_t nextPos;       // hash-chain "next entry index" (LE u16),
                              // 0xFFFF = end of chain. Confirmed only for
                              // N3to5; assumed entrySize-2 for the rest.
+    uint32_t selfIndexPos;  // entry's own array index (LE u16) — confirmed
+                             // for N3to5 (matches every one of 1641 real
+                             // entries exactly); 0xFFFFFFFF = unconfirmed
+                             // for this version, leave as zero.
+    // A second, renderer-facing copy of an image's dimensions — confirmed
+    // for N3to5 across all 99 real image entries, zero for non-image
+    // entries. Unlike widthPos/heightPos (which store actual-1 for
+    // dimsPlusOne versions), these are the *actual* values, no offset.
+    uint32_t widthDupPos;   // actual width   (LE u16), image entries only
+    uint32_t stridePos;     // width * bytesPerPixel (LE u16)
+    uint32_t heightDupPos;  // actual height  (LE u16), image entries only
+    uint32_t constantBytePos; // always 2 for every entry, image or not —
+                                // meaning unknown. 0xFFFFFFFF = unconfirmed.
 };
+
+static constexpr uint32_t kSelfIndexUnconfirmed = 0xFFFFFFFF;
 
 static Layout layoutFor(GameVersion v) {
     switch (v) {
         case GameVersion::N1:
             return { 0x1E, 0x0800, 0x081E, 0x26,
-                     32,  0x13, 0x0B, 0x0F, 0x11, 0x17, 0x1F, 0x23, false, 0x26 - 2 };
+                     32,  0x13, 0x0B, 0x0F, 0x11, 0x17, 0x1F, 0x23, false, 0x26 - 2,
+                     kSelfIndexUnconfirmed,
+                     kSelfIndexUnconfirmed, kSelfIndexUnconfirmed, kSelfIndexUnconfirmed, kSelfIndexUnconfirmed };
         case GameVersion::N2:
             return { 0x20, 0x0800, 0x0820, 0x46,
-                     32,  0x33, 0x13, 0x17, 0x31, 0x37, 0x3F, 0x43, true, 0x46 - 2 };
+                     32,  0x33, 0x13, 0x17, 0x31, 0x37, 0x3F, 0x43, true, 0x46 - 2,
+                     kSelfIndexUnconfirmed,
+                     kSelfIndexUnconfirmed, kSelfIndexUnconfirmed, kSelfIndexUnconfirmed, kSelfIndexUnconfirmed };
         case GameVersion::N3to5:
             return { 0x20, 0x0800, 0x0820, 0x5E,
-                     32,  0x4B, 0x2B, 0x2F, 0x49, 0x4F, 0x57, 0x5B, true, 0x5E - 2 };
+                     32,  0x4B, 0x2B, 0x2F, 0x49, 0x4F, 0x57, 0x5B, true, 0x5E - 2,
+                     0x21,
+                     67, 69, 71, 74 };
         case GameVersion::N6to12:
         case GameVersion::N13plus:
             return { 0x20, 0x0800, 0x0820, 0x5E,
-                     32,  0x23, 0x31, 0x35, 0x4F, 0x51, 0x59, 0x5D, true, 0x5E - 2 };
+                     32,  0x23, 0x31, 0x35, 0x4F, 0x51, 0x59, 0x5D, true, 0x5E - 2,
+                     kSelfIndexUnconfirmed,
+                     kSelfIndexUnconfirmed, kSelfIndexUnconfirmed, kSelfIndexUnconfirmed, kSelfIndexUnconfirmed };
     }
     // Unreachable; silence compiler warning.
     return layoutFor(GameVersion::N6to12);
@@ -168,27 +192,127 @@ static uint32_t legacyHashBucket(const std::string& name) {
     return sum % 1024;
 }
 
-static std::vector<uint8_t> buildHashTableFromScratch(
+static constexpr uint16_t kHashChainEnd = 0xFFFF;
+
+// Shared by buildHashTableFromScratch() (below) and the CIFHASHL/CIFHASHS
+// debug-manifest regenerator (see generateDebugManifestEntries) — both need
+// the same heads[1024]/next[] chain structure, just packaged differently.
+static std::vector<uint16_t> computeHashChains(
         const std::vector<LegacyEntry>& entries, std::vector<uint16_t>& nextOut) {
-    static constexpr uint16_t kEnd = 0xFFFF;
-    std::vector<uint16_t> heads(1024, kEnd);
-    std::vector<uint16_t> tails(1024, kEnd);
-    nextOut.assign(entries.size(), kEnd);
+    std::vector<uint16_t> heads(1024, kHashChainEnd);
+    std::vector<uint16_t> tails(1024, kHashChainEnd);
+    nextOut.assign(entries.size(), kHashChainEnd);
 
     for (size_t i = 0; i < entries.size(); ++i) {
         const uint32_t b = legacyHashBucket(entries[i].name);
-        if (heads[b] == kEnd) {
+        if (heads[b] == kHashChainEnd) {
             heads[b] = static_cast<uint16_t>(i);
         } else {
             nextOut[tails[b]] = static_cast<uint16_t>(i);
         }
         tails[b] = static_cast<uint16_t>(i);
     }
+    return heads;
+}
 
+static std::vector<uint8_t> buildHashTableFromScratch(
+        const std::vector<LegacyEntry>& entries, std::vector<uint16_t>& nextOut) {
+    const std::vector<uint16_t> heads = computeHashChains(entries, nextOut);
     std::vector<uint8_t> hashBin(1024 * 2, 0x00);
     for (size_t b = 0; b < 1024; ++b)
         wU16(hashBin.data() + b * 2, heads[b]);
     return hashBin;
+}
+
+// ── Debug-manifest regeneration (CIFLIST / CIFHASHL / CIFHASHS) ───────────
+//
+//  The original 2001 build tool left three plain-text debug entries inside
+//  every legacy Ciftree: CIFLIST (the file manifest fed to the packer) and
+//  CIFHASHL/CIFHASHS (dumps of the hash table's bucket→record-list
+//  structure). None of the three are read by the game engine at runtime —
+//  the engine looks entries up by hash, not by manifest — so they're pure
+//  build artifacts. Rather than treat them as ordinary content that has to
+//  be hand-maintained, packLegacyCiftree() always discards whatever's
+//  already at those names and regenerates fresh ones reflecting the
+//  archive's actual final entry list and hash table — so adding/removing
+//  entries (images, scenes, anything) never leaves these three stale.
+//
+//  This is a best-effort equivalent, not a byte-exact reconstruction of the
+//  original tool's output (the exact column widths/line endings of a 2001
+//  internal debug format aren't preserved anywhere) — but since nothing
+//  reads these files back, that doesn't matter.
+static const char* kDebugManifestNames[3] = {"CIFLIST", "CIFHASHL", "CIFHASHS"};
+
+static bool isDebugManifestName(const std::string& name) {
+    for (const char* n : kDebugManifestNames)
+        if (name == n) return true;
+    return false;
+}
+
+static std::vector<uint8_t> toBytes(const std::string& s) {
+    return std::vector<uint8_t>(s.begin(), s.end());
+}
+
+static void appendDebugManifestEntries(std::vector<LegacyEntry>& entries) {
+    entries.erase(
+        std::remove_if(entries.begin(), entries.end(),
+                        [](const LegacyEntry& e) { return isDebugManifestName(e.name); }),
+        entries.end());
+
+    const size_t cifListIdx  = entries.size();
+    const size_t hashLIdx    = entries.size() + 1;
+    const size_t hashSIdx    = entries.size() + 2;
+    for (const char* n : kDebugManifestNames) {
+        LegacyEntry e;
+        e.name = n;
+        e.ftype = 0x03;
+        entries.push_back(std::move(e));
+    }
+
+    std::vector<uint16_t> next;
+    const std::vector<uint16_t> heads = computeHashChains(entries, next);
+
+    // bucket -> ordered list of entry indices (walking the chain from head).
+    std::vector<std::vector<uint16_t>> bucketRecords(1024);
+    size_t maxBucket = 0, maxCount = 0;
+    for (size_t b = 0; b < 1024; ++b) {
+        for (uint16_t cur = heads[b]; cur != kHashChainEnd; cur = next[cur])
+            bucketRecords[b].push_back(cur);
+        if (bucketRecords[b].size() > maxCount) { maxCount = bucketRecords[b].size(); maxBucket = b; }
+    }
+
+    std::ostringstream hashS, hashL;
+    hashS << "Hash Table Short Summary - Total records in each entry\r\n"
+          << "Entry\t\tTotal\r\n";
+    hashL << "Hash Table Long Summary - Records in each entry\r\n"
+          << "Entry\t\tTotal\t\tRecords\r\n";
+    for (size_t b = 0; b < 1024; ++b) {
+        if (bucketRecords[b].empty()) continue;
+        hashS << " " << b << "\t\t" << bucketRecords[b].size() << "\r\n";
+        hashL << " " << b << "\t\t" << bucketRecords[b].size() << "\t\t";
+        for (size_t i = 0; i < bucketRecords[b].size(); ++i) {
+            if (i) hashL << ",";
+            hashL << bucketRecords[b][i];
+        }
+        hashL << "\r\n";
+    }
+    hashS << "\r\nMaximum Size Series:  Entry " << maxBucket << " = " << maxCount << "\r\n";
+    hashL << "\r\nMaximum Size Series:  Entry " << maxBucket << " = " << maxCount << "\r\n";
+
+    std::ostringstream list;
+    list << "#\r\n# CIFLIST\r\n#\r\n"
+         << "# Regenerated automatically by HIP Toolkit on every repack — reflects\r\n"
+         << "# this archive's actual entries, not a hand-maintained manifest.\r\n#\r\n";
+    for (const auto& e : entries) {
+        const char* kind = (e.ftype == 0x02) ? "PLAIN" : "DATA";
+        const std::string ext = (e.ftype == 0x02) ? ".TGA"
+                               : isDebugManifestName(e.name) ? "" : ".DAT";
+        list << e.name << ext << "\t\t\t" << kind << "\t\t\tPut comment here\r\n";
+    }
+
+    entries[cifListIdx].data = toBytes(list.str());
+    entries[hashLIdx].data   = toBytes(hashL.str());
+    entries[hashSIdx].data   = toBytes(hashS.str());
 }
 
 // ── Header / entry-table synthesis (no donor archive required) ────────────
@@ -248,11 +372,31 @@ static std::vector<uint8_t> buildEntriesTableFromScratch(
             (e.pixels == PixelFormat::RGB888) ? 0x18 : 0x00;
         ep[L.bppPos] = bpp;
 
-        const uint16_t w = static_cast<uint16_t>(L.dimsPlusOne ? e.width  - 1 : e.width);
-        const uint16_t h = static_cast<uint16_t>(L.dimsPlusOne ? e.height - 1 : e.height);
+        // Non-image entries store width/height as plain 0 in the real
+        // archive — applying the image-only "stored = actual - 1" encoding
+        // to e.width==0 here would underflow to 0xFFFF and corrupt every
+        // non-image entry's row (confirmed: this broke the game's loading
+        // even though the image entries themselves stayed byte-correct).
+        const bool isImage = (e.ftype == 0x02);
+        const uint16_t w = isImage
+            ? static_cast<uint16_t>(L.dimsPlusOne ? e.width  - 1 : e.width)
+            : 0;
+        const uint16_t h = isImage
+            ? static_cast<uint16_t>(L.dimsPlusOne ? e.height - 1 : e.height)
+            : 0;
         wU16(ep + L.widthPos,  w);
         wU16(ep + L.heightPos, h);
         wU16(ep + L.nextPos,   next[i]);
+        if (L.selfIndexPos != kSelfIndexUnconfirmed)
+            wU16(ep + L.selfIndexPos, static_cast<uint16_t>(i));
+        if (L.constantBytePos != kSelfIndexUnconfirmed)
+            ep[L.constantBytePos] = 2;
+        if (isImage && L.widthDupPos != kSelfIndexUnconfirmed) {
+            const uint16_t bytesPerPx = (bpp == 0x10) ? 2 : (bpp == 0x18) ? 3 : 0;
+            wU16(ep + L.widthDupPos,  e.width);
+            wU16(ep + L.heightDupPos, e.height);
+            wU16(ep + L.stridePos,    static_cast<uint16_t>(e.width * bytesPerPx));
+        }
         // offsetPos / packedSzPos / depackedSzPos are patched later, once
         // compression has run — left as zero here.
     }
@@ -619,16 +763,39 @@ std::vector<LegacyEntry> unpackLegacyCiftree(const std::filesystem::path& datPat
 //                       LegacyEntry data or a value computed during
 //                       packing here)
 //
+//  When fully synthesizing (header/hash/entries all empty — the normal
+//  case), CIFLIST/CIFHASHL/CIFHASHS are dropped from `entries` if present
+//  and three freshly regenerated ones are appended — see
+//  appendDebugManifestEntries(). Pass a non-empty originalHash or
+//  originalEntries to skip this and keep whatever the caller already put
+//  in `entries` verbatim.
+//
 //  Resulting layout:
 //    [header][hash][entryTable][dataBlobs…]
 
-std::vector<uint8_t> packLegacyCiftree(const std::vector<LegacyEntry>& entries,
+std::vector<uint8_t> packLegacyCiftree(const std::vector<LegacyEntry>& entriesIn,
                                         GameVersion version,
                                         const std::vector<uint8_t>& originalHeader,
                                         const std::vector<uint8_t>& originalHash,
                                         const std::vector<uint8_t>& originalEntries) {
-    if (entries.empty())
+    if (entriesIn.empty())
         throw std::runtime_error("LegacyCiftree: no entries to pack");
+
+    // CIFLIST/CIFHASHL/CIFHASHS are regenerated fresh whenever the entry
+    // table is being fully synthesized (the normal case — no donor
+    // header/hash/entries). The in-game black-screen regression this was
+    // suspected of causing turned out to be unrelated: buildEntriesTableFromScratch
+    // was writing 0xFFFF (underflow from 0-1) into every non-image entry's
+    // width/height, and omitting an entirely separate dimensions/stride/
+    // constant-byte block at offsets 67-74 that the engine actually reads.
+    // Both are fixed now and verified byte-exact against a real archive.
+    const bool synthesizing = originalHash.empty() && originalEntries.empty();
+    std::vector<LegacyEntry> entriesBuf;
+    if (synthesizing) {
+        entriesBuf = entriesIn;
+        appendDebugManifestEntries(entriesBuf);
+    }
+    const std::vector<LegacyEntry>& entries = synthesizing ? entriesBuf : entriesIn;
 
     const Layout L = layoutFor(version);
 
@@ -785,23 +952,17 @@ void unpackLegacyToFolder(const std::filesystem::path& datPath,
             // (and anything that fails to parse as either) falls back to
             // a raw .bin dump, with a <name>.meta only if ftype isn't the
             // 0x03 default.
-            nlohmann::json json;
-            bool recognised = false;
+            std::string s;
             try {
-                json = nlohmann::json::parse(CIF::Legacy::sceneToEditableJson(entry.data));
-                recognised = true;
+                s = CIF::Legacy::sceneToEditableJson(entry.data, vStr);
             } catch (const std::exception&) {
                 try {
-                    json = nlohmann::json::parse(
-                        CIF::Legacy::xs1ToJson(CIF::Legacy::parseXS1(entry.data)));
-                    recognised = true;
+                    s = CIF::Legacy::xs1ToJson(CIF::Legacy::parseXS1(entry.data), vStr);
                 } catch (const std::exception&) {
                     // Not a recognised container — fall through to .bin.
                 }
             }
-            if (recognised) {
-                json["version"] = vStr;
-                const std::string s = json.dump(2);
+            if (!s.empty()) {
                 writeFile(outDir / (entry.name + ".json"),
                           std::vector<uint8_t>(s.begin(), s.end()));
             } else {
@@ -1071,6 +1232,17 @@ static GameVersion detectVersionFromFolder(const std::filesystem::path& inDir) {
 }
 
 } // anonymous namespace
+
+bool isLegacyUnpackFolder(const std::filesystem::path& folder) {
+    if (!std::filesystem::exists(folder) || !std::filesystem::is_directory(folder))
+        return false;
+    try {
+        detectVersionFromFolder(folder);
+        return true;
+    } catch (const std::exception&) {
+        return false;
+    }
+}
 
 void packLegacyFromFolder(const std::filesystem::path& inDir,
                            const std::filesystem::path& outDatPath,

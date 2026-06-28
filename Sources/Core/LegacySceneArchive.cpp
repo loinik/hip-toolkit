@@ -149,6 +149,7 @@ struct ParsedSceneOffsets {
     bool hasSsum = false;
     std::vector<size_t> actPayloadStart;
     std::vector<size_t> actPayloadEnd;
+    std::vector<size_t> otherChunkPayloadStart;  // parallel to info.otherChunks
 };
 
 SceneInfo parseSceneBinImpl(const std::vector<uint8_t>& data, ParsedSceneOffsets* offsets) {
@@ -185,10 +186,16 @@ SceneInfo parseSceneBinImpl(const std::vector<uint8_t>& data, ParsedSceneOffsets
                 offsets->actPayloadStart.push_back(c.payloadStart);
                 offsets->actPayloadEnd.push_back(c.payloadEnd);
             }
+        } else {
+            // Any other chunk (BOOT's QUOT/CRED/MENU/HELP/LOAD/RCLB/etc, or
+            // anything else not individually modelled) — surface its text
+            // generically rather than leaving it fully opaque.
+            SceneChunk chunk;
+            chunk.tag = c.tag;
+            chunk.texts = findTextRuns(data, c.payloadStart, c.payloadStart, c.payloadEnd);
+            info.otherChunks.push_back(std::move(chunk));
+            if (offsets) offsets->otherChunkPayloadStart.push_back(c.payloadStart);
         }
-        // Other tags (if any appear in future titles) are silently skipped —
-        // this parser only extracts the scene-summary + hotspot data that
-        // has been confirmed across the Treasure in the Royal Tower corpus.
     }
 
     return info;
@@ -251,6 +258,26 @@ std::vector<uint8_t> b64decode(const std::string& s) {
     return out;
 }
 
+// Shared by ACT hotspots and generic chunks: writes only the text runs
+// that actually changed vs `orig`, each into a copy of the same
+// zero-padded window it came from (text.size() + capacity bytes) so
+// untouched runs — and everything between them — survive untouched.
+void patchTextRuns(uint8_t* recordStart, const std::string& label,
+                    const nlohmann::ordered_json& editedTexts, const std::vector<SceneText>& orig) {
+    for (size_t t = 0; t < editedTexts.size() && t < orig.size(); ++t) {
+        const auto& origText = orig[t];
+        const std::string newText = editedTexts[t].value("text", std::string{});
+        if (newText == origText.text) continue;
+        const size_t window = origText.text.size() + origText.capacity;
+        if (newText.size() > window)
+            throw std::runtime_error(
+                "LegacyScene: edited text for '" + label + "' ('" + newText +
+                "') is " + std::to_string(newText.size()) + " bytes, but only " +
+                std::to_string(window) + " bytes are available in the original record");
+        writeCStrField(recordStart + origText.offset, window, newText);
+    }
+}
+
 } // anonymous namespace
 
 SceneInfo parseSceneBin(const std::vector<uint8_t>& data) {
@@ -262,14 +289,14 @@ SceneInfo parseSceneBinFile(const std::filesystem::path& binPath) {
 }
 
 std::string sceneInfoToJson(const SceneInfo& info) {
-    nlohmann::json j;
+    nlohmann::ordered_json j;
     j["formType"]        = info.formType;
     j["sceneName"]        = info.sceneName;
     j["transitionName"]  = info.transitionName;
     j["soundName"]        = info.soundName;
-    j["hotspots"]          = nlohmann::json::array();
+    j["hotspots"]          = nlohmann::ordered_json::array();
     for (const auto& h : info.hotspots) {
-        nlohmann::json hj{{"name", h.name}, {"hasRect", h.hasRect}};
+        nlohmann::ordered_json hj{{"name", h.name}, {"hasRect", h.hasRect}};
         if (h.hasRect) {
             hj["left"]   = h.left;
             hj["top"]    = h.top;
@@ -281,35 +308,49 @@ std::string sceneInfoToJson(const SceneInfo& info) {
     return j.dump(2);
 }
 
-std::string sceneToEditableJson(const std::vector<uint8_t>& raw) {
+std::string sceneToEditableJson(const std::vector<uint8_t>& raw, const std::string& gameVersion) {
     SceneInfo info = parseSceneBin(raw);  // throws if not a DATA container
 
-    nlohmann::json j;
+    nlohmann::ordered_json j;
     j["container"]       = "WayneSikes.Scene";
+    if (!gameVersion.empty()) j["version"] = gameVersion;
     j["formType"]         = info.formType;
     j["sceneName"]        = info.sceneName;
     j["transitionName"]  = info.transitionName;
     j["soundName"]        = info.soundName;
-    j["hotspots"]          = nlohmann::json::array();
+    j["hotspots"]          = nlohmann::ordered_json::array();
     for (const auto& h : info.hotspots) {
-        nlohmann::json hj{{"name", h.name}, {"hasRect", h.hasRect}, {"typeCode", h.typeCode}};
+        nlohmann::ordered_json hj{{"name", h.name}, {"hasRect", h.hasRect}, {"typeCode", h.typeCode}};
         if (h.hasRect) {
             hj["left"]   = h.left;
             hj["top"]    = h.top;
             hj["right"]  = h.right;
             hj["bottom"] = h.bottom;
         }
-        hj["texts"] = nlohmann::json::array();
+        hj["texts"] = nlohmann::ordered_json::array();
         for (const auto& t : h.texts)
             hj["texts"].push_back({{"text", t.text}});
         j["hotspots"].push_back(std::move(hj));
+    }
+    j["chunks"] = nlohmann::ordered_json::array();
+    for (size_t i = 0; i < info.otherChunks.size(); ++i) {
+        const auto& c = info.otherChunks[i];
+        if (c.texts.empty()) continue;  // nothing editable — skip the noise
+        // "index" pins this back to its slot in otherChunks (and therefore
+        // to offsets.otherChunkPayloadStart) regardless of tag repeats or
+        // skipped textless chunks — sceneFromEditableJson reads it back.
+        nlohmann::ordered_json cj{{"tag", c.tag}, {"index", i}};
+        cj["texts"] = nlohmann::ordered_json::array();
+        for (const auto& t : c.texts)
+            cj["texts"].push_back({{"text", t.text}});
+        j["chunks"].push_back(std::move(cj));
     }
     j["_raw"] = b64encode(raw);
     return j.dump(2);
 }
 
 std::vector<uint8_t> sceneFromEditableJson(const std::string& jsonStr) {
-    nlohmann::json j = nlohmann::json::parse(jsonStr, nullptr, false);
+    nlohmann::ordered_json j = nlohmann::ordered_json::parse(jsonStr, nullptr, false);
     if (j.is_discarded() || !j.contains("_raw"))
         throw std::runtime_error("LegacyScene: not an editable scene JSON (missing \"_raw\")");
 
@@ -334,7 +375,7 @@ std::vector<uint8_t> sceneFromEditableJson(const std::string& jsonStr) {
         if (soundName       != original.soundName)       writeCStrField(p + 87, 33, soundName);
     }
 
-    const auto hotspots = j.value("hotspots", nlohmann::json::array());
+    const auto hotspots = j.value("hotspots", nlohmann::ordered_json::array());
     for (size_t i = 0; i < offsets.actPayloadStart.size() && i < hotspots.size(); ++i) {
         const auto& hj = hotspots[i];
         const auto& orig = original.hotspots[i];
@@ -367,19 +408,20 @@ std::vector<uint8_t> sceneFromEditableJson(const std::string& jsonStr) {
         // untouched. Removing a text from the JSON array, or adding a new
         // one past what the original had, is silently ignored — there's
         // nowhere in the fixed-size record to put a brand new run.
-        const auto texts = hj.value("texts", nlohmann::json::array());
-        for (size_t t = 0; t < texts.size() && t < orig.texts.size(); ++t) {
-            const auto& origText = orig.texts[t];
-            const std::string newText = texts[t].value("text", std::string{});
-            if (newText == origText.text) continue;
-            const size_t window = origText.text.size() + origText.capacity;
-            if (newText.size() > window)
-                throw std::runtime_error(
-                    "LegacyScene: edited text for '" + orig.name + "' ('" + newText +
-                    "') is " + std::to_string(newText.size()) + " bytes, but only " +
-                    std::to_string(window) + " bytes are available in the original record");
-            writeCStrField(start + origText.offset, window, newText);
-        }
+        const auto texts = hj.value("texts", nlohmann::ordered_json::array());
+        patchTextRuns(raw.data() + offsets.actPayloadStart[i], orig.name, texts, orig.texts);
+    }
+
+    // Generic chunks (BOOT's QUOT/CRED/MENU/etc) — same patch logic, located
+    // via the "index" tag sceneToEditableJson() stamped onto each one.
+    const auto chunks = j.value("chunks", nlohmann::ordered_json::array());
+    for (const auto& cj : chunks) {
+        const size_t idx = cj.value("index", static_cast<size_t>(-1));
+        if (idx >= offsets.otherChunkPayloadStart.size() || idx >= original.otherChunks.size())
+            continue;
+        const auto& orig = original.otherChunks[idx];
+        const auto texts = cj.value("texts", nlohmann::ordered_json::array());
+        patchTextRuns(raw.data() + offsets.otherChunkPayloadStart[idx], orig.tag, texts, orig.texts);
     }
 
     return raw;
