@@ -116,6 +116,12 @@ std::vector<uint8_t> loadImageAsCIFPixels(
         int expectedW = 0,
         int expectedH = 0);
 
+/// Reads just the width/height of any stb_image-supported image without
+/// decoding pixels — lets the repacker treat the image file itself as the
+/// source of truth for dimensions, instead of requiring a stored width/
+/// height sidecar. Throws std::runtime_error if the file can't be probed.
+void probeImageSize(const std::filesystem::path& imagePath, int& outW, int& outH);
+
 // ── TGA conversion ────────────────────────────────────────────────────────
 
 std::vector<uint8_t> legacyCIFToTGA(const LegacyCIFImage& img);

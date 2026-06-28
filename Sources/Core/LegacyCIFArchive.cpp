@@ -487,6 +487,16 @@ void writeLegacyCIF(const std::filesystem::path& imagePath,
 }
 
 
+// ── Public: probeImageSize ─────────────────────────────────────────────────
+
+void probeImageSize(const std::filesystem::path& imagePath, int& outW, int& outH) {
+    int channels = 0;
+    if (!stbi_info(imagePath.string().c_str(), &outW, &outH, &channels))
+        throw std::runtime_error(
+            std::string("probeImageSize: cannot read '") +
+            imagePath.string() + "': " + stbi_failure_reason());
+}
+
 // ── Public: loadImageAsCIFPixels ──────────────────────────────────────────
 
 std::vector<uint8_t> loadImageAsCIFPixels(

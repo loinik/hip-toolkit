@@ -16,6 +16,7 @@
 		EE000004LEGACYCIFARCH0001 /* LegacyCIFArchive.cpp in Sources */ = {isa = PBXBuildFile; fileRef = EE000004LEGACYCIFARCH0000 /* LegacyCIFArchive.cpp */; };
 		EE000005LEGACYCIFTREE0001 /* LegacyCiftreeArchive.cpp in Sources */ = {isa = PBXBuildFile; fileRef = EE000005LEGACYCIFTREE0000 /* LegacyCiftreeArchive.cpp */; };
 		EE000007LEGACYSCENEARC0001 /* LegacySceneArchive.cpp in Sources */ = {isa = PBXBuildFile; fileRef = EE000007LEGACYSCENEARC0000 /* LegacySceneArchive.cpp */; };
+		EE000008LEGACYXSHEET0001 /* LegacyXSheetArchive.cpp in Sources */ = {isa = PBXBuildFile; fileRef = EE000008LEGACYXSHEET0000 /* LegacyXSheetArchive.cpp */; };
 		EE6186782F82969000EB6D27 /* HIPWrapper.mm in Sources */ = {isa = PBXBuildFile; fileRef = EE6186702F82969000EB6D27 /* HIPWrapper.mm */; };
 		EE6186792F82969000EB6D27 /* HISArchive.cpp in Sources */ = {isa = PBXBuildFile; fileRef = EE6186722F82969000EB6D27 /* HISArchive.cpp */; };
 		EE6186C52F829A4600EB6D27 /* stb_vorbis.c in Sources */ = {isa = PBXBuildFile; fileRef = EE6186BD2F829A4600EB6D27 /* stb_vorbis.c */; };
@@ -104,6 +105,8 @@
 		EE000005LEGACYCIFTREE0002 /* LegacyCiftreeArchive.hpp */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.cpp.h; path = LegacyCiftreeArchive.hpp; sourceTree = "<group>"; };
 		EE000007LEGACYSCENEARC0000 /* LegacySceneArchive.cpp */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.cpp.cpp; path = LegacySceneArchive.cpp; sourceTree = "<group>"; };
 		EE000007LEGACYSCENEARC0002 /* LegacySceneArchive.hpp */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.cpp.h; path = LegacySceneArchive.hpp; sourceTree = "<group>"; };
+		EE000008LEGACYXSHEET0000 /* LegacyXSheetArchive.cpp */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.cpp.cpp; path = LegacyXSheetArchive.cpp; sourceTree = "<group>"; };
+		EE000008LEGACYXSHEET0002 /* LegacyXSheetArchive.hpp */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.cpp.h; path = LegacyXSheetArchive.hpp; sourceTree = "<group>"; };
 		EE61866F2F82969000EB6D27 /* HIPWrapper.h */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.h; path = HIPWrapper.h; sourceTree = "<group>"; };
 		EE6186702F82969000EB6D27 /* HIPWrapper.mm */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.cpp.objcpp; path = HIPWrapper.mm; sourceTree = "<group>"; };
 		EE6186712F82969000EB6D27 /* HISArchive.hpp */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.cpp.h; path = HISArchive.hpp; sourceTree = "<group>"; };
@@ -325,6 +328,8 @@
 				EE000005LEGACYCIFTREE0000 /* LegacyCiftreeArchive.cpp */,
 				EE000007LEGACYSCENEARC0002 /* LegacySceneArchive.hpp */,
 				EE000007LEGACYSCENEARC0000 /* LegacySceneArchive.cpp */,
+				EE000008LEGACYXSHEET0002 /* LegacyXSheetArchive.hpp */,
+				EE000008LEGACYXSHEET0000 /* LegacyXSheetArchive.cpp */,
 				EE6186712F82969000EB6D27 /* HISArchive.hpp */,
 				EE6186722F82969000EB6D27 /* HISArchive.cpp */,
 				EE618700AA000001DEADBEEF /* XSheetArchive.hpp */,
@@ -526,6 +531,7 @@
 				EE000004LEGACYCIFARCH0001 /* LegacyCIFArchive.cpp in Sources */,
 				EE000005LEGACYCIFTREE0001 /* LegacyCiftreeArchive.cpp in Sources */,
 				EE000007LEGACYSCENEARC0001 /* LegacySceneArchive.cpp in Sources */,
+				EE000008LEGACYXSHEET0001 /* LegacyXSheetArchive.cpp in Sources */,
 				EE6186782F82969000EB6D27 /* HIPWrapper.mm in Sources */,
 				EE6186C52F829A4600EB6D27 /* stb_vorbis.c in Sources */,
 				EE000001VORBISCOMPILE0001 /* vorbis_compile.c in Sources */,

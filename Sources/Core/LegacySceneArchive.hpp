@@ -56,10 +56,23 @@
 //  right >= left, bottom >= top, within a generous screen-size bound)
 //  before trusting it, rather than emitting clearly-bogus coordinates.
 //
-//  Field semantics beyond string names and hotspot rectangles are not
-//  fully confirmed (no access to the original engine source or a live
-//  DOSBox session to behaviourally verify flag bytes) — treat anything
-//  not listed above as opaque.
+//  [48..49] is actually the head of a much bigger picture: it's a u16
+//  "type code" that discriminates 47+ distinct ACT record variants seen
+//  across the Treasure in the Royal Tower corpus (e.g. 270/271/272 are
+//  scene-transition hotspots with a trailing rect, 331 is a multi-line
+//  on-screen text box, 313/314 are voiced dialogue lines with embedded
+//  control codes like <n>/<c1>/<e>). Modelling all 47 variants field-by-
+//  field is future work; for now, every printable-ASCII run >= 4 chars
+//  found anywhere in the record body (outside the name field, and outside
+//  the trailing rect when hasRect is set) is surfaced as a SceneText,
+//  regardless of which variant it belongs to — this is what actually
+//  carries the dialogue/UI text players see, and it's editable/
+//  translatable without needing to understand the surrounding binary.
+//
+//  Field semantics beyond string names, hotspot rectangles, and these text
+//  runs are not fully confirmed (no access to the original engine source
+//  or a live DOSBox session to behaviourally verify flag bytes) — treat
+//  anything not listed above as opaque.
 //
 
 #pragma once
@@ -72,6 +85,22 @@
 namespace CIF {
 namespace Legacy {
 
+/// A printable-ASCII run found inside an ACT record's body — dialogue
+/// lines, on-screen text, or short codes like sound-cue IDs all show up
+/// this way regardless of which of the 47+ ACT variants they belong to.
+struct SceneText {
+    std::string text;
+    /// Offset relative to the ACT record's payload start — identifies
+    /// *where* to patch this string back in on edit; not meaningful on
+    /// its own without the record it came from.
+    size_t offset = 0;
+    /// How many zero bytes follow the original text before the next
+    /// non-zero byte (or the end of the record) — the editable headroom.
+    /// An edited value longer than text.size() + capacity won't fit and
+    /// sceneFromEditableJson() throws rather than overwriting adjacent data.
+    size_t capacity = 0;
+};
+
 struct SceneHotspot {
     std::string name;
     int32_t left = 0, top = 0, right = 0, bottom = 0;
@@ -80,6 +109,12 @@ struct SceneHotspot {
     /// trailing 16 bytes hold something other than a rect, so left/top/
     /// right/bottom are left at 0 rather than populated with garbage.
     bool hasRect = false;
+    /// u16 at [48..49] — discriminates the ACT record variant (47+ distinct
+    /// values observed). Preserved verbatim; not yet decoded per-variant.
+    uint16_t typeCode = 0;
+    /// Every printable-ASCII run found in the record body (see typeCode
+    /// comment above) — dialogue text, UI labels, sound-cue codes, etc.
+    std::vector<SceneText> texts;
 };
 
 struct SceneInfo {
@@ -102,6 +137,27 @@ SceneInfo parseSceneBinFile(const std::filesystem::path& binPath);
 
 /// SceneInfo → JSON string (for inspection/export). Mirrors XSheet::toJson.
 std::string sceneInfoToJson(const SceneInfo& info);
+
+// ── Editable round-trip ─────────────────────────────────────────────────────
+//
+//  sceneToEditableJson() embeds the original bytes (base64, under "_raw")
+//  alongside the structured SceneInfo fields, tagged
+//  "container": "WayneSikes.Scene". sceneFromEditableJson() decodes "_raw"
+//  and patches sceneName/transitionName/soundName and each hotspot's
+//  name/rect back into a COPY of those original bytes, in place — every
+//  field this parser doesn't understand (SSUM's unidentified tail, ACT's
+//  unidentified mid-section, any unknown chunk types) survives untouched,
+//  because the byte layout is never rebuilt from scratch.
+//
+//  Name fields are NUL-padded to their original fixed width and silently
+//  truncated if the edited value is too long to fit (50/37/33 bytes for
+//  scene/transition/sound names, 48 bytes for hotspot names).
+
+std::string sceneToEditableJson(const std::vector<uint8_t>& raw);
+
+/// Throws std::runtime_error if json has no "_raw" field or it doesn't
+/// decode to a valid DATA/SCEN container.
+std::vector<uint8_t> sceneFromEditableJson(const std::string& json);
 
 } // namespace Legacy
 } // namespace CIF

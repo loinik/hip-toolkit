@@ -65,9 +65,25 @@ inline std::vector<LegacyEntry> unpackLegacyCiftree(const std::filesystem::path&
 }
 
 // ── Packing ───────────────────────────────────────────────────────────────
-// Rebuilds a legacy Ciftree from modified entries. originalHeader and
-// originalHash must be the raw blobs from the source archive — they contain
-// version-specific metadata that cannot be reconstructed from entry data alone.
+// Rebuilds a legacy Ciftree from modified entries. All three donor blobs
+// are now optional (pass {} to synthesize) — none are strictly required:
+//   originalHeader  — optional. Confirmed correct for GameVersion::N3to5;
+//                      best-effort for other versions, since only one
+//                      legacy game archive was available to verify the
+//                      format-marker bytes against.
+//   originalHash    — optional. Fully confirmed: the hash table is a
+//                      1024-bucket separate-chaining structure where
+//                      bucket(name) = sum(toupper(name bytes, no ext)) %
+//                      1024 — reverse-engineered from CIFHASHL/CIFHASHS
+//                      debug dumps left by the original tool and verified
+//                      byte-exact against a real hash.bin/entries.bin pair.
+//   originalEntries — optional. Fully confirmed: every field maps to
+//                      either LegacyEntry data (name/ftype/width/height/
+//                      pixels) or a value computed here during packing
+//                      (offset/sizes/hash-chain "next" pointer).
+// Synthesizing all three reorders entries to match the input list's order
+// (rather than any original on-disk order) — harmless, since the engine
+// locates entries by walking the hash chain, not by table position.
 std::vector<uint8_t> packLegacyCiftree(const std::vector<LegacyEntry>& entries,
                                         GameVersion version,
                                         const std::vector<uint8_t>& originalHeader,
@@ -79,10 +95,14 @@ std::vector<uint8_t> packLegacyCiftree(const std::vector<LegacyEntry>& entries,
 // .png — directly editable in any image tool, and re-read losslessly by
 // packLegacyFromFolder() (which converts it back to the entry's exact
 // original pixel format/dimensions via stb_image). Falls back to a raw
-// pixel dump (.rgb555 / .rgb888 + sidecar .meta JSON) only if PNG encoding
-// fails. Non-image entries are saved as .bin. The original archive's
-// header, hash and entry-table blobs are saved to outDir/_meta/ so the
-// archive can be rebuilt later with packLegacyFromFolder().
+// pixel dump (.rgb555 / .rgb888) only if PNG encoding fails. Non-image
+// entries are saved as .bin. Every entry additionally gets a small
+// <name>.meta JSON sidecar (ftype + pixel format/dimensions for images)
+// so the archive can be rebuilt even if outDir/_meta is discarded entirely
+// (besides version.txt, which is always required). The original archive's
+// header, hash and entry-table blobs are saved to outDir/_meta/ for
+// byte-exact repacking with packLegacyFromFolder() — all three are now
+// optional and will be synthesized from the .meta sidecars if missing.
 void unpackLegacyToFolder(const std::filesystem::path& datPath,
                            GameVersion version,
                            const std::filesystem::path& outDir,

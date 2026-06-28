@@ -7,13 +7,17 @@
 
 #include "LegacyCiftreeArchive.hpp"
 #include "LegacyCIFArchive.hpp"   // loadImageAsCIFPixels
+#include "LegacySceneArchive.hpp" // sceneToEditableJson / sceneFromEditableJson
+#include "LegacyXSheetArchive.hpp" // xs1ToJson / xs1FromJson
 #include "CIFArchive.hpp"
+#include "nlohmann_json.hpp"
 
 #include <algorithm>
 #include <array>
 #include <cassert>
 #include <cstring>
 #include <fstream>
+#include <optional>
 #include <stdexcept>
 #include <unordered_map>
 
@@ -84,23 +88,26 @@ struct Layout {
     uint32_t packedSzPos;   // compressed size   (LE u32)
     uint32_t ftypePos;      // file type (u8)
     bool     dimsPlusOne;   // if true, stored dim = actual - 1
+    uint32_t nextPos;       // hash-chain "next entry index" (LE u16),
+                             // 0xFFFF = end of chain. Confirmed only for
+                             // N3to5; assumed entrySize-2 for the rest.
 };
 
 static Layout layoutFor(GameVersion v) {
     switch (v) {
         case GameVersion::N1:
             return { 0x1E, 0x0800, 0x081E, 0x26,
-                     32,  0x13, 0x0B, 0x0F, 0x11, 0x17, 0x1F, 0x23, false };
+                     32,  0x13, 0x0B, 0x0F, 0x11, 0x17, 0x1F, 0x23, false, 0x26 - 2 };
         case GameVersion::N2:
             return { 0x20, 0x0800, 0x0820, 0x46,
-                     32,  0x33, 0x13, 0x17, 0x31, 0x37, 0x3F, 0x43, true };
+                     32,  0x33, 0x13, 0x17, 0x31, 0x37, 0x3F, 0x43, true, 0x46 - 2 };
         case GameVersion::N3to5:
             return { 0x20, 0x0800, 0x0820, 0x5E,
-                     32,  0x4B, 0x2B, 0x2F, 0x49, 0x4F, 0x57, 0x5B, true };
+                     32,  0x4B, 0x2B, 0x2F, 0x49, 0x4F, 0x57, 0x5B, true, 0x5E - 2 };
         case GameVersion::N6to12:
         case GameVersion::N13plus:
             return { 0x20, 0x0800, 0x0820, 0x5E,
-                     32,  0x23, 0x31, 0x35, 0x4F, 0x51, 0x59, 0x5D, true };
+                     32,  0x23, 0x31, 0x35, 0x4F, 0x51, 0x59, 0x5D, true, 0x5E - 2 };
     }
     // Unreachable; silence compiler warning.
     return layoutFor(GameVersion::N6to12);
@@ -124,11 +131,132 @@ static void wU32(uint8_t* p, uint32_t v) {
     p[2] = static_cast<uint8_t>(v >> 16);
     p[3] = static_cast<uint8_t>(v >> 24);
 }
+static void wU16(uint8_t* p, uint16_t v) {
+    p[0] = static_cast<uint8_t>(v);
+    p[1] = static_cast<uint8_t>(v >> 8);
+}
 
 static std::string readName(const uint8_t* field, size_t maxLen) {
     size_t n = 0;
     while (n < maxLen && field[n] != 0x00) ++n;
     return std::string(reinterpret_cast<const char*>(field), n);
+}
+
+// ── Hash table (separate chaining, 1024 buckets) ───────────────────────────
+//
+//  Reverse-engineered from CIFHASHL/CIFHASHS debug dumps left behind by the
+//  original HIP tool, cross-checked against a real hash.bin + entries.bin
+//  pair from Treasure in the Royal Tower (100% match, 1024/1024 buckets,
+//  1641/1641 chain links):
+//
+//    bucket(name) = sum(toupper(byte) for byte in name-without-extension)
+//                   % 1024
+//    hash.bin     = 1024 × u16 LE — index of the chain's head entry per
+//                    bucket, or 0xFFFF if the bucket is empty
+//    entry.next   = u16 LE at Layout::nextPos — index of the next entry
+//                    in the same bucket's chain, or 0xFFFF if last.
+//                    Chains are built by appending in entry-table order
+//                    (FIFO): the first entry whose name hashes to a given
+//                    bucket becomes that bucket's head.
+//
+//  This makes hash.bin fully synthesizable — no donor archive is needed
+//  for it (unlike header.bin/entries.bin, which were already optional).
+static uint32_t legacyHashBucket(const std::string& name) {
+    uint32_t sum = 0;
+    for (unsigned char c : name)
+        sum += static_cast<uint32_t>(std::toupper(c));
+    return sum % 1024;
+}
+
+static std::vector<uint8_t> buildHashTableFromScratch(
+        const std::vector<LegacyEntry>& entries, std::vector<uint16_t>& nextOut) {
+    static constexpr uint16_t kEnd = 0xFFFF;
+    std::vector<uint16_t> heads(1024, kEnd);
+    std::vector<uint16_t> tails(1024, kEnd);
+    nextOut.assign(entries.size(), kEnd);
+
+    for (size_t i = 0; i < entries.size(); ++i) {
+        const uint32_t b = legacyHashBucket(entries[i].name);
+        if (heads[b] == kEnd) {
+            heads[b] = static_cast<uint16_t>(i);
+        } else {
+            nextOut[tails[b]] = static_cast<uint16_t>(i);
+        }
+        tails[b] = static_cast<uint16_t>(i);
+    }
+
+    std::vector<uint8_t> hashBin(1024 * 2, 0x00);
+    for (size_t b = 0; b < 1024; ++b)
+        wU16(hashBin.data() + b * 2, heads[b]);
+    return hashBin;
+}
+
+// ── Header / entry-table synthesis (no donor archive required) ────────────
+//
+//  Layout confirmed against Treasure in the Royal Tower (GameVersion::N3to5):
+//    [0  ..19]  magic "CIF TREE WayneSikes\0" (20 bytes, constant)
+//    [20 ..23]  zero (4 bytes)
+//    [24 ..25]  u16 LE — format marker, observed constant = 2
+//    [26 ..27]  u16 LE — format marker, observed constant = 1
+//    [28 ..29]  u16 LE — numEntries (matches the @0x1C read used by
+//                         detectVersion(), confirmed for every version)
+//    [30 ..]    zero padding up to headerSize (0 bytes for N1, 2 for the rest)
+//  The two markers are unconfirmed for versions other than N3to5 — only one
+//  legacy game archive was available to test against. If a donor header.bin
+//  is available, prefer it; this is a best-effort fallback for when there
+//  is truly nothing to anchor to.
+static std::vector<uint8_t> buildLegacyHeaderFromScratch(GameVersion version,
+                                                           uint16_t numEntries) {
+    static constexpr uint8_t MAGIC[20] = {
+        'C','I','F',' ','T','R','E','E',' ',
+        'W','a','y','n','e','S','i','k','e','s', 0x00
+    };
+    const Layout L = layoutFor(version);
+    std::vector<uint8_t> h(L.headerSize, 0x00);
+    std::memcpy(h.data(), MAGIC, sizeof(MAGIC));
+    if (L.headerSize >= 26) wU16(h.data() + 24, 2);
+    if (L.headerSize >= 28) wU16(h.data() + 26, 1);
+    if (L.headerSize >= 30) wU16(h.data() + 28, numEntries);
+    return h;
+}
+
+//  Builds a fresh entry table purely from in-memory LegacyEntry metadata —
+//  no donor entries.bin needed. offset/packedSz/depackedSz are filled in
+//  with placeholder zeros here; packLegacyCiftree() patches the real
+//  values once compression sizes are known, exactly as it already does
+//  for a donor-sourced table. Also fills in the hash-chain "next" field
+//  (see legacyHashBucket / buildHashTableFromScratch above) so the result
+//  is consistent with a from-scratch hash.bin.
+static std::vector<uint8_t> buildEntriesTableFromScratch(
+        const std::vector<LegacyEntry>& entries, GameVersion version) {
+    const Layout L = layoutFor(version);
+    std::vector<uint8_t> table(entries.size() * L.entrySize, 0x00);
+
+    std::vector<uint16_t> next;
+    buildHashTableFromScratch(entries, next);
+
+    for (size_t i = 0; i < entries.size(); ++i) {
+        uint8_t* ep = table.data() + i * L.entrySize;
+        const auto& e = entries[i];
+
+        const size_t n = std::min(e.name.size(), static_cast<size_t>(L.nameLen));
+        std::memcpy(ep, e.name.data(), n);
+
+        ep[L.ftypePos] = e.ftype;
+        const uint8_t bpp =
+            (e.pixels == PixelFormat::RGB555) ? 0x10 :
+            (e.pixels == PixelFormat::RGB888) ? 0x18 : 0x00;
+        ep[L.bppPos] = bpp;
+
+        const uint16_t w = static_cast<uint16_t>(L.dimsPlusOne ? e.width  - 1 : e.width);
+        const uint16_t h = static_cast<uint16_t>(L.dimsPlusOne ? e.height - 1 : e.height);
+        wU16(ep + L.widthPos,  w);
+        wU16(ep + L.heightPos, h);
+        wU16(ep + L.nextPos,   next[i]);
+        // offsetPos / packedSzPos / depackedSzPos are patched later, once
+        // compression has run — left as zero here.
+    }
+    return table;
 }
 
 // ── Encryption / decryption ───────────────────────────────────────────────
@@ -475,9 +603,21 @@ std::vector<LegacyEntry> unpackLegacyCiftree(const std::filesystem::path& datPat
 //  unpacked size fields are updated to reflect the newly compressed data.
 //
 //  The caller must pass the raw blobs from the source archive:
-//    originalHeader  — bytes [0 .. headerSize)
-//    originalHash    — bytes [headerSize .. tableStart)  (0x0800 bytes)
-//    originalEntries — bytes [tableStart .. tableEnd)    (N × entrySize)
+//    originalHeader  — bytes [0 .. headerSize), or empty to synthesize a
+//                       fresh header from scratch (see
+//                       buildLegacyHeaderFromScratch — confirmed only
+//                       against Treasure in the Royal Tower)
+//    originalHash    — bytes [headerSize .. tableStart)  (0x0800 bytes),
+//                       or empty to synthesize a fresh hash table from
+//                       scratch (see buildHashTableFromScratch — fully
+//                       confirmed against a real hash.bin/entries.bin pair)
+//    originalEntries — bytes [tableStart .. tableEnd)    (N × entrySize),
+//                       or empty to synthesize a fresh table purely from
+//                       the entries' own name/ftype/width/height/pixels
+//                       (see buildEntriesTableFromScratch — fully
+//                       confirmed: every field maps cleanly to either
+//                       LegacyEntry data or a value computed during
+//                       packing here)
 //
 //  Resulting layout:
 //    [header][hash][entryTable][dataBlobs…]
@@ -492,18 +632,31 @@ std::vector<uint8_t> packLegacyCiftree(const std::vector<LegacyEntry>& entries,
 
     const Layout L = layoutFor(version);
 
-    if (originalEntries.size() != entries.size() * L.entrySize)
+    if (!originalEntries.empty() && originalEntries.size() != entries.size() * L.entrySize)
         throw std::runtime_error(
             "LegacyCiftree: originalEntries size mismatch "
             "(expected " + std::to_string(entries.size() * L.entrySize) +
             ", got "     + std::to_string(originalEntries.size()) + ")");
+    if (!originalHash.empty() && originalHash.size() != 0x0800)
+        throw std::runtime_error("LegacyCiftree: originalHash must be exactly 0x800 bytes");
+
+    const std::vector<uint8_t> header = originalHeader.empty()
+        ? buildLegacyHeaderFromScratch(version, static_cast<uint16_t>(entries.size()))
+        : originalHeader;
 
     // Mutable copy of the entry table so we can patch per-entry fields.
-    std::vector<uint8_t> entryTable = originalEntries;
+    std::vector<uint8_t> entryTable = originalEntries.empty()
+        ? buildEntriesTableFromScratch(entries, version)
+        : originalEntries;
+
+    std::vector<uint16_t> dummyNext;
+    const std::vector<uint8_t> hash = originalHash.empty()
+        ? buildHashTableFromScratch(entries, dummyNext)
+        : originalHash;
 
     // Absolute offset where data blobs start in the output file.
-    const size_t dataStart = originalHeader.size()
-                           + originalHash.size()
+    const size_t dataStart = header.size()
+                           + hash.size()
                            + entryTable.size();
 
     std::vector<uint8_t> dataBlock;
@@ -533,8 +686,8 @@ std::vector<uint8_t> packLegacyCiftree(const std::vector<LegacyEntry>& entries,
     // Assemble the final file.
     std::vector<uint8_t> out;
     out.reserve(dataStart + dataBlock.size());
-    out.insert(out.end(), originalHeader.begin(), originalHeader.end());
-    out.insert(out.end(), originalHash.begin(),   originalHash.end());
+    out.insert(out.end(), header.begin(), header.end());
+    out.insert(out.end(), hash.begin(),            hash.end());
     out.insert(out.end(), entryTable.begin(),     entryTable.end());
     out.insert(out.end(), dataBlock.begin(),      dataBlock.end());
     return out;
@@ -543,50 +696,49 @@ std::vector<uint8_t> packLegacyCiftree(const std::vector<LegacyEntry>& entries,
 
 // ── High-level folder extraction ──────────────────────────────────────────
 //
-//  Image entries  (ftype 0x02) → <name>.rgb555 or <name>.rgb888
-//                                + <name>.meta  (JSON sidecar with w/h/format)
-//  All other entries            → <name>.bin
+//  No _meta/ folder, no shared version file — every piece of metadata
+//  this can't recover on its own lives on the entry it actually belongs
+//  to, and only gets written when it deviates from a sane default:
 //
-//  Additionally writes outDir/_meta/{header.bin, hash.bin, entries.bin,
-//  version.txt} so packLegacyFromFolder() can rebuild the archive later.
+//   Image entries (ftype 0x02) → <name>.png. Width/height are read back
+//     from the PNG itself when repacking (probeImageSize) — never stored.
+//     Pixel format defaults to RGB555 (the overwhelming majority case);
+//     a <name>.meta with {"format":"rgb888"} is only written when it
+//     actually is RGB888. If PNG encoding fails, falls back to a raw
+//     <name>.rgb555/.rgb888 dump — which, unlike a PNG, carries no
+//     dimensions of its own, so that path's <name>.meta also carries
+//     width/height.
+//
+//   Scene/BOOT-style DATA containers (LegacySceneArchive) and XS1
+//   cel-animation buffers (LegacyXSheetArchive) → <name>.json, tagged
+//   "container" ("WayneSikes.Scene" / "WayneSikes.XSheet") + "version"
+//   right inside the JSON — no separate sidecar needed, and no
+//   .scene.json/.xs1.json split either; packLegacyFromFolder() picks the
+//   right decoder by reading "container" out of the file, not its name.
+//
+//   Anything else → <name>.bin, ftype defaults to 0x03 (the only kind
+//   seen so far besides images and recognised containers); a <name>.meta
+//   with {"ftype": N} is only written for the rare entry that isn't 0x03.
+//
+//  packLegacyFromFolder() can still read a donor _meta/{header,hash,
+//  entries}.bin if one happens to be present (e.g. carried over from an
+//  older unpack), but unpackLegacyToFolder() no longer produces one —
+//  every field it used to hold is either synthesizable or has moved onto
+//  the entry's own sidecar.
 
 void unpackLegacyToFolder(const std::filesystem::path& datPath,
                            GameVersion version,
                            const std::filesystem::path& outDir,
                            ProgressFn progress) {
     auto entries = unpackLegacyCiftree(datPath, version);
-    const auto raw = readFile(datPath);
-    const Layout L = layoutFor(version);
-
-    if (raw.size() < L.tableStart + entries.size() * L.entrySize)
-        throw std::runtime_error(
-            "LegacyCiftree: archive truncated before entry table");
-
     std::filesystem::create_directories(outDir);
-    const auto metaDir = outDir / "_meta";
-    std::filesystem::create_directories(metaDir);
 
-    // Dump raw header/hash/entry-table so the repacker can preserve them.
-    writeFile(metaDir / "header.bin",
-              std::vector<uint8_t>(raw.begin(),
-                                    raw.begin() + L.headerSize));
-    writeFile(metaDir / "hash.bin",
-              std::vector<uint8_t>(raw.begin() + L.headerSize,
-                                    raw.begin() + L.tableStart));
-    writeFile(metaDir / "entries.bin",
-              std::vector<uint8_t>(
-                  raw.begin() + L.tableStart,
-                  raw.begin() + L.tableStart + entries.size() * L.entrySize));
-
-    // Plain-text version tag, e.g. "N6to12".
     const char* vStr =
         (version == GameVersion::N1)      ? "N1"      :
         (version == GameVersion::N2)      ? "N2"      :
         (version == GameVersion::N3to5)   ? "N3to5"   :
         (version == GameVersion::N6to12)  ? "N6to12"  :
         (version == GameVersion::N13plus) ? "N13plus" : "unknown";
-    writeFile(metaDir / "version.txt",
-              std::vector<uint8_t>(vStr, vStr + std::strlen(vStr)));
 
     const int total = static_cast<int>(entries.size());
     int done = 0;
@@ -599,30 +751,69 @@ void unpackLegacyToFolder(const std::filesystem::path& datPath,
         }
 
         if (entry.ftype == 0x02 && entry.pixels != PixelFormat::None) {
-            // Prefer PNG — findEntryFile() looks for it ahead of every other
-            // format (including the raw dump) when repacking, it's the most
-            // broadly supported format for viewing/editing, and it round-trips
-            // losslessly through packLegacyFromFolder() (stb_image decodes it
-            // back to the entry's exact original pixel format/dimensions).
             auto png = entryToPNG(entry);
             if (!png.empty()) {
                 writeFile(outDir / (entry.name + ".png"), png);
+                // Width/height come back from the PNG itself when
+                // repacking; only a non-default pixel format needs saving.
+                if (entry.pixels == PixelFormat::RGB888) {
+                    nlohmann::json meta;
+                    meta["format"] = "rgb888";
+                    const std::string s = meta.dump();
+                    writeFile(outDir / (entry.name + ".meta"),
+                              std::vector<uint8_t>(s.begin(), s.end()));
+                }
             } else {
+                // Raw dump has no embedded dimensions — width/height must
+                // be saved alongside it.
                 const std::string ext =
                     (entry.pixels == PixelFormat::RGB555) ? ".rgb555" : ".rgb888";
                 writeFile(outDir / (entry.name + ext), entry.data);
-
-                const std::string fmtStr =
-                    (entry.pixels == PixelFormat::RGB555) ? "\"rgb555\"" : "\"rgb888\"";
-                const std::string meta =
-                    "{\"width\":"  + std::to_string(entry.width)  +
-                    ",\"height\":" + std::to_string(entry.height) +
-                    ",\"format\":" + fmtStr + "}";
-                const std::vector<uint8_t> metaBytes(meta.begin(), meta.end());
-                writeFile(outDir / (entry.name + ".meta"), metaBytes);
+                nlohmann::json meta;
+                meta["format"] = (entry.pixels == PixelFormat::RGB555) ? "rgb555" : "rgb888";
+                meta["width"]  = entry.width;
+                meta["height"] = entry.height;
+                const std::string s = meta.dump();
+                writeFile(outDir / (entry.name + ".meta"),
+                          std::vector<uint8_t>(s.begin(), s.end()));
             }
         } else {
-            writeFile(outDir / (entry.name + ".bin"), entry.data);
+            // Scene/BOOT-style DATA containers (IFF/FORM chunks — see
+            // LegacySceneArchive) and XS1 cel-animation buffers (see
+            // LegacyXSheetArchive) convert to editable JSON, tagged with
+            // the game version right inside the file; everything else
+            // (and anything that fails to parse as either) falls back to
+            // a raw .bin dump, with a <name>.meta only if ftype isn't the
+            // 0x03 default.
+            nlohmann::json json;
+            bool recognised = false;
+            try {
+                json = nlohmann::json::parse(CIF::Legacy::sceneToEditableJson(entry.data));
+                recognised = true;
+            } catch (const std::exception&) {
+                try {
+                    json = nlohmann::json::parse(
+                        CIF::Legacy::xs1ToJson(CIF::Legacy::parseXS1(entry.data)));
+                    recognised = true;
+                } catch (const std::exception&) {
+                    // Not a recognised container — fall through to .bin.
+                }
+            }
+            if (recognised) {
+                json["version"] = vStr;
+                const std::string s = json.dump(2);
+                writeFile(outDir / (entry.name + ".json"),
+                          std::vector<uint8_t>(s.begin(), s.end()));
+            } else {
+                writeFile(outDir / (entry.name + ".bin"), entry.data);
+                if (entry.ftype != 0x03) {
+                    nlohmann::json meta;
+                    meta["ftype"] = entry.ftype;
+                    const std::string s = meta.dump();
+                    writeFile(outDir / (entry.name + ".meta"),
+                              std::vector<uint8_t>(s.begin(), s.end()));
+                }
+            }
         }
 
         ++done;
@@ -655,26 +846,228 @@ static GameVersion parseVersionTag(const std::string& s) {
 
 // Tries the candidate extensions in priority order. Returns empty path
 // if none of them exist.
-static std::filesystem::path findEntryFile(const std::filesystem::path& dir,
-                                            const std::string& name,
-                                            PixelFormat fmt,
-                                            uint8_t ftype) {
+// Used only by the donor-_meta/entries.bin-driven repack path below, where
+// ftype/pixels/width/height are already known exactly from the table —
+// unlike resolveEntryContent()'s folder-scan path, nothing here is guessed.
+static std::filesystem::path findEntryFileKnown(const std::filesystem::path& dir,
+                                                 const std::string& name,
+                                                 PixelFormat fmt,
+                                                 uint8_t ftype) {
     if (ftype == 0x02) {
-        // Image entry: prefer modern formats users can edit.
         for (const char* ext :
              { ".png", ".jpg", ".jpeg", ".tga", ".bmp", ".gif" }) {
             auto p = dir / (name + ext);
             if (std::filesystem::exists(p)) return p;
         }
-        // Fallback to the raw pixel dump.
         const std::string raw = (fmt == PixelFormat::RGB555) ? ".rgb555" : ".rgb888";
         auto p = dir / (name + raw);
         if (std::filesystem::exists(p)) return p;
     } else {
+        auto json = dir / (name + ".json");
+        if (std::filesystem::exists(json)) return json;
         auto p = dir / (name + ".bin");
         if (std::filesystem::exists(p)) return p;
     }
     return {};
+}
+
+// Decodes a <name>.json back to binary by reading its "container" field —
+// the format is determined by content, never by filename (there's only
+// ever one .json extension; .scene.json/.xs1.json don't exist on disk).
+// Returns false (data left untouched) if the file isn't JSON or doesn't
+// carry a container this code recognises.
+static bool decodeContainerJson(const std::filesystem::path& src, std::vector<uint8_t>& outData) {
+    auto jsonBytes = readFile(src);
+    const std::string jsonStr(jsonBytes.begin(), jsonBytes.end());
+    auto j = nlohmann::json::parse(jsonStr, nullptr, false);
+    if (j.is_discarded()) return false;
+    const std::string container = j.value("container", std::string{});
+    if (container == "WayneSikes.Scene") {
+        outData = CIF::Legacy::sceneFromEditableJson(jsonStr);
+        return true;
+    }
+    if (container == "WayneSikes.XSheet") {
+        outData = CIF::Legacy::xs1FromJson(jsonStr);
+        return true;
+    }
+    return false;
+}
+
+static LegacyEntry resolveEntryContentKnown(const std::filesystem::path& inDir,
+                                             const std::string& name, uint8_t ftype,
+                                             PixelFormat pixels,
+                                             uint16_t width, uint16_t height) {
+    LegacyEntry e;
+    e.name = name; e.ftype = ftype; e.pixels = pixels;
+    e.width = width; e.height = height;
+
+    auto src = findEntryFileKnown(inDir, name, pixels, ftype);
+    if (src.empty())
+        throw std::runtime_error(
+            "LegacyCiftree: no replacement file found for entry '" + name + "'");
+
+    const std::string ext = src.extension().string();
+    const bool isImageEntry = (ftype == 0x02 && pixels != PixelFormat::None);
+    const bool isRawDump = (ext == ".rgb555" || ext == ".rgb888");
+    const bool isBin = (ext == ".bin");
+
+    if (ext == ".json" && decodeContainerJson(src, e.data)) {
+        // handled
+    } else if (isImageEntry && !isRawDump && !isBin) {
+        e.data = loadImageAsCIFPixels(src, pixels, width, height);
+    } else {
+        e.data = readFile(src);
+        if (isImageEntry) {
+            const size_t expectedBytes =
+                static_cast<size_t>(width) * height * (pixels == PixelFormat::RGB555 ? 2 : 3);
+            if (e.data.size() != expectedBytes)
+                throw std::runtime_error(
+                    "LegacyCiftree: raw pixel file '" + src.string() +
+                    "' has wrong size (expected " +
+                    std::to_string(expectedBytes) + " bytes, got " +
+                    std::to_string(e.data.size()) + ")");
+        }
+    }
+    return e;
+}
+
+static std::optional<nlohmann::json> readOptionalMeta(const std::filesystem::path& dir,
+                                                        const std::string& name) {
+    auto p = dir / (name + ".meta");
+    if (!std::filesystem::exists(p)) return std::nullopt;
+    auto bytes = readFile(p);
+    auto meta = nlohmann::json::parse(std::string(bytes.begin(), bytes.end()), nullptr, false);
+    if (meta.is_discarded())
+        throw std::runtime_error("LegacyCiftree: malformed metadata sidecar '" + p.string() + "'");
+    return meta;
+}
+
+// Resolves one entry purely from what's on disk: file extension implies
+// ftype/container, image dimensions come from the image file itself
+// (probeImageSize) rather than a stored value, and a <name>.meta is only
+// consulted for the things that genuinely can't be recovered any other
+// way (non-default pixel format, a raw dump's width/height, or a non-0x03
+// ftype) — see the comment above unpackLegacyToFolder().
+static LegacyEntry resolveEntryContent(const std::filesystem::path& inDir,
+                                        const std::filesystem::path& src) {
+    const std::string ext  = src.extension().string();
+    const bool isRawDump   = (ext == ".rgb555" || ext == ".rgb888");
+    const bool isBin       = (ext == ".bin");
+    const bool isImageExt  =
+        ext == ".png" || ext == ".jpg" || ext == ".jpeg" ||
+        ext == ".tga" || ext == ".bmp" || ext == ".gif";
+
+    LegacyEntry e;
+    e.name = src.stem().string();
+
+    if (ext == ".json" && decodeContainerJson(src, e.data)) {
+        e.ftype = 0x03;
+    } else if (isImageExt) {
+        e.ftype = 0x02;
+        auto meta = readOptionalMeta(inDir, e.name);
+        e.pixels = (meta && meta->value("format", "rgb555") == "rgb888")
+                 ? PixelFormat::RGB888 : PixelFormat::RGB555;
+        int w = 0, h = 0;
+        probeImageSize(src, w, h);  // image file is the source of truth
+        e.width  = static_cast<uint16_t>(w);
+        e.height = static_cast<uint16_t>(h);
+        e.data = loadImageAsCIFPixels(src, e.pixels, w, h);
+    } else if (isRawDump) {
+        e.ftype = 0x02;
+        auto meta = readOptionalMeta(inDir, e.name);
+        if (!meta)
+            throw std::runtime_error(
+                "LegacyCiftree: '" + src.string() + "' needs a <name>.meta with "
+                "width/height/format — a raw pixel dump has no dimensions of its own");
+        e.pixels = (meta->value("format", "rgb555") == "rgb888")
+                 ? PixelFormat::RGB888 : PixelFormat::RGB555;
+        e.width  = static_cast<uint16_t>(meta->value("width",  0));
+        e.height = static_cast<uint16_t>(meta->value("height", 0));
+        e.data = readFile(src);
+        const size_t expectedBytes =
+            static_cast<size_t>(e.width) * e.height * (e.pixels == PixelFormat::RGB555 ? 2 : 3);
+        if (e.data.size() != expectedBytes)
+            throw std::runtime_error(
+                "LegacyCiftree: raw pixel file '" + src.string() + "' has wrong size "
+                "(expected " + std::to_string(expectedBytes) + " bytes, got " +
+                std::to_string(e.data.size()) + ")");
+    } else if (isBin) {
+        auto meta = readOptionalMeta(inDir, e.name);
+        e.ftype = meta ? static_cast<uint8_t>(meta->value("ftype", 3)) : 0x03;
+        e.data = readFile(src);
+    } else {
+        throw std::runtime_error("LegacyCiftree: unrecognised content file '" + src.string() + "'");
+    }
+    return e;
+}
+
+// Scans inDir directly for content files (PNG/raw dump/.json/.bin), one
+// entry per distinct base name, and resolves each via resolveEntryContent()
+// above — used whenever there's no donor _meta/entries.bin to drive the
+// entry list instead.
+static std::vector<LegacyEntry> buildEntriesFromFolderScan(
+        const std::filesystem::path& inDir, ProgressFn progress) {
+    std::vector<std::filesystem::path> files;
+    for (const auto& dirEntry : std::filesystem::directory_iterator(inDir)) {
+        if (!dirEntry.is_regular_file()) continue;
+        const auto& p = dirEntry.path();
+        const std::string ext = p.extension().string();
+        if (ext == ".meta") continue;
+        if (ext == ".png" || ext == ".jpg" || ext == ".jpeg" || ext == ".tga" ||
+            ext == ".bmp" || ext == ".gif" || ext == ".rgb555" || ext == ".rgb888" ||
+            ext == ".json" || ext == ".bin")
+            files.push_back(p);
+    }
+    std::sort(files.begin(), files.end());
+    if (files.empty())
+        throw std::runtime_error(
+            "LegacyCiftree: no recognised content files found in '" + inDir.string() + "'");
+
+    std::vector<LegacyEntry> entries;
+    entries.reserve(files.size());
+    const int total = static_cast<int>(files.size());
+    int done = 0;
+    for (const auto& f : files) {
+        entries.push_back(resolveEntryContent(inDir, f));
+        ++done;
+        if (progress) progress(done, total);
+    }
+    return entries;
+}
+
+//  Detects the game version from any "version" field found on a .json
+//  file in inDir (unpackLegacyToFolder() tags every recognised-container
+//  .json with the GameVersion) — survives even if every other piece of
+//  shared state is gone, as long as the archive had at least one scene
+//  or XS1 entry. An archive with neither (no donor _meta/version.txt
+//  either) has nowhere left to read the version from — that's a real gap,
+//  not silently patched over with a redundant tag on every plain entry;
+//  the caller is expected to ask the user (version picker / popup) when
+//  this throws. Also checks plain .meta sidecars for backward compat with
+//  older unpacks that did tag them.
+static GameVersion detectVersionFromFolder(const std::filesystem::path& inDir) {
+    for (const auto& dirEntry : std::filesystem::directory_iterator(inDir)) {
+        if (!dirEntry.is_regular_file()) continue;
+        const auto ext = dirEntry.path().extension();
+        if (ext != ".meta" && ext != ".json") continue;
+
+        auto bytes = readFile(dirEntry.path());
+        auto j = nlohmann::json::parse(std::string(bytes.begin(), bytes.end()), nullptr, false);
+        if (j.is_discarded() || !j.contains("version")) continue;
+        return parseVersionTag(j.value("version", std::string{}));
+    }
+
+    const auto versionTxt = inDir / "_meta" / "version.txt";
+    if (std::filesystem::exists(versionTxt)) {
+        auto versionBytes = readFile(versionTxt);
+        return parseVersionTag(std::string(versionBytes.begin(), versionBytes.end()));
+    }
+
+    throw std::runtime_error(
+        "LegacyCiftree: can't determine the game version — no .json "
+        "with a \"version\" field, and no donor _meta/version.txt, found in '" +
+        inDir.string() + "'. This archive has nothing self-describing left to read "
+        "the version from; the caller should ask the user which GameVersion to use.");
 }
 
 } // anonymous namespace
@@ -683,85 +1076,66 @@ void packLegacyFromFolder(const std::filesystem::path& inDir,
                            const std::filesystem::path& outDatPath,
                            ProgressFn progress) {
     const auto metaDir = inDir / "_meta";
-    if (!std::filesystem::exists(metaDir / "version.txt"))
-        throw std::runtime_error(
-            "LegacyCiftree: missing _meta/ — folder was not produced by "
-            "unpackLegacyToFolder()");
-
-    auto versionBytes = readFile(metaDir / "version.txt");
-    const std::string versionTag(versionBytes.begin(), versionBytes.end());
-    const GameVersion version = parseVersionTag(versionTag);
+    const GameVersion version = detectVersionFromFolder(inDir);
     const Layout L = layoutFor(version);
 
-    auto header  = readFile(metaDir / "header.bin");
-    auto hash    = readFile(metaDir / "hash.bin");
-    auto rawEntries = readFile(metaDir / "entries.bin");
-
-    if (header.size() != L.headerSize ||
-        hash.size()   != L.hashSize   ||
-        rawEntries.size() % L.entrySize != 0)
-        throw std::runtime_error(
-            "LegacyCiftree: _meta blob sizes do not match version layout");
-
-    const size_t numEntries = rawEntries.size() / L.entrySize;
-
-    // Build LegacyEntry list with replacement data.
-    std::vector<LegacyEntry> entries;
-    entries.reserve(numEntries);
-
-    const int total = static_cast<int>(numEntries);
-    int done = 0;
-
-    for (size_t i = 0; i < numEntries; ++i) {
-        const uint8_t* ep = rawEntries.data() + i * L.entrySize;
-
-        LegacyEntry e;
-        e.name = std::string(reinterpret_cast<const char*>(ep),
-                              ::strnlen(reinterpret_cast<const char*>(ep), L.nameLen));
-        e.ftype  = ep[L.ftypePos];
-        const uint8_t bpp = ep[L.bppPos];
-        e.pixels =
-            (bpp == 0x10) ? PixelFormat::RGB555 :
-            (bpp == 0x18) ? PixelFormat::RGB888 :
-                            PixelFormat::None;
-        e.width  = rU16(ep + L.widthPos);
-        e.height = rU16(ep + L.heightPos);
-        if (L.dimsPlusOne) { e.width += 1; e.height += 1; }
-
-        auto src = findEntryFile(inDir, e.name, e.pixels, e.ftype);
-        if (src.empty())
+    // hash.bin is optional: packLegacyCiftree() synthesizes a fresh one
+    // from the entry names (see buildHashTableFromScratch) if it's missing.
+    std::vector<uint8_t> hash;
+    if (std::filesystem::exists(metaDir / "hash.bin")) {
+        hash = readFile(metaDir / "hash.bin");
+        if (hash.size() != L.hashSize)
             throw std::runtime_error(
-                "LegacyCiftree: no replacement file found for entry '" +
-                e.name + "'");
+                "LegacyCiftree: _meta/hash.bin size does not match version layout");
+    }
 
-        const std::string ext = src.extension().string();
-        const bool isImageEntry = (e.ftype == 0x02 && e.pixels != PixelFormat::None);
-        const bool isRawDump =
-            (ext == ".rgb555" || ext == ".rgb888");
-        const bool isBin = (ext == ".bin");
+    // header.bin is optional: packLegacyCiftree() synthesizes a fresh one
+    // (confirmed correct for GameVersion::N3to5; best-effort for the rest)
+    // if it's missing.
+    std::vector<uint8_t> header;
+    if (std::filesystem::exists(metaDir / "header.bin")) {
+        header = readFile(metaDir / "header.bin");
+        if (header.size() != L.headerSize)
+            throw std::runtime_error(
+                "LegacyCiftree: _meta/header.bin size does not match version layout");
+    }
 
-        if (isImageEntry && !isRawDump && !isBin) {
-            // Modern image format — convert via stb_image.
-            e.data = loadImageAsCIFPixels(src, e.pixels, e.width, e.height);
-        } else {
-            // Raw dump or non-image: use bytes verbatim.
-            e.data = readFile(src);
-            if (isImageEntry) {
-                const size_t expectedBytes =
-                    static_cast<size_t>(e.width) * e.height *
-                    (e.pixels == PixelFormat::RGB555 ? 2 : 3);
-                if (e.data.size() != expectedBytes)
-                    throw std::runtime_error(
-                        "LegacyCiftree: raw pixel file '" + src.string() +
-                        "' has wrong size (expected " +
-                        std::to_string(expectedBytes) + " bytes, got " +
-                        std::to_string(e.data.size()) + ")");
-            }
+    std::vector<uint8_t> rawEntries;
+    std::vector<LegacyEntry> entries;
+
+    if (std::filesystem::exists(metaDir / "entries.bin")) {
+        rawEntries = readFile(metaDir / "entries.bin");
+        if (rawEntries.size() % L.entrySize != 0)
+            throw std::runtime_error(
+                "LegacyCiftree: _meta/entries.bin size does not match version layout");
+
+        const size_t numEntries = rawEntries.size() / L.entrySize;
+        entries.reserve(numEntries);
+        const int total = static_cast<int>(numEntries);
+        int done = 0;
+
+        for (size_t i = 0; i < numEntries; ++i) {
+            const uint8_t* ep = rawEntries.data() + i * L.entrySize;
+            const std::string name(reinterpret_cast<const char*>(ep),
+                                    ::strnlen(reinterpret_cast<const char*>(ep), L.nameLen));
+            const uint8_t ftype = ep[L.ftypePos];
+            const uint8_t bpp   = ep[L.bppPos];
+            const PixelFormat pixels =
+                (bpp == 0x10) ? PixelFormat::RGB555 :
+                (bpp == 0x18) ? PixelFormat::RGB888 :
+                                PixelFormat::None;
+            uint16_t width  = rU16(ep + L.widthPos);
+            uint16_t height = rU16(ep + L.heightPos);
+            if (L.dimsPlusOne) { width += 1; height += 1; }
+
+            entries.push_back(resolveEntryContentKnown(inDir, name, ftype, pixels, width, height));
+            ++done;
+            if (progress) progress(done, total);
         }
-
-        entries.push_back(std::move(e));
-        ++done;
-        if (progress) progress(done, total);
+    } else {
+        // No donor entries.bin — rebuild the entry list straight from
+        // whatever content files are sitting in inDir.
+        entries = buildEntriesFromFolderScan(inDir, progress);
     }
 
     auto out = packLegacyCiftree(entries, version, header, hash, rawEntries);
