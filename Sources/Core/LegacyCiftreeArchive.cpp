@@ -350,6 +350,15 @@ static bool layoutFits(const std::vector<uint8_t>& data,
 //    3. For N6to12 vs N13plus (same entry layout) scan the table for any
 //       image entry with bpp == 0x18 (RGB888) — that signals N13plus.
 
+bool isLegacyCiftreeBytes(const std::vector<uint8_t>& data) {
+    static constexpr uint8_t MAGIC[20] = {
+        'C','I','F',' ','T','R','E','E',' ',
+        'W','a','y','n','e','S','i','k','e','s'
+    };
+    return data.size() >= sizeof(MAGIC) &&
+           std::memcmp(data.data(), MAGIC, sizeof(MAGIC)) == 0;
+}
+
 GameVersion detectVersion(const std::filesystem::path& datPath) {
     const auto data = readFile(datPath);
     if (data.size() < 0x0822)
@@ -590,18 +599,28 @@ void unpackLegacyToFolder(const std::filesystem::path& datPath,
         }
 
         if (entry.ftype == 0x02 && entry.pixels != PixelFormat::None) {
-            const std::string ext =
-                (entry.pixels == PixelFormat::RGB555) ? ".rgb555" : ".rgb888";
-            writeFile(outDir / (entry.name + ext), entry.data);
+            // Prefer PNG — findEntryFile() looks for it ahead of every other
+            // format (including the raw dump) when repacking, it's the most
+            // broadly supported format for viewing/editing, and it round-trips
+            // losslessly through packLegacyFromFolder() (stb_image decodes it
+            // back to the entry's exact original pixel format/dimensions).
+            auto png = entryToPNG(entry);
+            if (!png.empty()) {
+                writeFile(outDir / (entry.name + ".png"), png);
+            } else {
+                const std::string ext =
+                    (entry.pixels == PixelFormat::RGB555) ? ".rgb555" : ".rgb888";
+                writeFile(outDir / (entry.name + ext), entry.data);
 
-            const std::string fmtStr =
-                (entry.pixels == PixelFormat::RGB555) ? "\"rgb555\"" : "\"rgb888\"";
-            const std::string meta =
-                "{\"width\":"  + std::to_string(entry.width)  +
-                ",\"height\":" + std::to_string(entry.height) +
-                ",\"format\":" + fmtStr + "}";
-            const std::vector<uint8_t> metaBytes(meta.begin(), meta.end());
-            writeFile(outDir / (entry.name + ".meta"), metaBytes);
+                const std::string fmtStr =
+                    (entry.pixels == PixelFormat::RGB555) ? "\"rgb555\"" : "\"rgb888\"";
+                const std::string meta =
+                    "{\"width\":"  + std::to_string(entry.width)  +
+                    ",\"height\":" + std::to_string(entry.height) +
+                    ",\"format\":" + fmtStr + "}";
+                const std::vector<uint8_t> metaBytes(meta.begin(), meta.end());
+                writeFile(outDir / (entry.name + ".meta"), metaBytes);
+            }
         } else {
             writeFile(outDir / (entry.name + ".bin"), entry.data);
         }

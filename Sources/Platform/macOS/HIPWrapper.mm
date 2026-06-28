@@ -6,6 +6,8 @@
 #include "CiftreeArchive.hpp"
 #include "HISArchive.hpp"
 #include "XSheetArchive.hpp"
+#include "LegacyCiftreeArchive.hpp"
+#include "LegacyCIFArchive.hpp"
 
 // MARK: - Helpers
 
@@ -240,7 +242,7 @@ static NSData *vecToData(const std::vector<uint8_t>& v) {
 
 + (nullable NSData *)decodeAtPath:(NSString *)path error:(NSError **)error {
     try {
-        return vecToData(CIF::decode(path.fileSystemRepresentation));
+        return vecToData(CIF::decodeAny(path.fileSystemRepresentation));
     } catch (const std::exception &e) {
         if (error) *error = hipError(@(e.what()));
         return nil;
@@ -249,7 +251,7 @@ static NSData *vecToData(const std::vector<uint8_t>& v) {
 
 + (nullable CIFFileInfo *)readHeaderAtPath:(NSString *)path error:(NSError **)error {
     try {
-        auto h        = CIF::readHeader(path.fileSystemRepresentation);
+        auto h        = CIF::readHeaderAny(path.fileSystemRepresentation);
         CIFFileInfo *info = [CIFFileInfo new];
         info.type     = static_cast<uint32_t>(h.type);
         info.width    = h.width;
@@ -307,8 +309,46 @@ static NSData *vecToData(const std::vector<uint8_t>& v) {
         NSMutableArray *result = [NSMutableArray arrayWithCapacity:entries.size()];
         for (const auto &e : entries) {
             CiftreeFileEntry *obj = [CiftreeFileEntry new];
-            obj.name    = [NSString stringWithUTF8String:e.name.c_str()];
-            obj.cifData = vecToData(e.cifData);
+            obj.name          = [NSString stringWithUTF8String:e.name.c_str()];
+            obj.cifData       = vecToData(e.cifData);
+            obj.isPreDecoded  = NO;
+            obj.fileExtension = @"cif";
+            [result addObject:obj];
+        }
+        return [result copy];
+    } catch (const std::exception &e) {
+        if (error) *error = hipError(@(e.what()));
+        return nil;
+    }
+}
+
++ (nullable NSArray<CiftreeFileEntry *> *)unpackCiftreeAnyAtPath:(NSString *)path
+                                                           error:(NSError **)error {
+    try {
+        auto raw = CIF::readFile(path.fileSystemRepresentation);
+        if (!CIF::Legacy::isLegacyCiftreeBytes(raw)) {
+            return [self unpackCiftreeAtPath:path error:error];
+        }
+
+        auto entries = CIF::Legacy::unpackLegacyCiftree(path.fileSystemRepresentation);
+        NSMutableArray *result = [NSMutableArray arrayWithCapacity:entries.size()];
+        for (const auto &e : entries) {
+            CiftreeFileEntry *obj = [CiftreeFileEntry new];
+            obj.name          = [NSString stringWithUTF8String:e.name.c_str()];
+            obj.isPreDecoded  = YES;
+            if (e.ftype == 0x02 && e.pixels != CIF::Legacy::PixelFormat::None) {
+                auto png = CIF::Legacy::entryToPNG(e);
+                if (!png.empty()) {
+                    obj.cifData       = vecToData(png);
+                    obj.fileExtension = @"png";
+                } else {
+                    obj.cifData       = vecToData(e.data);
+                    obj.fileExtension = @"bin";
+                }
+            } else {
+                obj.cifData       = vecToData(e.data);
+                obj.fileExtension = @"bin";
+            }
             [result addObject:obj];
         }
         return [result copy];
@@ -327,6 +367,47 @@ static NSData *vecToData(const std::vector<uint8_t>& v) {
         opts.extractContents = extractContents;
         CIF::unpackToFolder(datPath.fileSystemRepresentation,
                             outPath.fileSystemRepresentation, opts);
+        return YES;
+    } catch (const std::exception &e) {
+        if (error) *error = hipError(@(e.what()));
+        return NO;
+    }
+}
+
++ (BOOL)isLegacyCiftreeAtPath:(NSString *)path {
+    try {
+        auto raw = CIF::readFile(path.fileSystemRepresentation);
+        return CIF::Legacy::isLegacyCiftreeBytes(raw);
+    } catch (const std::exception &) {
+        return NO;
+    }
+}
+
++ (BOOL)isLegacyUnpackFolderAtPath:(NSString *)folderPath {
+    NSString *versionPath = [folderPath stringByAppendingPathComponent:@"_meta/version.txt"];
+    return [NSFileManager.defaultManager fileExistsAtPath:versionPath];
+}
+
++ (BOOL)unpackLegacyCiftreeAtPath:(NSString *)datPath
+                      toFolderPath:(NSString *)outPath
+                             error:(NSError **)error {
+    try {
+        auto version = CIF::Legacy::detectVersion(datPath.fileSystemRepresentation);
+        CIF::Legacy::unpackLegacyToFolder(datPath.fileSystemRepresentation, version,
+                                           outPath.fileSystemRepresentation);
+        return YES;
+    } catch (const std::exception &e) {
+        if (error) *error = hipError(@(e.what()));
+        return NO;
+    }
+}
+
++ (BOOL)packLegacyCiftreeAtPath:(NSString *)folderPath
+                          toPath:(NSString *)outPath
+                           error:(NSError **)error {
+    try {
+        CIF::Legacy::packLegacyFromFolder(folderPath.fileSystemRepresentation,
+                                           outPath.fileSystemRepresentation);
         return YES;
     } catch (const std::exception &e) {
         if (error) *error = hipError(@(e.what()));

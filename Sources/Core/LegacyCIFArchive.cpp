@@ -18,6 +18,7 @@
 #include "CIFArchive.hpp"
 
 #include "../../Vendor/stb_image.h"
+#include "../../Vendor/stb_image_write.h"
 
 #include <algorithm>
 #include <array>
@@ -215,6 +216,37 @@ static std::vector<uint8_t> rgbaToRGB888(const uint8_t* rgba, int w, int h) {
     return out;
 }
 
+// ── Decoded legacy pixels → RGBA8 (inverse of rgbaToRGB555/888) ──────────────
+
+static std::vector<uint8_t> legacyPixelsToRGBAImpl(const uint8_t* pixels,
+                                                     uint16_t w, uint16_t h,
+                                                     PixelFormat fmt) {
+    const size_t numPx = static_cast<size_t>(w) * h;
+    std::vector<uint8_t> out(numPx * 4);
+
+    if (fmt == PixelFormat::RGB555) {
+        for (size_t i = 0; i < numPx; ++i) {
+            const uint16_t px = static_cast<uint16_t>(pixels[2 * i]) |
+                                 static_cast<uint16_t>(pixels[2 * i + 1]) << 8;
+            const uint8_t r5 = (px >> 10) & 0x1F;
+            const uint8_t g5 = (px >>  5) & 0x1F;
+            const uint8_t b5 = (px >>  0) & 0x1F;
+            out[4 * i + 0] = static_cast<uint8_t>((r5 << 3) | (r5 >> 2));
+            out[4 * i + 1] = static_cast<uint8_t>((g5 << 3) | (g5 >> 2));
+            out[4 * i + 2] = static_cast<uint8_t>((b5 << 3) | (b5 >> 2));
+            out[4 * i + 3] = 0xFF;
+        }
+    } else if (fmt == PixelFormat::RGB888) {
+        for (size_t i = 0; i < numPx; ++i) {
+            out[4 * i + 0] = pixels[3 * i + 0];
+            out[4 * i + 1] = pixels[3 * i + 1];
+            out[4 * i + 2] = pixels[3 * i + 2];
+            out[4 * i + 3] = 0xFF;
+        }
+    }
+    return out;
+}
+
 // ── Little-endian read helpers ────────────────────────────────────────────
 
 static uint16_t rU16(const uint8_t* p) {
@@ -340,6 +372,14 @@ static LegacyCIFImage parseHeader(const std::vector<uint8_t>& d) {
 }
 
 } // anonymous namespace
+
+
+// ── Public: isLegacyCIFBytes ──────────────────────────────────────────────
+
+bool isLegacyCIFBytes(const std::vector<uint8_t>& data) {
+    return data.size() >= sizeof(LEGACY_CIF_MAGIC) &&
+           std::memcmp(data.data(), LEGACY_CIF_MAGIC, sizeof(LEGACY_CIF_MAGIC)) == 0;
+}
 
 
 // ── Public: readLegacyCIF ─────────────────────────────────────────────────
@@ -495,6 +535,33 @@ std::vector<uint8_t> legacyCIFToTGA(const LegacyCIFImage& img) {
 }
 
 
+// ── legacyPixelsToRGBA / legacyCIFToPNG ───────────────────────────────────
+
+std::vector<uint8_t> legacyPixelsToRGBA(const uint8_t* pixels,
+                                         uint16_t w, uint16_t h,
+                                         PixelFormat fmt) {
+    return legacyPixelsToRGBAImpl(pixels, w, h, fmt);
+}
+
+std::vector<uint8_t> legacyCIFToPNG(const LegacyCIFImage& img) {
+    if (!img.decompressed || img.pixelData.empty() || img.width == 0 || img.height == 0)
+        return {};
+
+    auto rgba = legacyPixelsToRGBAImpl(img.pixelData.data(), img.width, img.height, img.pixels);
+
+    std::vector<uint8_t> out;
+    auto sink = [](void* context, void* data, int size) {
+        auto* dst = static_cast<std::vector<uint8_t>*>(context);
+        const auto* bytes = static_cast<const uint8_t*>(data);
+        dst->insert(dst->end(), bytes, bytes + size);
+    };
+    const int ok = stbi_write_png_to_func(
+        sink, &out, img.width, img.height, /*comp*/ 4, rgba.data(), /*stride*/ img.width * 4);
+    if (!ok) return {};
+    return out;
+}
+
+
 // ── entryToTGA (CIFTREE.DAT entries — already raw pixels) ─────────────────
 
 std::vector<uint8_t> entryToTGA(const LegacyEntry& entry) {
@@ -507,6 +574,32 @@ std::vector<uint8_t> entryToTGA(const LegacyEntry& entry) {
     if (entry.data.size() < expectedBytes) return {};
 
     return buildTGA(entry.data.data(), entry.width, entry.height, entry.pixels);
+}
+
+
+// ── entryToPNG ─────────────────────────────────────────────────────────────
+
+std::vector<uint8_t> entryToPNG(const LegacyEntry& entry) {
+    if (entry.ftype != 0x02 || entry.pixels == PixelFormat::None) return {};
+    if (entry.width == 0 || entry.height == 0 || entry.data.empty()) return {};
+
+    const size_t bytesPerPx = (entry.pixels == PixelFormat::RGB555) ? 2 : 3;
+    const size_t expectedBytes =
+        static_cast<size_t>(entry.width) * entry.height * bytesPerPx;
+    if (entry.data.size() < expectedBytes) return {};
+
+    auto rgba = legacyPixelsToRGBAImpl(entry.data.data(), entry.width, entry.height, entry.pixels);
+
+    std::vector<uint8_t> out;
+    auto sink = [](void* context, void* data, int size) {
+        auto* dst = static_cast<std::vector<uint8_t>*>(context);
+        const auto* bytes = static_cast<const uint8_t*>(data);
+        dst->insert(dst->end(), bytes, bytes + size);
+    };
+    const int ok = stbi_write_png_to_func(
+        sink, &out, entry.width, entry.height, /*comp*/ 4, rgba.data(), /*stride*/ entry.width * 4);
+    if (!ok) return {};
+    return out;
 }
 
 

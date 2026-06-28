@@ -82,6 +82,11 @@ struct WriteOptions {
 LegacyCIFImage readLegacyCIF(const std::filesystem::path& cifPath);
 LegacyCIFImage readLegacyCIFFromBytes(const std::vector<uint8_t>& cifBytes);
 
+/// True if the buffer starts with the legacy ("CIF FILE WayneSikes\0") magic,
+/// as opposed to the modern ("CIF FILE HerInteractive") CIF container magic.
+/// Used by the bridge layer to dispatch decode requests transparently.
+bool isLegacyCIFBytes(const std::vector<uint8_t>& data);
+
 // ── Encode & write standalone legacy CIF ─────────────────────────────────
 
 /// Encode an image file (PNG/JPG/TGA/BMP/…) into a CIF byte buffer.
@@ -115,6 +120,22 @@ std::vector<uint8_t> loadImageAsCIFPixels(
 
 std::vector<uint8_t> legacyCIFToTGA(const LegacyCIFImage& img);
 std::vector<uint8_t> entryToTGA(const LegacyEntry& entry);
+
+/// Encode a CIFTREE.DAT image entry (already raw decoded pixels) straight
+/// to in-memory PNG bytes. Returns an empty vector on unrecognised/invalid
+/// entries (non-image ftype, zero dimensions, undersized data).
+std::vector<uint8_t> entryToPNG(const LegacyEntry& entry);
+
+// ── PNG conversion (for bridge/preview use) ───────────────────────────────
+
+/// Decoded legacy pixels (RGB555 LE or RGB888) → RGBA8, alpha forced to 255.
+std::vector<uint8_t> legacyPixelsToRGBA(const uint8_t* pixels,
+                                         uint16_t w, uint16_t h,
+                                         PixelFormat fmt);
+
+/// Encode a decoded legacy CIF image straight to in-memory PNG bytes.
+/// Returns an empty vector if the image wasn't successfully decompressed.
+std::vector<uint8_t> legacyCIFToPNG(const LegacyCIFImage& img);
 
 // ── Batch helpers ─────────────────────────────────────────────────────────
 

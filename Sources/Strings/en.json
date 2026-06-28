@@ -1,7 +1,8 @@
 {
   "category_cif":     "CIF",
   "category_ciftree": "Ciftree",
-  "category_his":     "HIS",
+  "category_his":     "Sound",
+  "category_video":   "Video",
 
   "menu_check_updates":  "Check for Updates…",
   "update_title":        "Update Available",

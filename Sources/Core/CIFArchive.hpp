@@ -82,6 +82,17 @@ CIFHeader readHeaderFromBytes(const std::vector<uint8_t>& cifBytes);
 /// Strip the CIF header from in-memory bytes and return the payload body.
 std::vector<uint8_t> decodeFromBytes(const std::vector<uint8_t>& cifBytes);
 
+// -- Unified decoding (modern + legacy) --------------------------------------
+//
+//  Transparently dispatches between the modern "CIF FILE HerInteractive"
+//  container and standalone legacy ("CIF FILE WayneSikes") image files.
+//  Legacy images are decoded and re-encoded as PNG, so callers can treat
+//  the result exactly like a modern FileType::PNG body — no format probing
+//  needed at the bridge/UI layer.
+
+CIFHeader readHeaderAny(const std::filesystem::path& cifPath);
+std::vector<uint8_t> decodeAny(const std::filesystem::path& cifPath);
+
 // -- Utilities ---------------------------------------------------------------
 
 bool isCompiledLua(const std::vector<uint8_t>& data);

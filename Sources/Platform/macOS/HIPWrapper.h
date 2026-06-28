@@ -17,6 +17,14 @@ NS_ASSUME_NONNULL_BEGIN
 @interface CiftreeFileEntry : NSObject
 @property (nonatomic, copy)   NSString *name;
 @property (nonatomic, strong) NSData   *cifData;
+/// YES for entries unpacked from a legacy (pre-Trail of the Twister) archive.
+/// cifData already holds the FINAL content (PNG bytes for images, raw bytes
+/// otherwise) — write it directly using fileExtension, do NOT run it back
+/// through the CIF decoder.
+@property (nonatomic) BOOL isPreDecoded;
+/// Extension to use when writing cifData to disk. "cif" for modern entries
+/// (the default); "png" or "bin" for pre-decoded legacy entries.
+@property (nonatomic, copy) NSString *fileExtension;
 @end
 
 /// Options used when packing a folder into a Ciftree .dat archive.
@@ -79,10 +87,51 @@ NS_ASSUME_NONNULL_BEGIN
 + (nullable NSArray<CiftreeFileEntry *> *)unpackCiftreeAtPath:(NSString *)path
                                                         error:(NSError **)error;
 
+/// Unpacks either a modern or a legacy (pre-Trail of the Twister) Ciftree
+/// archive, auto-detected from the file's magic bytes. Modern entries come
+/// back exactly as from unpackCiftreeAtPath:error: (isPreDecoded = NO,
+/// fileExtension = "cif"). Legacy image entries are pre-converted to PNG;
+/// legacy non-image entries are returned as raw bytes (isPreDecoded = YES,
+/// fileExtension = "png" or "bin").
++ (nullable NSArray<CiftreeFileEntry *> *)unpackCiftreeAnyAtPath:(NSString *)path
+                                                           error:(NSError **)error;
+
 + (BOOL)unpackCiftreeAtPath:(NSString *)datPath
               toFolderPath:(NSString *)outPath
           extractContents:(BOOL)extractContents
                     error:(NSError **)error;
+
+// ── Legacy Ciftree round-trip (edit + repack) ─────────────────────────────
+//
+//  Unlike unpackCiftreeAnyAtPath:error: (which pre-converts legacy images
+//  to PNG for quick viewing, with no way back), this pair preserves enough
+//  metadata to losslessly rebuild the original archive after editing the
+//  extracted assets.
+
+/// True if the file at path is a legacy (pre-Trail of the Twister) Ciftree
+/// archive, as opposed to a modern "CIF FILE HerInteractive" container.
++ (BOOL)isLegacyCiftreeAtPath:(NSString *)path;
+
+/// True if folderPath was produced by unpackLegacyCiftreeAtPath:toFolderPath:error:
+/// (i.e. contains a _meta/version.txt) and can be fed back into
+/// packLegacyCiftreeAtPath:toPath:error:.
++ (BOOL)isLegacyUnpackFolderAtPath:(NSString *)folderPath;
+
+/// Unpacks a legacy CIFTREE.DAT to outPath: images as editable .png,
+/// everything else as .bin, plus a _meta/ folder needed to repack later.
++ (BOOL)unpackLegacyCiftreeAtPath:(NSString *)datPath
+                      toFolderPath:(NSString *)outPath
+                             error:(NSError **)error;
+
+/// Repacks a folder produced by unpackLegacyCiftreeAtPath:toFolderPath:error:
+/// back into a CIFTREE.DAT at outPath. Each entry looks for a replacement
+/// file in this priority order: .png/.jpg/.jpeg/.tga/.bmp/.gif (converted
+/// to the entry's original pixel format and dimensions), then the raw
+/// .rgb555/.rgb888 dump, then .bin — falling back to the original bytes
+/// unchanged if nothing was edited.
++ (BOOL)packLegacyCiftreeAtPath:(NSString *)folderPath
+                          toPath:(NSString *)outPath
+                           error:(NSError **)error;
 
 // ── XSheet JSON ─────────────────────────────────────────────────────────
 

@@ -9,10 +9,19 @@ import AVFoundation
 // MARK: - App state
 
 enum AppCategory: String, CaseIterable, Identifiable {
-    case cif      = "CIF"
-    case ciftree  = "Ciftree"
-    case his      = "HIS"
+    case cif
+    case ciftree
+    case his
+    
     var id: Self { self }
+    
+    var localizedTitle: String {
+        switch self {
+        case .cif:     return S.get("category_cif")
+        case .ciftree: return S.get("category_ciftree")
+        case .his:     return S.get("category_his")
+        }
+    }
 }
 
 enum AppDirection: String, Identifiable {
@@ -208,6 +217,9 @@ final class AppViewModel: ObservableObject {
         guard url.hasDirectoryPath else {
             return [AppViewModel.fail(url.lastPathComponent, S.get("error_expected_folder"))]
         }
+        if HIPWrapper.isLegacyUnpackFolder(atPath: url.path) {
+            return await packLegacyCiftreeAsync(url)
+        }
         let onProgress: @Sendable (Int, Int) -> Void = { [weak self] cur, tot in
             Task { @MainActor [weak self] in self?.progress = (current: cur, total: tot) }
         }
@@ -239,6 +251,27 @@ final class AppViewModel: ObservableObject {
         cancelWorkTask = nil
         currentOutputURL = nil
         return packResult + warnings
+    }
+
+    // Repack a folder produced by the legacy unpack path (has _meta/version.txt) —
+    // bypasses enumerateAndEncode/packAndWrite entirely, since legacy archives use
+    // a different on-disk layout (.png/.bin + raw entry-table blobs, not .cif files).
+    private func packLegacyCiftreeAsync(_ url: URL) async -> [ConversionResult] {
+        let panel = NSSavePanel()
+        panel.nameFieldStringValue = url.deletingPathExtension().lastPathComponent + ".dat"
+        panel.directoryURL         = url.deletingLastPathComponent()
+        guard panel.runModal() == .OK, let dest = panel.url else {
+            return [AppViewModel.fail(url.lastPathComponent, "Save cancelled")]
+        }
+        currentOutputURL = dest
+        let writeTask = Task.detached(priority: .userInitiated) {
+            AppViewModel.packLegacyWork(url, dest: dest)
+        }
+        cancelWorkTask = { writeTask.cancel() }
+        let result = await writeTask.value
+        cancelWorkTask = nil
+        currentOutputURL = nil
+        return result
     }
 
     // Unpack: check write access on main, show NSOpenPanel if denied, do work on background
@@ -481,19 +514,51 @@ final class AppViewModel: ObservableObject {
         } catch { return [fail(sourceName, error.localizedDescription)] }
     }
 
+    nonisolated static func packLegacyWork(_ folderURL: URL, dest: URL) -> [ConversionResult] {
+        do {
+            try HIPWrapper.packLegacyCiftree(atPath: folderURL.path, toPath: dest.path)
+            let size = (try? FileManager.default.attributesOfItem(atPath: dest.path)[.size] as? Int) ?? nil
+            return [ConversionResult(icon: "archivebox.fill", tint: .blue,
+                                     title: dest.lastPathComponent,
+                                     detail: sizeStr(size ?? 0),
+                                     revealURL: dest)]
+        } catch { return [fail(folderURL.lastPathComponent, error.localizedDescription)] }
+    }
+
     // ── Ciftree unpack ───────────────────────────────────────────────────
 
     nonisolated static func unpackWork(_ url: URL, to outDir: URL,
                                         extractContents: Bool, decompileLua: Bool,
                                         onProgress: (@Sendable (Int, Int) -> Void)? = nil) -> [ConversionResult] {
+        if HIPWrapper.isLegacyCiftree(atPath: url.path) {
+            do {
+                try FileManager.default.createDirectory(at: outDir, withIntermediateDirectories: true)
+                try HIPWrapper.unpackLegacyCiftree(atPath: url.path, toFolderPath: outDir.path)
+                let count = (try? FileManager.default.contentsOfDirectory(atPath: outDir.path).count) ?? 1
+                return [ok(outDir.lastPathComponent,
+                           "→ \(max(count - 1, 0)) file(s) · editable .png + metadata for repacking")]
+            } catch { return [fail(url.lastPathComponent, error.localizedDescription)] }
+        }
         do {
-            let entries = try HIPWrapper.unpackCiftree(atPath: url.path)
+            let entries = try HIPWrapper.unpackCiftreeAny(atPath: url.path)
             try FileManager.default.createDirectory(at: outDir, withIntermediateDirectories: true)
             var rows: [ConversionResult] = []
             var failedDecompile: [String] = []
             for (i, entry) in entries.enumerated() {
                 guard !Task.isCancelled else { break }
                 onProgress?(i + 1, entries.count)
+
+                if entry.isPreDecoded {
+                    // Legacy archive entry — already in final form (PNG bytes for
+                    // images, raw bytes otherwise). Nothing left to decode.
+                    let ext = entry.fileExtension
+                    let outURL = outDir.appendingPathComponent(entry.name + "." + ext)
+                    try entry.cifData.write(to: outURL)
+                    rows.append(ok(entry.name + "." + ext,
+                                   "→ ." + ext + "  " + sizeStr(entry.cifData.count)))
+                    continue
+                }
+
                 let outURL = outDir.appendingPathComponent(entry.name + ".cif")
                 try entry.cifData.write(to: outURL)
                 if extractContents {
@@ -659,7 +724,7 @@ struct ContentView: View {
     private var toolbarContent: some ToolbarContent {
         ToolbarItem(placement: .principal) {
             Picker("", selection: $vm.category) {
-                ForEach(AppCategory.allCases) { c in Text(c.rawValue).tag(c) }
+                ForEach(AppCategory.allCases) { c in Text(c.localizedTitle).tag(c) }
             }
             .pickerStyle(.segmented)
             .disabled(vm.isProcessing)

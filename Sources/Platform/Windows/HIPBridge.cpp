@@ -54,7 +54,7 @@ extern "C" HIP_API void HIP_Free(void* ptr) {
 
 extern "C" HIP_API int HIP_ReadCIFHeader(const char* path, HIP_CIFHeader* out) {
     try {
-        auto h = CIF::readHeader(toPath(path));
+        auto h = CIF::readHeaderAny(toPath(path));
         out->type     = static_cast<uint32_t>(h.type);
         out->width    = h.width;
         out->height   = h.height;
@@ -105,7 +105,7 @@ extern "C" HIP_API int HIP_EncodeXSheet(const char* path,
 extern "C" HIP_API int HIP_DecodeCIF(const char* path,
                                       uint8_t** outData, uint32_t* outSize) {
     try {
-        auto v = CIF::decode(toPath(path));
+        auto v = CIF::decodeAny(toPath(path));
         *outData = copyToHeap(v, outSize);
         return *outData ? 0 : 1;
     } catch (const std::exception& e) { setError(e.what()); return 1; }

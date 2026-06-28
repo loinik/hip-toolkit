@@ -170,6 +170,9 @@
   <ItemGroup>
     <ClCompile Include="..\..\Core\CIFArchive.cpp" />
     <ClCompile Include="..\..\Core\CiftreeArchive.cpp" />
+    <ClCompile Include="..\..\Core\LegacyCiftreeArchive.cpp" />
+    <ClCompile Include="..\..\Core\LegacySceneArchive.cpp" />
+    <ClCompile Include="..\..\Core\LegacyCIFArchive.cpp" />
     <ClCompile Include="..\..\Core\HISArchive.cpp">
       <DisableSpecificWarnings>4244;4267;4505</DisableSpecificWarnings>
     </ClCompile>
@@ -187,14 +190,25 @@
     <ClCompile Include="..\..\..\Vendor\libshine\src\shine_compile.c">
       <DisableSpecificWarnings>4244;4245;4267;4305;4701;4706</DisableSpecificWarnings>
     </ClCompile>
+    <ClCompile Include="..\..\..\Vendor\stb_image_impl.c">
+      <DisableSpecificWarnings>4244;4245;4267;4305;4456;4457;4701</DisableSpecificWarnings>
+    </ClCompile>
+    <ClCompile Include="..\..\..\Vendor\stb_image_write_impl.c">
+      <DisableSpecificWarnings>4244;4245;4267;4305;4456;4457;4701;4996</DisableSpecificWarnings>
+    </ClCompile>
   </ItemGroup>
 
   <ItemGroup>
     <ClInclude Include="..\..\Core\CIFArchive.hpp" />
     <ClInclude Include="..\..\Core\CiftreeArchive.hpp" />
+    <ClInclude Include="..\..\Core\LegacyCiftreeArchive.hpp" />
+    <ClInclude Include="..\..\Core\LegacySceneArchive.hpp" />
+    <ClInclude Include="..\..\Core\LegacyCIFArchive.hpp" />
     <ClInclude Include="..\..\Core\HISArchive.hpp" />
     <ClInclude Include="..\..\Core\XSheetArchive.hpp" />
     <ClInclude Include="..\..\..\Vendor\nlohmann_json.hpp" />
+    <ClInclude Include="..\..\..\Vendor\stb_image.h" />
+    <ClInclude Include="..\..\..\Vendor\stb_image_write.h" />
     <ClInclude Include="..\..\..\Vendor\lua\*.h" />
   </ItemGroup>
 

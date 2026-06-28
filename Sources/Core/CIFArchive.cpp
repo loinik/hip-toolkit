@@ -5,6 +5,7 @@
 //  Created by Mike Lucyšyn
 
 #include "CIFArchive.hpp"
+#include "LegacyCIFArchive.hpp"
 
 #include <algorithm>
 #include <array>
@@ -214,6 +215,37 @@ std::vector<uint8_t> decodeFromBytes(const std::vector<uint8_t>& data) {
     if (std::memcmp(data.data(), MAGIC.data(), MAGIC.size()) != 0)
         throw std::runtime_error("CIF: invalid magic");
     return std::vector<uint8_t>(data.begin() + HEADER_SIZE, data.end());
+}
+
+
+// -- Unified decoding (modern + legacy) --------------------------------------
+
+CIFHeader readHeaderAny(const std::filesystem::path& cifPath) {
+    auto data = readFile(cifPath);
+    if (Legacy::isLegacyCIFBytes(data)) {
+        auto img = Legacy::readLegacyCIFFromBytes(data);
+        CIFHeader h;
+        h.type     = FileType::PNG;
+        h.width    = img.width;
+        h.height   = img.height;
+        h.bodySize = img.compSize;
+        return h;
+    }
+    return readHeaderFromBytes(data);
+}
+
+std::vector<uint8_t> decodeAny(const std::filesystem::path& cifPath) {
+    auto data = readFile(cifPath);
+    if (Legacy::isLegacyCIFBytes(data)) {
+        auto img = Legacy::readLegacyCIFFromBytes(data);
+        if (!img.decompressed)
+            throw std::runtime_error("LegacyCIF: failed to decompress image data");
+        auto png = Legacy::legacyCIFToPNG(img);
+        if (png.empty())
+            throw std::runtime_error("LegacyCIF: PNG re-encode failed");
+        return png;
+    }
+    return decodeFromBytes(data);
 }
 
 } // namespace CIF

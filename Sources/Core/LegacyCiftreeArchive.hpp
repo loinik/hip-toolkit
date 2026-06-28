@@ -44,6 +44,13 @@ struct LegacyEntry {
 
 using ProgressFn = std::function<void(int, int)>;
 
+// ── Quick magic check ──────────────────────────────────────────────────────
+// True if the buffer starts with the legacy ("CIF TREE WayneSikes") magic,
+// as opposed to the modern ("CIF FILE HerInteractive") Ciftree container
+// magic. Non-throwing — used by the bridge layer to dispatch unpack
+// requests transparently, before any version-specific parsing is attempted.
+bool isLegacyCiftreeBytes(const std::vector<uint8_t>& data);
+
 // ── Version detection ─────────────────────────────────────────────────────
 // Infers the game version by examining the archive's internal structure.
 // Throws std::runtime_error if the file is not a recognisable legacy Ciftree.
@@ -69,10 +76,13 @@ std::vector<uint8_t> packLegacyCiftree(const std::vector<LegacyEntry>& entries,
 
 // ── High-level folder extraction ──────────────────────────────────────────
 // Saves each entry to outDir. Image entries (ftype 0x02) are written as
-// raw pixel files (.rgb555 / .rgb888) alongside a sidecar .meta JSON.
-// Non-image entries are saved as .bin. The original archive's header, hash
-// and entry-table blobs are saved to outDir/_meta/ so the archive can be
-// rebuilt later with packLegacyFromFolder().
+// .png — directly editable in any image tool, and re-read losslessly by
+// packLegacyFromFolder() (which converts it back to the entry's exact
+// original pixel format/dimensions via stb_image). Falls back to a raw
+// pixel dump (.rgb555 / .rgb888 + sidecar .meta JSON) only if PNG encoding
+// fails. Non-image entries are saved as .bin. The original archive's
+// header, hash and entry-table blobs are saved to outDir/_meta/ so the
+// archive can be rebuilt later with packLegacyFromFolder().
 void unpackLegacyToFolder(const std::filesystem::path& datPath,
                            GameVersion version,
                            const std::filesystem::path& outDir,
