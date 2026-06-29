@@ -239,6 +239,7 @@ final class AppViewModel: ObservableObject {
         let panel = NSSavePanel()
         panel.nameFieldStringValue = url.deletingPathExtension().lastPathComponent + ".dat"
         panel.directoryURL         = url.deletingLastPathComponent()
+        NSApp.activate(ignoringOtherApps: true)
         guard panel.runModal() == .OK, let dest = panel.url else {
             return [AppViewModel.fail(url.lastPathComponent, "Save cancelled")]
         }
@@ -260,6 +261,7 @@ final class AppViewModel: ObservableObject {
         let panel = NSSavePanel()
         panel.nameFieldStringValue = url.deletingPathExtension().lastPathComponent + ".dat"
         panel.directoryURL         = url.deletingLastPathComponent()
+        NSApp.activate(ignoringOtherApps: true)
         guard panel.runModal() == .OK, let dest = panel.url else {
             return [AppViewModel.fail(url.lastPathComponent, "Save cancelled")]
         }
@@ -288,6 +290,7 @@ final class AppViewModel: ObservableObject {
             panel.allowsMultipleSelection = false
             panel.prompt  = "Choose Output Folder"
             panel.message = "Can't write next to the archive. Choose where to extract files."
+            NSApp.activate(ignoringOtherApps: true)
             guard panel.runModal() == .OK, let dest = panel.url else {
                 return [AppViewModel.fail(url.lastPathComponent, "Export cancelled")]
             }
@@ -987,6 +990,7 @@ struct ContentView: View {
             UTType(filenameExtension: "jpg")    ?? .data,
             UTType(filenameExtension: "jpeg")   ?? .data,
         ]
+        NSApp.activate(ignoringOtherApps: true)
         if panel.runModal() == .OK {
             for url in panel.urls {
                 openWindow(id: "hip-toolkit.preview", value: url)
@@ -1026,6 +1030,7 @@ struct ContentView: View {
         case .hisDecode:
             panel.allowedContentTypes = [UTType(filenameExtension: "his") ?? .data]
         }
+        NSApp.activate(ignoringOtherApps: true)
         if panel.runModal() == .OK { vm.processURLs(panel.urls) }
     }
 
@@ -1135,8 +1140,8 @@ struct FilePreviewWindowView: View {
                     description: Text("No preview available for \(url.pathExtension.uppercased()) files."))
             }
         }
-        .navigationTitle(url.lastPathComponent)
-        .navigationSubtitle(url.deletingLastPathComponent().abbreviatingWithTildeInPath)
+        .navigationTitle(previewTitle)
+        .navigationSubtitle(previewSubtitle)
         .toolbar {
             ToolbarItem(placement: .primaryAction) {
                 Button { NSWorkspace.shared.activateFileViewerSelecting([url]) } label: {
@@ -1154,6 +1159,22 @@ struct FilePreviewWindowView: View {
         }
     }
 
+    // Archive-entry previews are written to a cache folder, which is a
+    // meaningless title-bar subtitle on its own — the ".source" sidecar
+    // (see DatPreviewView.openImagePreview) carries the *original
+    // archive's* path instead, so the window can show "which archive does
+    // this image actually live in" rather than "where's the temp copy".
+    private var sourceArchivePath: String? {
+        let sidecar = url.deletingLastPathComponent().appendingPathComponent(url.lastPathComponent + ".source")
+        return try? String(contentsOf: sidecar, encoding: .utf8)
+    }
+    private var previewTitle: String {
+        sourceArchivePath != nil ? url.deletingPathExtension().lastPathComponent : url.lastPathComponent
+    }
+    private var previewSubtitle: String {
+        sourceArchivePath ?? url.deletingLastPathComponent().abbreviatingWithTildeInPath
+    }
+
     private func openInspectPanel() {
         let panel = NSOpenPanel()
         panel.canChooseFiles = true; panel.canChooseDirectories = false
@@ -1169,6 +1190,7 @@ struct FilePreviewWindowView: View {
             UTType(filenameExtension: "jpg")    ?? .data,
             UTType(filenameExtension: "jpeg")   ?? .data,
         ]
+        NSApp.activate(ignoringOtherApps: true)
         if panel.runModal() == .OK {
             for u in panel.urls { openWindow(id: "hip-toolkit.preview", value: u) }
         }
@@ -1185,6 +1207,22 @@ private extension Data {
             rawBuffer.load(as: UInt32.self)
         }
         return UInt32(littleEndian: value)
+    }
+    func be32(at offset: Int) -> UInt32 {
+        guard offset + 4 <= count else { return 0 }
+        let range = offset..<(offset + 4)
+        let value = self[range].withUnsafeBytes { rawBuffer in
+            rawBuffer.load(as: UInt32.self)
+        }
+        return UInt32(bigEndian: value)
+    }
+    /// Width/height straight from a PNG's IHDR chunk — avoids decoding the
+    /// whole image just to know its dimensions for a list row.
+    var pngSize: (width: Int, height: Int)? {
+        guard count >= 24, self[0] == 0x89, self[1] == 0x50 else { return nil }  // \x89PNG
+        let w = be32(at: 16), h = be32(at: 20)
+        guard w > 0, h > 0 else { return nil }
+        return (Int(w), Int(h))
     }
 }
 
@@ -1311,6 +1349,7 @@ private struct CIFImageView: View {
         let panel = NSSavePanel()
         panel.nameFieldStringValue = sourceURL.deletingPathExtension().lastPathComponent + ".png"
         panel.allowedContentTypes  = [.png]
+        NSApp.activate(ignoringOtherApps: true)
         guard panel.runModal() == .OK, let dest = panel.url else { return }
         guard let cgImg = image.cgImage(forProposedRect: nil, context: nil, hints: nil) else { return }
         let rep = NSBitmapImageRep(cgImage: cgImg)
@@ -1354,6 +1393,7 @@ private struct CodeView: View {
                         let panel = NSSavePanel()
                         panel.nameFieldStringValue = name + ".lua"
                         panel.allowedContentTypes  = [UTType(filenameExtension: "lua") ?? .data]
+                        NSApp.activate(ignoringOtherApps: true)
                         if panel.runModal() == .OK, let dest = panel.url { try? data.write(to: dest) }
                     }
                     .buttonStyle(.glass).buttonBorderShape(.capsule).controlSize(.small)
@@ -1409,6 +1449,7 @@ private struct BytecodeView: View {
                                 let panel = NSSavePanel()
                                 panel.nameFieldStringValue = name + ".lua"
                                 panel.allowedContentTypes  = [UTType(filenameExtension: "lua") ?? .data]
+                                NSApp.activate(ignoringOtherApps: true)
                                 if panel.runModal() == .OK, let dest = panel.url { try? data.write(to: dest) }
                             }
                             .buttonStyle(.glass).buttonBorderShape(.capsule)
@@ -1567,6 +1608,7 @@ struct XSheetBodyView: View {
         let panel = NSSavePanel()
         panel.nameFieldStringValue = sourceURL.deletingPathExtension().lastPathComponent + ".xsheet"
         panel.allowedContentTypes  = [UTType(filenameExtension: "xsheet") ?? .data]
+        NSApp.activate(ignoringOtherApps: true)
         if panel.runModal() == .OK, let dest = panel.url { try? data.write(to: dest) }
     }
     private func exportJSON() {
@@ -1575,6 +1617,7 @@ struct XSheetBodyView: View {
         let panel = NSSavePanel()
         panel.nameFieldStringValue = sourceURL.deletingPathExtension().lastPathComponent + ".json"
         panel.allowedContentTypes  = [.json]
+        NSApp.activate(ignoringOtherApps: true)
         if panel.runModal() == .OK, let dest = panel.url { try? json.write(to: dest) }
     }
 }
@@ -1761,8 +1804,46 @@ private struct DatEntry: Identifiable {
     let id      = UUID()
     let name:    String
     let size:    Int
-    let cifType: UInt32  // 2 PNG, 3 Lua, 4 OVL, 6 XSheet, 0 unknown
+    let cifType: UInt32  // 2 PNG, 3 Lua, 4 OVL, 6 XSheet, 0 unknown/legacy
     let cifData: Data
+    var isLegacy:      Bool   = false   // true = already-decoded (legacy archive entry)
+    var fileExtension: String = "cif"   // "cif" for modern; "png"/"bin" for legacy
+    var imageSize: (width: Int, height: Int)? = nil   // nil for non-image entries
+    var isImage: Bool { imageSize != nil }
+}
+
+/// Small lazily-decoded thumbnail for an image entry's list row — falls
+/// back to a generic file icon for everything else, and decodes nothing
+/// until the row actually appears on screen (SwiftUI List is lazy).
+private struct EntryThumbnail: View {
+    let entry: DatEntry
+    @State private var thumb: NSImage?
+
+    var body: some View {
+        Group {
+            if let thumb {
+                Image(nsImage: thumb).resizable().aspectRatio(contentMode: .fit)
+            } else {
+                Image(systemName: iconName).foregroundStyle(.tint)
+            }
+        }
+        .frame(width: 24, height: 24)
+        .task {
+            guard entry.isImage, thumb == nil else { return }
+            let bytes = entry.isLegacy ? entry.cifData
+                : (entry.cifData.count > 48 ? entry.cifData.suffix(from: 48) : Data())
+            thumb = NSImage(data: bytes)
+        }
+    }
+
+    private var iconName: String {
+        if entry.isLegacy { return entry.fileExtension == "png" ? "photo.fill" : "doc.fill" }
+        switch entry.cifType {
+        case 6:    return "tablecells.fill"
+        case 2, 4: return "photo.fill"
+        default:   return "doc.fill"
+        }
+    }
 }
 
 struct DatPreviewView: View {
@@ -1770,6 +1851,8 @@ struct DatPreviewView: View {
     @State private var entries:      [DatEntry] = []
     @State private var isLoading     = true
     @State private var errorMessage: String?
+    @State private var selection:    Set<UUID> = []
+    @Environment(\.openWindow) private var openWindow
 
     var body: some View {
         Group {
@@ -1786,7 +1869,11 @@ struct DatPreviewView: View {
                         Label("\(entries.count) entries", systemImage: "archivebox")
                             .font(.caption).foregroundStyle(.secondary)
                         Spacer()
-                        Button("Extract…") { extractAll() }
+                        if !selection.isEmpty {
+                            Button("Extract \(selection.count) Selected…") { extract(entries.filter { selection.contains($0.id) }) }
+                                .buttonStyle(.glass).buttonBorderShape(.capsule).controlSize(.small)
+                        }
+                        Button("Extract All…") { extract(entries) }
                             .buttonStyle(.glass).buttonBorderShape(.capsule).controlSize(.small)
                         Text(ByteCountFormatter.string(
                             fromByteCount: Int64(entries.reduce(0) { $0 + $1.size }),
@@ -1795,27 +1882,50 @@ struct DatPreviewView: View {
                     }
                     .padding(.horizontal, 16).padding(.vertical, 8)
                     Divider()
-                    List(entries) { entry in
+                    List(entries, selection: $selection) { entry in
                         HStack(spacing: 12) {
-                            Image(systemName: iconForEntry(entry))
-                                .foregroundStyle(.tint).frame(width: 20)
-                            Text(entry.name + ".cif").font(.system(.body, design: .monospaced))
+                            EntryThumbnail(entry: entry)
+                            VStack(alignment: .leading, spacing: 1) {
+                                Text(entry.name + "." + entry.fileExtension).font(.system(.body, design: .monospaced))
+                                if let sz = entry.imageSize {
+                                    Text("\(sz.width) × \(sz.height) px")
+                                        .font(.caption2).foregroundStyle(.secondary)
+                                }
+                            }
                             Spacer()
+                            if entry.isImage {
+                                Button("Preview") { openImagePreview(entry) }
+                                    .buttonStyle(.glass).controlSize(.mini)
+                            }
                             Text(ByteCountFormatter.string(fromByteCount: Int64(entry.size),
                                                            countStyle: .file))
                                 .font(.caption).foregroundStyle(.secondary)
+                                .frame(width: 70, alignment: .trailing)
                         }
                         .padding(.vertical, 2)
+                        .contextMenu {
+                            Button("Extract…") { extract([entry]) }
+                            if entry.isImage { Button("Preview…") { openImagePreview(entry) } }
+                        }
                     }
                     .listStyle(.inset)
                 }
             }
         }
-        .frame(minWidth: 360, minHeight: 280)
+        .frame(minWidth: 420, minHeight: 280)
         .task { await loadDat() }
+        .onKeyPress(.escape) {
+            guard !selection.isEmpty else { return .ignored }
+            selection.removeAll()
+            return .handled
+        }
+        .onReceive(NotificationCenter.default.publisher(for: .hipDeselectAll)) { _ in
+            selection.removeAll()
+        }
     }
 
     private func iconForEntry(_ entry: DatEntry) -> String {
+        if entry.isLegacy { return entry.fileExtension == "png" ? "photo.fill" : "doc.fill" }
         switch entry.cifType {
         case 6:    return "tablecells.fill"
         case 2, 4: return "photo.fill"
@@ -1823,28 +1933,78 @@ struct DatPreviewView: View {
         }
     }
 
-    private func extractAll() {
+    /// PNG body ready for NSImage — already-final bytes for legacy entries,
+    /// or the modern CIF's body past its 48-byte header.
+    private func imageBytes(_ entry: DatEntry) -> Data {
+        entry.isLegacy ? entry.cifData : (entry.cifData.count > 48 ? entry.cifData.suffix(from: 48) : Data())
+    }
+
+    /// Caches/HIP Toolkit/Archive Previews/<archive name>/ — organized and
+    /// identifiable, rather than dumping flat hyphenated names into raw
+    /// system temp. Each entry also gets a ".source" sidecar with the
+    /// original archive's full path, so PlainImagePreviewView can show
+    /// "from <archive path>" under the entry's own name.
+    private func previewCacheDir() -> URL {
+        let base = FileManager.default.urls(for: .cachesDirectory, in: .userDomainMask).first
+            ?? FileManager.default.temporaryDirectory
+        let dir = base.appendingPathComponent("HIP Toolkit", isDirectory: true)
+            .appendingPathComponent("Archive Previews", isDirectory: true)
+            .appendingPathComponent(url.deletingPathExtension().lastPathComponent, isDirectory: true)
+        try? FileManager.default.createDirectory(at: dir, withIntermediateDirectories: true)
+        return dir
+    }
+
+    private func openImagePreview(_ entry: DatEntry) {
+        let dir = previewCacheDir()
+        let tmp = dir.appendingPathComponent(entry.name).appendingPathExtension("png")
+        guard (try? imageBytes(entry).write(to: tmp)) != nil else { return }
+        try? url.path.write(to: dir.appendingPathComponent(entry.name + ".png.source"),
+                            atomically: true, encoding: .utf8)
+        openWindow(id: "hip-toolkit.preview", value: tmp)
+    }
+
+    private func extract(_ items: [DatEntry]) {
         let panel = NSOpenPanel()
         panel.canChooseDirectories    = true
         panel.canChooseFiles          = false
         panel.allowsMultipleSelection = false
         panel.prompt                  = "Extract Here"
-        panel.message                 = "Choose the destination folder for the extracted .cif files"
+        panel.message                 = items.count == entries.count
+            ? "Choose the destination folder for the extracted files"
+            : "Choose the destination folder for the \(items.count) extracted file(s)"
+        NSApp.activate(ignoringOtherApps: true)
         guard panel.runModal() == .OK, let dest = panel.url else { return }
-        for entry in entries {
-            let outURL = dest.appendingPathComponent(entry.name + ".cif")
+        for entry in items {
+            let outURL = dest.appendingPathComponent(entry.name + "." + entry.fileExtension)
             try? entry.cifData.write(to: outURL)
         }
     }
 
     private func loadDat() async {
         do {
-            let raw = try HIPWrapper.unpackCiftree(atPath: url.path)
+            // unpackCiftreeAny() auto-detects modern vs legacy ("CIF TREE
+            // WayneSikes") archives — unpackCiftree() alone only understands
+            // the modern format and throws on a legacy one, which is why
+            // legacy .dat previews used to fail to open at all.
+            let raw = try HIPWrapper.unpackCiftreeAny(atPath: url.path)
             entries = raw.map { entry in
-                let data    = entry.cifData as Data
+                let data = entry.cifData as Data
+                if entry.isPreDecoded {
+                    // Legacy entry — already final-form PNG/raw bytes; peek the
+                    // PNG's own IHDR for dimensions rather than decoding it.
+                    let size = entry.fileExtension == "png" ? data.pngSize : nil
+                    return DatEntry(name: entry.name, size: data.count, cifType: 0, cifData: data,
+                                    isLegacy: true, fileExtension: entry.fileExtension, imageSize: size)
+                }
                 let cifType = data.count >= 32 ? data.le32(at: 28) : 0
-                return DatEntry(name: entry.name, size: data.count,
-                                cifType: cifType, cifData: data)
+                // Modern CIF header carries width/height directly for image
+                // types (2 = PNG, 4 = OVL) — no need to decode the PNG body.
+                let size: (width: Int, height: Int)? =
+                    (cifType == 2 || cifType == 4) && data.count >= 40
+                        ? (Int(data.le32(at: 32)), Int(data.le32(at: 36)))
+                        : nil
+                return DatEntry(name: entry.name, size: data.count, cifType: cifType, cifData: data,
+                                imageSize: size)
             }
         } catch { errorMessage = error.localizedDescription }
         isLoading = false
@@ -1884,18 +2044,66 @@ struct LuaPreviewView: View {
 struct PlainImagePreviewView: View {
     let url: URL
     @State private var image: NSImage?
+    @State private var containerSize: CGSize = .zero
+    @State private var zoom:        CGFloat = 1     // manual zoom level, once manualZoom is true
+    @State private var lastZoom:    CGFloat = 1
+    @State private var manualZoom = false           // false = auto "contain, capped at 100%"
+
+    private let minZoom: CGFloat = 0.05, maxZoom: CGFloat = 8
+
+    /// "object-fit: contain" scale, never exceeding 100% — this is what's
+    /// shown until the user explicitly zooms (pinch, Cmd+/-, or double-tap).
+    /// Once they do, resizing the window stops touching the zoom level at
+    /// all — it's fully manual from there.
+    private func fitScale(for image: NSImage) -> CGFloat {
+        guard containerSize.width > 0, containerSize.height > 0,
+              image.size.width > 0, image.size.height > 0 else { return 1 }
+        return min(1, min(containerSize.width / image.size.width,
+                           containerSize.height / image.size.height))
+    }
 
     var body: some View {
         Group {
             if let img = image {
+                let effectiveZoom = manualZoom ? zoom : fitScale(for: img)
                 VStack(spacing: 0) {
-                    Image(nsImage: img).resizable().aspectRatio(contentMode: .fit)
-                        .frame(maxWidth: .infinity, maxHeight: .infinity)
+                    ScrollView([.horizontal, .vertical], showsIndicators: false) {
+                        Image(nsImage: img).resizable()
+                            .frame(width: img.size.width * effectiveZoom,
+                                   height: img.size.height * effectiveZoom)
+                    }
+                    .frame(maxWidth: .infinity, maxHeight: .infinity)
+                    .onGeometryChange(for: CGSize.self, of: { $0.size }) { containerSize = $0 }
+                    .gesture(
+                        MagnifyGesture()
+                            .onChanged { value in
+                                beginManualZoomIfNeeded(from: img)
+                                zoom = min(max(lastZoom * value.magnification, minZoom), maxZoom)
+                            }
+                            .onEnded { _ in lastZoom = zoom }
+                    )
+                    .onTapGesture(count: 2) { resetToAuto() }
+                    .background {
+                        // Invisible buttons — Cmd+/Cmd-/Cmd+0 work anywhere
+                        // in the window without needing a visible toolbar.
+                        Group {
+                            Button("") { zoomBy(1.25, from: img) }.keyboardShortcut("=", modifiers: .command)
+                            Button("") { zoomBy(1.25, from: img) }.keyboardShortcut("+", modifiers: .command)
+                            Button("") { zoomBy(0.8, from: img) }.keyboardShortcut("-", modifiers: .command)
+                            Button("") { resetToAuto() }.keyboardShortcut("0", modifiers: .command)
+                        }
+                        .opacity(0)
+                    }
                     Divider()
-                    HStack {
-                        Label("\(Int(img.size.width)) × \(Int(img.size.height)) px", systemImage: "photo")
-                        Spacer()
-                        Text(url.lastPathComponent).foregroundStyle(.secondary)
+                    ZStack {
+                        Text("\(Int((effectiveZoom * 100).rounded()))%")
+                            .foregroundStyle(.secondary)
+                        HStack {
+                            Label("\(Int(img.size.width)) × \(Int(img.size.height)) px", systemImage: "photo")
+                            Spacer()
+                            Button("Export…") { exportImage() }
+                                .buttonStyle(.glass).buttonBorderShape(.capsule).controlSize(.small)
+                        }
                     }
                     .font(.caption).padding(.horizontal, 16).padding(.vertical, 8)
                 }
@@ -1903,6 +2111,36 @@ struct PlainImagePreviewView: View {
         }
         .frame(minWidth: 300, minHeight: 200)
         .task { image = NSImage(contentsOf: url) }
+    }
+
+    /// The first manual zoom action seeds `zoom`/`lastZoom` from whatever
+    /// the auto-fit scale currently is, so the zoom doesn't jump when
+    /// switching from auto to manual.
+    private func beginManualZoomIfNeeded(from img: NSImage) {
+        guard !manualZoom else { return }
+        manualZoom = true
+        lastZoom = fitScale(for: img)
+    }
+    private func zoomBy(_ factor: CGFloat, from img: NSImage) {
+        beginManualZoomIfNeeded(from: img)
+        zoom = min(max(zoom * factor, minZoom), maxZoom)
+        lastZoom = zoom
+    }
+    /// Cmd+0 / double-tap — hands control back to the automatic
+    /// "contain, capped at 100%" behaviour, rather than just locking at a
+    /// fixed 100%.
+    private func resetToAuto() {
+        withAnimation { manualZoom = false; zoom = 1; lastZoom = 1 }
+    }
+
+    private func exportImage() {
+        let panel = NSSavePanel()
+        panel.nameFieldStringValue = url.lastPathComponent
+        panel.allowedContentTypes  = [.png]
+        NSApp.activate(ignoringOtherApps: true)
+        guard panel.runModal() == .OK, let dest = panel.url else { return }
+        try? FileManager.default.removeItem(at: dest)
+        try? FileManager.default.copyItem(at: url, to: dest)
     }
 }
 
@@ -2033,6 +2271,7 @@ struct PreviewEmptyWindowView: View {
         let panel = NSOpenPanel()
         panel.canChooseFiles = true; panel.canChooseDirectories = false
         panel.allowsMultipleSelection = false
+        NSApp.activate(ignoringOtherApps: true)
         if panel.runModal() == .OK, let u = panel.urls.first { onOpen(u) }
     }
 }

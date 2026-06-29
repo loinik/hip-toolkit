@@ -14,6 +14,10 @@ extension Notification.Name {
     static let hipShowPreview = Notification.Name("hip.showPreview")
     /// Posted when "HIP Toolkit → Check for Updates…" fires.
     static let hipCheckUpdates = Notification.Name("hip.checkUpdates")
+    /// Posted when "Edit → Deselect All" fires — archive preview lists clear
+    /// their selection (Esc does the same thing; this is just the menu-
+    /// discoverable equivalent).
+    static let hipDeselectAll = Notification.Name("hip.deselectAll")
 }
 
 // MARK: - App Delegate (Cmd+Q interception)
@@ -69,6 +73,18 @@ struct hipApp: App {
                     NotificationCenter.default.post(name: .hipOpenFile, object: nil)
                 }
                 .keyboardShortcut("o", modifiers: .command)
+            }
+
+            // ── Edit menu ──────────────────────────────────────────────
+            // Add "Deselect All" — clears multi-selection in archive
+            // preview lists. Esc does the same; this is the discoverable
+            // menu equivalent.
+            CommandGroup(after: .pasteboard) {
+                Divider()
+                Button("Deselect All") {
+                    NotificationCenter.default.post(name: .hipDeselectAll, object: nil)
+                }
+                .keyboardShortcut("a", modifiers: [.command, .shift])
             }
 
             // ── Window menu ────────────────────────────────────────────

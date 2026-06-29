@@ -142,6 +142,46 @@ private func parseCiftree(_ data: Data) -> [CiftreeEntry]? {
     }
 }
 
+// MARK: - Legacy ("CIF TREE WayneSikes") Ciftree
+//
+// Pre-Trail-of-the-Twister archives use a completely different on-disk
+// layout from the modern format above (fixed-size entry table with a
+// separate-chaining hash block, not a trailing title index) — see
+// Sources/Core/LegacyCiftreeArchive.cpp for the full reverse-engineered
+// format. Only the N3to5 entry layout (94-byte entries) is confirmed
+// against a real archive; other legacy versions fall back to a generic
+// "Legacy Ciftree Archive" card with no file listing rather than risk
+// showing wrong field offsets.
+
+private let kLegacyCIFMagic: [UInt8] = Array("CIF TREE WayneSikes".utf8)
+
+private func parseLegacyCiftree(_ data: Data) -> [CiftreeEntry]? {
+    guard data.hasPrefix(kLegacyCIFMagic) else { return nil }
+    let headerSize = 0x20, hashSize = 0x800, entrySize = 0x5E
+    let tableStart = headerSize + hashSize
+    let numEntries = Int(data.le16(at: 0x1c))
+    guard numEntries > 0, tableStart + numEntries * entrySize <= data.count else { return [] }
+
+    var entries: [CiftreeEntry] = []
+    entries.reserveCapacity(numEntries)
+    for i in 0..<numEntries {
+        let base = tableStart + i * entrySize
+        let name = data.cString(at: base, maxLen: 32)
+        guard !name.isEmpty else { continue }
+        let ftype = data[base + 0x5B]
+        let depackedSz = Int(data.le32(at: base + 0x4F))
+        var label = "DATA"
+        if ftype == 0x02 {
+            let w = Int(data.le16(at: base + 0x2B)) + 1
+            let h = Int(data.le16(at: base + 0x2F)) + 1
+            let bpp = data[base + 0x49]
+            label = "Image  \(w)×\(h)  \(bpp == 0x18 ? "RGB888" : "RGB555")"
+        }
+        entries.append(CiftreeEntry(name: name, size: depackedSz, typeLabel: label))
+    }
+    return entries
+}
+
 // MARK: - PreviewViewController
 
 final class PreviewViewController: NSViewController, QLPreviewingController {
@@ -404,11 +444,33 @@ final class PreviewViewController: NSViewController, QLPreviewingController {
     // MARK: - Ciftree preview
 
     private func buildCiftreePreview(_ data: Data, url: URL) {
-        guard let entries = parseCiftree(data) else { buildError("Not a valid Ciftree archive"); return }
+        if let entries = parseCiftree(data) {
+            renderCiftreeEntries(entries, data: data, title: "Ciftree Archive")
+            return
+        }
+        if data.hasPrefix(kLegacyCIFMagic) {
+            let entries = parseLegacyCiftree(data) ?? []
+            if entries.isEmpty {
+                buildInfoCard(icon: "archivebox.fill", color: .systemTeal, lines: [
+                    .header("Legacy Ciftree Archive"),
+                    .row("Archive size", fmt(data.count)),
+                    .divider,
+                    .note("Pre-Trail-of-the-Twister archive format — file listing isn't " +
+                          "supported for this version yet. Open in HIP Toolkit to unpack."),
+                ])
+            } else {
+                renderCiftreeEntries(entries, data: data, title: "Legacy Ciftree Archive")
+            }
+            return
+        }
+        buildError("Not a valid Ciftree archive")
+    }
+
+    private func renderCiftreeEntries(_ entries: [CiftreeEntry], data: Data, title: String) {
         view.subviews.forEach { $0.removeFromSuperview() }
 
         let headerLines: [InfoLine] = [
-            .header("Ciftree Archive"),
+            .header(title),
             .row("Files", "\(entries.count)"),
             .row("Archive size", fmt(data.count)),
             .divider,
@@ -595,7 +657,7 @@ final class PreviewViewController: NSViewController, QLPreviewingController {
         c.wantsLayer = true
         if alt { c.layer?.backgroundColor = NSColor.alternatingContentBackgroundColors.last?.withAlphaComponent(0.3).cgColor }
         let iconName: String
-        if entry.typeLabel.hasPrefix("PNG") { iconName = "photo" }
+        if entry.typeLabel.hasPrefix("PNG") || entry.typeLabel.hasPrefix("Image") { iconName = "photo" }
         else if entry.typeLabel == "Lua"    { iconName = "doc.text" }
         else if entry.typeLabel == "XSheet" { iconName = "tablecells" }
         else                               { iconName = "doc" }
