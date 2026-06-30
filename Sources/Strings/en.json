@@ -157,5 +157,5 @@
   "lua_result_save_failed":      "Save failed: {0}",
 
   "encoding_picker_title":       "Select Text Encoding",
-  "encoding_picker_message":     "The encoding of "{0}" couldn't be determined automatically. Select the option where the preview looks correct."
+  "encoding_picker_message":     "The encoding of \"{0}\" couldn't be determined automatically. Select the option where the preview looks correct."
 }

@@ -59,6 +59,19 @@
 		EE6188022F82B9D100EB6D27 /* QuickLookThumbnailing.framework in Frameworks */ = {isa = PBXBuildFile; fileRef = EE6188012F82B9D100EB6D27 /* QuickLookThumbnailing.framework */; };
 		EE77C5662FEA85DB00965EC2 /* ContentView.swift in Sources */ = {isa = PBXBuildFile; fileRef = EE77C5622FEA85DB00965EC2 /* ContentView.swift */; };
 		EE77C5672FEA85DB00965EC2 /* hipApp.swift in Sources */ = {isa = PBXBuildFile; fileRef = EE77C5632FEA85DB00965EC2 /* hipApp.swift */; };
+		EE01A001DEADBEEF00000002 /* Models.swift in Sources */ = {isa = PBXBuildFile; fileRef = EE01A001DEADBEEF00000001 /* Models.swift */; };
+		EE01A002DEADBEEF00000002 /* AppViewModel.swift in Sources */ = {isa = PBXBuildFile; fileRef = EE01A002DEADBEEF00000001 /* AppViewModel.swift */; };
+		EE01A003DEADBEEF00000002 /* DataHelpers.swift in Sources */ = {isa = PBXBuildFile; fileRef = EE01A003DEADBEEF00000001 /* DataHelpers.swift */; };
+		EE01A004DEADBEEF00000002 /* WindowHooks.swift in Sources */ = {isa = PBXBuildFile; fileRef = EE01A004DEADBEEF00000001 /* WindowHooks.swift */; };
+		EE01A005DEADBEEF00000002 /* PreviewWindow.swift in Sources */ = {isa = PBXBuildFile; fileRef = EE01A005DEADBEEF00000001 /* PreviewWindow.swift */; };
+		EE01A006DEADBEEF00000002 /* SharedPreviewViews.swift in Sources */ = {isa = PBXBuildFile; fileRef = EE01A006DEADBEEF00000001 /* SharedPreviewViews.swift */; };
+		EE01A007DEADBEEF00000002 /* CIFPreviewView.swift in Sources */ = {isa = PBXBuildFile; fileRef = EE01A007DEADBEEF00000001 /* CIFPreviewView.swift */; };
+		EE01A008DEADBEEF00000002 /* XSheetPreviewView.swift in Sources */ = {isa = PBXBuildFile; fileRef = EE01A008DEADBEEF00000001 /* XSheetPreviewView.swift */; };
+		EE01A009DEADBEEF00000002 /* HISPreviewView.swift in Sources */ = {isa = PBXBuildFile; fileRef = EE01A009DEADBEEF00000001 /* HISPreviewView.swift */; };
+		EE01A00ADEADBEEF00000002 /* DatPreviewView.swift in Sources */ = {isa = PBXBuildFile; fileRef = EE01A00ADEADBEEF00000001 /* DatPreviewView.swift */; };
+		EE01A00BDEADBEEF00000002 /* LuaPreviewView.swift in Sources */ = {isa = PBXBuildFile; fileRef = EE01A00BDEADBEEF00000001 /* LuaPreviewView.swift */; };
+		EE01A00CDEADBEEF00000002 /* PlainImagePreviewView.swift in Sources */ = {isa = PBXBuildFile; fileRef = EE01A00CDEADBEEF00000001 /* PlainImagePreviewView.swift */; };
+		EE01A00DDEADBEEF00000002 /* OGGPreviewView.swift in Sources */ = {isa = PBXBuildFile; fileRef = EE01A00DDEADBEEF00000001 /* OGGPreviewView.swift */; };
 		EE77C5682FEA85DB00965EC2 /* Info.plist in Resources */ = {isa = PBXBuildFile; fileRef = EE77C5642FEA85DB00965EC2 /* Info.plist */; };
 		EEA0BB01CC000001DEADBEEF /* Strings.swift in Sources */ = {isa = PBXBuildFile; fileRef = EEA0BB02CC000001DEADBEEF /* Strings.swift */; };
 		EEA0BB03CC000001DEADBEEF /* en.json in Resources */ = {isa = PBXBuildFile; fileRef = EEA0BB04CC000001DEADBEEF /* en.json */; };
@@ -178,6 +191,19 @@
 		EE6F8A272F7A4C38005E4E41 /* HIP Toolkit.app */ = {isa = PBXFileReference; explicitFileType = wrapper.application; includeInIndex = 0; path = "HIP Toolkit.app"; sourceTree = BUILT_PRODUCTS_DIR; };
 		EE77C5622FEA85DB00965EC2 /* ContentView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ContentView.swift; sourceTree = "<group>"; };
 		EE77C5632FEA85DB00965EC2 /* hipApp.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = hipApp.swift; sourceTree = "<group>"; };
+		EE01A001DEADBEEF00000001 /* Models.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Models.swift; sourceTree = "<group>"; };
+		EE01A002DEADBEEF00000001 /* AppViewModel.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AppViewModel.swift; sourceTree = "<group>"; };
+		EE01A003DEADBEEF00000001 /* DataHelpers.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = DataHelpers.swift; sourceTree = "<group>"; };
+		EE01A004DEADBEEF00000001 /* WindowHooks.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = WindowHooks.swift; sourceTree = "<group>"; };
+		EE01A005DEADBEEF00000001 /* PreviewWindow.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = PreviewWindow.swift; sourceTree = "<group>"; };
+		EE01A006DEADBEEF00000001 /* SharedPreviewViews.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SharedPreviewViews.swift; sourceTree = "<group>"; };
+		EE01A007DEADBEEF00000001 /* CIFPreviewView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = CIFPreviewView.swift; sourceTree = "<group>"; };
+		EE01A008DEADBEEF00000001 /* XSheetPreviewView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = XSheetPreviewView.swift; sourceTree = "<group>"; };
+		EE01A009DEADBEEF00000001 /* HISPreviewView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = HISPreviewView.swift; sourceTree = "<group>"; };
+		EE01A00ADEADBEEF00000001 /* DatPreviewView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = DatPreviewView.swift; sourceTree = "<group>"; };
+		EE01A00BDEADBEEF00000001 /* LuaPreviewView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = LuaPreviewView.swift; sourceTree = "<group>"; };
+		EE01A00CDEADBEEF00000001 /* PlainImagePreviewView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = PlainImagePreviewView.swift; sourceTree = "<group>"; };
+		EE01A00DDEADBEEF00000001 /* OGGPreviewView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = OGGPreviewView.swift; sourceTree = "<group>"; };
 		EE77C5642FEA85DB00965EC2 /* Info.plist */ = {isa = PBXFileReference; lastKnownFileType = text.plist.xml; path = Info.plist; sourceTree = "<group>"; };
 		EEA0BB02CC000001DEADBEEF /* Strings.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Strings.swift; sourceTree = "<group>"; };
 		EEA0BB04CC000001DEADBEEF /* en.json */ = {isa = PBXFileReference; lastKnownFileType = text.json; name = en.json; path = Sources/Strings/en.json; sourceTree = SOURCE_ROOT; };
@@ -397,13 +423,50 @@
 		EE77C5652FEA85DB00965EC2 /* macOS */ = {
 			isa = PBXGroup;
 			children = (
-				EE77C5622FEA85DB00965EC2 /* ContentView.swift */,
-				EEA0BB02CC000001DEADBEEF /* Strings.swift */,
-				EE77C5632FEA85DB00965EC2 /* hipApp.swift */,
+				EE02A001DEADBEEF00000002 /* App */,
+				EE02A002DEADBEEF00000002 /* Converter */,
+				EE02A003DEADBEEF00000002 /* Preview */,
 				EE77C5642FEA85DB00965EC2 /* Info.plist */,
 				EEA0BB04CC000001DEADBEEF /* en.json */,
 			);
 			path = macOS;
+			sourceTree = "<group>";
+		};
+		EE02A001DEADBEEF00000002 /* App */ = {
+			isa = PBXGroup;
+			children = (
+				EE77C5632FEA85DB00965EC2 /* hipApp.swift */,
+				EEA0BB02CC000001DEADBEEF /* Strings.swift */,
+			);
+			path = App;
+			sourceTree = "<group>";
+		};
+		EE02A002DEADBEEF00000002 /* Converter */ = {
+			isa = PBXGroup;
+			children = (
+				EE77C5622FEA85DB00965EC2 /* ContentView.swift */,
+				EE01A001DEADBEEF00000001 /* Models.swift */,
+				EE01A002DEADBEEF00000001 /* AppViewModel.swift */,
+				EE01A003DEADBEEF00000001 /* DataHelpers.swift */,
+				EE01A004DEADBEEF00000001 /* WindowHooks.swift */,
+			);
+			path = Converter;
+			sourceTree = "<group>";
+		};
+		EE02A003DEADBEEF00000002 /* Preview */ = {
+			isa = PBXGroup;
+			children = (
+				EE01A005DEADBEEF00000001 /* PreviewWindow.swift */,
+				EE01A006DEADBEEF00000001 /* SharedPreviewViews.swift */,
+				EE01A007DEADBEEF00000001 /* CIFPreviewView.swift */,
+				EE01A008DEADBEEF00000001 /* XSheetPreviewView.swift */,
+				EE01A009DEADBEEF00000001 /* HISPreviewView.swift */,
+				EE01A00ADEADBEEF00000001 /* DatPreviewView.swift */,
+				EE01A00BDEADBEEF00000001 /* LuaPreviewView.swift */,
+				EE01A00CDEADBEEF00000001 /* PlainImagePreviewView.swift */,
+				EE01A00DDEADBEEF00000001 /* OGGPreviewView.swift */,
+			);
+			path = Preview;
 			sourceTree = "<group>";
 		};
 /* End PBXGroup section */
@@ -572,6 +635,19 @@
 				EE77C5662FEA85DB00965EC2 /* ContentView.swift in Sources */,
 				EEA0BB01CC000001DEADBEEF /* Strings.swift in Sources */,
 				EE77C5672FEA85DB00965EC2 /* hipApp.swift in Sources */,
+				EE01A001DEADBEEF00000002 /* Models.swift in Sources */,
+				EE01A002DEADBEEF00000002 /* AppViewModel.swift in Sources */,
+				EE01A003DEADBEEF00000002 /* DataHelpers.swift in Sources */,
+				EE01A004DEADBEEF00000002 /* WindowHooks.swift in Sources */,
+				EE01A005DEADBEEF00000002 /* PreviewWindow.swift in Sources */,
+				EE01A006DEADBEEF00000002 /* SharedPreviewViews.swift in Sources */,
+				EE01A007DEADBEEF00000002 /* CIFPreviewView.swift in Sources */,
+				EE01A008DEADBEEF00000002 /* XSheetPreviewView.swift in Sources */,
+				EE01A009DEADBEEF00000002 /* HISPreviewView.swift in Sources */,
+				EE01A00ADEADBEEF00000002 /* DatPreviewView.swift in Sources */,
+				EE01A00BDEADBEEF00000002 /* LuaPreviewView.swift in Sources */,
+				EE01A00CDEADBEEF00000002 /* PlainImagePreviewView.swift in Sources */,
+				EE01A00DDEADBEEF00000002 /* OGGPreviewView.swift in Sources */,
 				EE6187342F829A8100EB6D27 /* ltable.c in Sources */,
 				EE6187352F829A8100EB6D27 /* lstate.c in Sources */,
 			);

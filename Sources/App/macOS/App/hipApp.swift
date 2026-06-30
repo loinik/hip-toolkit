@@ -1,28 +1,44 @@
 //  hipApp.swift
-//  hip
-//  Created by Mike Lucyšyn on 3/30/26.
+//  hip — HeR Interactive asset converter + inspector
 
 import SwiftUI
 import AppKit
+import Combine
 
 // MARK: - Shared notification names
 
 extension Notification.Name {
-    /// Posted when "File → Open" or ⌘O fires from the menu bar.
-    static let hipOpenFile    = Notification.Name("hip.openFile")
-    /// Posted when "Window → Show Preview Window" fires.
-    static let hipShowPreview = Notification.Name("hip.showPreview")
-    /// Posted when "HIP Toolkit → Check for Updates…" fires.
-    static let hipCheckUpdates = Notification.Name("hip.checkUpdates")
-    /// Posted when "Edit → Deselect All" fires — archive preview lists clear
-    /// their selection (Esc does the same thing; this is just the menu-
-    /// discoverable equivalent).
-    static let hipDeselectAll = Notification.Name("hip.deselectAll")
+    static let hipOpenFile       = Notification.Name("hip.openFile")
+    static let hipShowPreview    = Notification.Name("hip.showPreview")
+    static let hipCheckUpdates   = Notification.Name("hip.checkUpdates")
+    static let hipDeselectAll    = Notification.Name("hip.deselectAll")
+    static let hipOpenURLInPreview = Notification.Name("hip.openURLInPreview")
 }
 
-// MARK: - App Delegate (Cmd+Q interception)
+// MARK: - Recent files model
+
+final class RecentFilesModel: ObservableObject {
+    static weak var shared: RecentFilesModel?
+
+    @Published private(set) var urls: [URL] = NSDocumentController.shared.recentDocumentURLs
+
+    init() { RecentFilesModel.shared = self }
+
+    func note(_ url: URL) {
+        NSDocumentController.shared.noteNewRecentDocumentURL(url)
+        urls = NSDocumentController.shared.recentDocumentURLs
+    }
+
+    func clear() {
+        NSDocumentController.shared.clearRecentDocuments(nil)
+        urls = []
+    }
+}
+
+// MARK: - App Delegate
 
 class AppDelegate: NSObject, NSApplicationDelegate {
+
     func applicationShouldTerminate(_ sender: NSApplication) -> NSApplication.TerminateReply {
         guard let vm = AppViewModel.shared, vm.isProcessing else { return .terminateNow }
         let alert = NSAlert()
@@ -38,6 +54,14 @@ class AppDelegate: NSObject, NSApplicationDelegate {
         }
         return .terminateCancel
     }
+
+    /// Handles Dock drops and OS-initiated opens.
+    func application(_ application: NSApplication, open urls: [URL]) {
+        for url in urls {
+            RecentFilesModel.shared?.note(url)
+            NotificationCenter.default.post(name: .hipOpenURLInPreview, object: url)
+        }
+    }
 }
 
 // MARK: - App
@@ -45,6 +69,7 @@ class AppDelegate: NSObject, NSApplicationDelegate {
 @main
 struct hipApp: App {
     @NSApplicationDelegateAdaptor(AppDelegate.self) var appDelegate
+    @StateObject private var recentFiles = RecentFilesModel()
 
     var body: some Scene {
 
@@ -56,7 +81,6 @@ struct hipApp: App {
         .commands {
 
             // ── App menu ───────────────────────────────────────────────
-            // Add "Check for Updates…" just below "About".
             CommandGroup(after: .appInfo) {
                 Button(S.get("menu_check_updates")) {
                     NotificationCenter.default.post(name: .hipCheckUpdates, object: nil)
@@ -64,21 +88,30 @@ struct hipApp: App {
             }
 
             // ── File menu ──────────────────────────────────────────────
-            // Remove the built-in "New Window" item entirely.
             CommandGroup(replacing: .newItem) { }
 
-            // Add "File → Open…" (same action as ⌘O in the toolbar).
             CommandGroup(after: .newItem) {
                 Button("Open…") {
                     NotificationCenter.default.post(name: .hipOpenFile, object: nil)
                 }
                 .keyboardShortcut("o", modifiers: .command)
+
+                Menu("Open Recent") {
+                    ForEach(recentFiles.urls, id: \.self) { url in
+                        Button(url.lastPathComponent) {
+                            recentFiles.note(url)
+                            NotificationCenter.default.post(name: .hipOpenURLInPreview, object: url)
+                        }
+                        .help(url.path)
+                    }
+                    if !recentFiles.urls.isEmpty { Divider() }
+                    Button("Clear Menu") { recentFiles.clear() }
+                        .disabled(recentFiles.urls.isEmpty)
+                }
+                .disabled(recentFiles.urls.isEmpty)
             }
 
             // ── Edit menu ──────────────────────────────────────────────
-            // Add "Deselect All" — clears multi-selection in archive
-            // preview lists. Esc does the same; this is the discoverable
-            // menu equivalent.
             CommandGroup(after: .pasteboard) {
                 Divider()
                 Button("Deselect All") {
@@ -88,7 +121,6 @@ struct hipApp: App {
             }
 
             // ── Window menu ────────────────────────────────────────────
-            // Append "Show Preview Window" after the standard window commands.
             CommandGroup(after: .windowArrangement) {
                 Divider()
                 Button("Show Preview Window") {
