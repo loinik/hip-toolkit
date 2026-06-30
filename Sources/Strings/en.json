@@ -99,8 +99,8 @@
   "error_xsheet_json":    "Not a valid XSheet JSON",
   "error_access_denied":  "Access denied — save cancelled",
   "error_unknown_mode":   "Unknown mode",
-  "his_format_ogg":          "OGG",
   "his_format_wav":          "WAV",
+  "his_format_ogg":          "OGG",
   "his_format_mp3":          "MP3",
   "his_output_format_label": "Output",
 
