@@ -91,12 +91,12 @@ struct hipApp: App {
             CommandGroup(replacing: .newItem) { }
 
             CommandGroup(after: .newItem) {
-                Button("Open…") {
+                Button(S.get("menu_open")) {
                     NotificationCenter.default.post(name: .hipOpenFile, object: nil)
                 }
                 .keyboardShortcut("o", modifiers: .command)
 
-                Menu("Open Recent") {
+                Menu(S.get("menu_open_recent")) {
                     ForEach(recentFiles.urls, id: \.self) { url in
                         Button(url.lastPathComponent) {
                             recentFiles.note(url)
@@ -105,7 +105,7 @@ struct hipApp: App {
                         .help(url.path)
                     }
                     if !recentFiles.urls.isEmpty { Divider() }
-                    Button("Clear Menu") { recentFiles.clear() }
+                    Button(S.get("menu_clear_recent")) { recentFiles.clear() }
                         .disabled(recentFiles.urls.isEmpty)
                 }
                 .disabled(recentFiles.urls.isEmpty)
@@ -114,7 +114,7 @@ struct hipApp: App {
             // ── Edit menu ──────────────────────────────────────────────
             CommandGroup(after: .pasteboard) {
                 Divider()
-                Button("Deselect All") {
+                Button(S.get("menu_deselect_all")) {
                     NotificationCenter.default.post(name: .hipDeselectAll, object: nil)
                 }
                 .keyboardShortcut("a", modifiers: [.command, .shift])
@@ -123,7 +123,7 @@ struct hipApp: App {
             // ── Window menu ────────────────────────────────────────────
             CommandGroup(after: .windowArrangement) {
                 Divider()
-                Button("Show Preview Window") {
+                Button(S.get("menu_show_preview")) {
                     NotificationCenter.default.post(name: .hipShowPreview, object: nil)
                 }
                 .keyboardShortcut("1", modifiers: [.command, .shift])

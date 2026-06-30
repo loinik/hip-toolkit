@@ -57,13 +57,13 @@ struct PlainImagePreviewView: View {
                         HStack {
                             Label("\(Int(img.size.width)) × \(Int(img.size.height)) px", systemImage: "photo")
                             Spacer()
-                            Button("Pack to CIF…") { packToCIF() }
+                            Button(S.get("preview_pack_to_cif")) { packToCIF() }
                                 .buttonStyle(.glass).buttonBorderShape(.capsule).controlSize(.small)
                         }
                     }
                     .font(.caption).padding(.horizontal, 16).padding(.vertical, 8)
                 }
-            } else { ProgressView("Loading…") }
+            } else { ProgressView(S.get("preview_loading")) }
         }
         .frame(minWidth: 300, minHeight: 200)
         .task { image = NSImage(contentsOf: url) }

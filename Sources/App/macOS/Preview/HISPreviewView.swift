@@ -109,7 +109,7 @@ struct HISPreviewView: View {
             VStack(spacing: 6) {
                 Text(url.deletingPathExtension().lastPathComponent).font(.title2.weight(.semibold))
                 if let bytes = ctrl.decodedBytes {
-                    Text("OGG Vorbis · \(ByteCountFormatter.string(fromByteCount: Int64(bytes), countStyle: .file))")
+                    Text(S.fmt("his_ogg_size_label", ByteCountFormatter.string(fromByteCount: Int64(bytes), countStyle: .file)))
                         .font(.subheadline).foregroundStyle(.secondary)
                 }
                 if let err = ctrl.errorMessage { Text(err).font(.caption).foregroundStyle(.red) }
@@ -136,12 +136,12 @@ struct HISPreviewView: View {
             .buttonStyle(.plain)
             .foregroundStyle(ctrl.canPlay ? Color.accentColor : .secondary)
             .disabled(!ctrl.canPlay)
-            .help(ctrl.canPlay ? "Play / Pause" : "Decoding audio…")
-            Menu("Export…") {
+            .help(ctrl.canPlay ? S.get("tooltip_play_pause") : S.get("preview_decoding_audio"))
+            Menu(S.get("preview_export")) {
                 let name = url.deletingPathExtension().lastPathComponent
-                Button("Export as OGG…") { ctrl.export(format: "ogg", hisURL: url, suggestedName: name) }
-                Button("Export as WAV…") { ctrl.export(format: "wav", hisURL: url, suggestedName: name) }
-                Button("Export as MP3…") { ctrl.export(format: "mp3", hisURL: url, suggestedName: name) }
+                Button(S.get("preview_export_ogg")) { ctrl.export(format: "ogg", hisURL: url, suggestedName: name) }
+                Button(S.get("preview_export_wav")) { ctrl.export(format: "wav", hisURL: url, suggestedName: name) }
+                Button(S.get("preview_export_mp3")) { ctrl.export(format: "mp3", hisURL: url, suggestedName: name) }
             }
             .menuStyle(.button)
             .buttonStyle(.glass)

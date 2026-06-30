@@ -28,7 +28,7 @@ struct OGGPreviewView: View {
             .buttonStyle(.plain)
             .foregroundStyle(player == nil ? Color.secondary : Color.accentColor)
             .disabled(player == nil)
-            .help(player == nil ? "Decoding audio…" : "Play / Pause")
+            .help(player == nil ? S.get("preview_decoding_audio") : S.get("tooltip_play_pause"))
             Spacer()
         }
         .frame(minWidth: 320, minHeight: 320)

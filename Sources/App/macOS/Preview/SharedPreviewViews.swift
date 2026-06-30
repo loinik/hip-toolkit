@@ -18,7 +18,7 @@ struct CodeView: View {
                 Label(badge, systemImage: icon).font(.caption).foregroundStyle(.secondary)
                 Spacer()
                 if let data = exportData, let name = exportName {
-                    Button("Export…") {
+                    Button(S.get("preview_export")) {
                         let panel = NSSavePanel()
                         panel.nameFieldStringValue = name + ".lua"
                         panel.allowedContentTypes  = [UTType(filenameExtension: "lua") ?? .data]
@@ -56,7 +56,7 @@ struct BytecodeView: View {
     var body: some View {
         Group {
             if let src = decompiled {
-                CodeView(text: src, badge: "Decompiled Lua", icon: "doc.text",
+                CodeView(text: src, badge: S.get("preview_decompiled_lua"), icon: "doc.text",
                          exportData: src.data(using: .utf8),
                          exportName: exportName)
             } else {
@@ -64,11 +64,11 @@ struct BytecodeView: View {
                     Spacer()
                     Image(systemName: "lock.doc.fill").font(.system(size: 52)).foregroundStyle(.secondary)
                     VStack(spacing: 4) {
-                        Text("Compiled Lua bytecode").font(.headline)
+                        Text(S.get("bytecode_title")).font(.headline)
                         Text(ByteCountFormatter.string(fromByteCount: Int64(bytes), countStyle: .file))
                             .font(.subheadline).foregroundStyle(.secondary)
                     }
-                    Text("Use the converter (CIF → File) with **Decompile Lua** enabled\nto extract readable source code.")
+                    Text(LocalizedStringKey(S.get("bytecode_hint")))
                         .font(.callout).foregroundStyle(.secondary).multilineTextAlignment(.center)
                     if let err = decompileError {
                         Text(err).font(.caption).foregroundStyle(.red).multilineTextAlignment(.center)
@@ -76,7 +76,7 @@ struct BytecodeView: View {
                     }
                     HStack(spacing: 12) {
                         if let data = exportData, let name = exportName {
-                            Button("Save Bytecode (.lua)…") {
+                            Button(S.get("bytecode_save")) {
                                 let panel = NSSavePanel()
                                 panel.nameFieldStringValue = name + ".lua"
                                 panel.allowedContentTypes  = [UTType(filenameExtension: "lua") ?? .data]
@@ -92,9 +92,9 @@ struct BytecodeView: View {
                                 HStack(spacing: 4) {
                                     if isDecompiling {
                                         ProgressView().scaleEffect(0.7).frame(width: 14, height: 14)
-                                        Text("Decompiling…")
+                                        Text(S.get("preview_decompiling"))
                                     } else {
-                                        Text("Decompile")
+                                        Text(S.get("lua_action_decompile"))
                                         Text("β").font(.caption).foregroundStyle(.secondary)
                                     }
                                 }
@@ -124,7 +124,7 @@ struct BytecodeView: View {
                 await MainActor.run {
                     isDecompiling = false
                     if let s = src as String?, !s.isEmpty { decompiled = s }
-                    else { decompileError = "Decompiler returned empty output" }
+                    else { decompileError = S.get("preview_decompile_empty_error") }
                 }
             } catch {
                 await MainActor.run {

@@ -24,7 +24,7 @@ struct CIFPreviewView: View {
         Group {
             if let err = errorMessage {
                 ContentUnavailableView(
-                    "Decode Error",
+                    S.get("preview_decode_error"),
                     systemImage: "exclamationmark.triangle",
                     description: Text(err))
             } else if let c = content {
@@ -32,7 +32,7 @@ struct CIFPreviewView: View {
                 case .image(let img, let w, let h, let ovl):
                     CIFImageView(image: img, width: w, height: h, isOverlay: ovl, sourceURL: url)
                 case .luaSource(let text, let data):
-                    CodeView(text: text, badge: "Lua source", icon: "doc.text",
+                    CodeView(text: text, badge: S.get("preview_lua_source"), icon: "doc.text",
                              exportData: data,
                              exportName: url.deletingPathExtension().lastPathComponent)
                 case .luaBytecode(let bytes, let data):
@@ -43,13 +43,13 @@ struct CIFPreviewView: View {
                     XSheetBodyView(data: data, sourceURL: url)
                 case .raw(let type, let size):
                     ContentUnavailableView(
-                        "Unknown CIF type \(type)",
+                        S.fmt("preview_unknown_cif_type", type),
                         systemImage: "doc.badge.questionmark",
                         description: Text(ByteCountFormatter.string(
                             fromByteCount: Int64(size), countStyle: .file)))
                 }
             } else {
-                ProgressView("Decoding…")
+                ProgressView(S.get("preview_decoding"))
             }
         }
         .frame(minWidth: 480, minHeight: 320)
@@ -112,12 +112,12 @@ private struct CIFImageView: View {
             Divider()
             HStack(spacing: 12) {
                 if isOverlay {
-                    Label("OVL overlay · type 4", systemImage: "square.on.square")
+                    Label(S.get("preview_ovl_label"), systemImage: "square.on.square")
                         .foregroundStyle(.orange)
                 }
                 Label("\(width) × \(height) px", systemImage: "photo")
                 Spacer()
-                Button("Export PNG…") { exportPNG() }
+                Button(S.get("preview_export_png")) { exportPNG() }
                     .buttonStyle(.glass).buttonBorderShape(.capsule).controlSize(.small)
                 Text(sourceURL.lastPathComponent).foregroundStyle(.secondary)
             }

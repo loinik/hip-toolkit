@@ -53,8 +53,8 @@ struct XSheetBodyView: View {
             if let p = parsed {
                 xsheetContent(p)
             } else {
-                ContentUnavailableView("Cannot parse XSheet", systemImage: "tablecells",
-                                       description: Text("Unrecognised XSHEET format."))
+                ContentUnavailableView(S.get("preview_cannot_parse_xsheet"), systemImage: "tablecells",
+                                       description: Text(S.get("preview_unrecognised_xsheet")))
             }
         }
         .task { parsed = parseXSheet(data) }
@@ -64,36 +64,36 @@ struct XSheetBodyView: View {
     private func xsheetContent(_ p: ParsedXSheet) -> some View {
         VStack(spacing: 0) {
             HStack {
-                Label("XSheet Sprite Data", systemImage: "tablecells")
+                Label(S.get("xsheet_title"), systemImage: "tablecells")
                     .font(.caption).foregroundStyle(.secondary)
                 Spacer()
-                Button("Export .xsheet…") { exportRaw() }
+                Button(S.get("xsheet_export_bin")) { exportRaw() }
                     .buttonStyle(.glass).buttonBorderShape(.capsule).controlSize(.small)
-                Button("Export JSON…") { exportJSON() }
+                Button(S.get("xsheet_export_json")) { exportJSON() }
                     .buttonStyle(.glass).buttonBorderShape(.capsule).controlSize(.small)
                 Text(sourceURL.lastPathComponent).font(.caption).foregroundStyle(.tertiary)
             }
             .padding(.horizontal, 16).padding(.vertical, 8)
             Divider()
             List {
-                Section("Source Image") {
-                    LabeledContent("CNV name") {
-                        Text(p.cnvName.isEmpty ? "(unknown)" : p.cnvName)
+                Section(S.get("xsheet_source_section")) {
+                    LabeledContent(S.get("xsheet_cnv_name")) {
+                        Text(p.cnvName.isEmpty ? S.get("xsheet_cnv_unknown") : p.cnvName)
                             .font(.system(.body, design: .monospaced))
                     }
                 }
                 if p.x2 > p.x1 && p.y2 > p.y1 {
-                    Section("Bounding Rect") {
-                        LabeledContent("Origin (x1, y1)") { Text("\(p.x1), \(p.y1)") }
-                        LabeledContent("Extent (x2, y2)") { Text("\(p.x2), \(p.y2)") }
-                        LabeledContent("Sprite size")     { Text("\(p.x2 - p.x1) × \(p.y2 - p.y1) px") }
+                    Section(S.get("xsheet_bounds_section")) {
+                        LabeledContent(S.get("xsheet_origin")) { Text("\(p.x1), \(p.y1)") }
+                        LabeledContent(S.get("xsheet_extent")) { Text("\(p.x2), \(p.y2)") }
+                        LabeledContent(S.get("xsheet_sprite_size")) { Text("\(p.x2 - p.x1) × \(p.y2 - p.y1) px") }
                     }
                 }
-                Section("Animation") {
-                    LabeledContent("Frame count") { Text("\(p.frameCount)") }
+                Section(S.get("xsheet_animation")) {
+                    LabeledContent(S.get("xsheet_frame_count")) { Text("\(p.frameCount)") }
                 }
-                Section("Raw") {
-                    LabeledContent("Body size") {
+                Section(S.get("xsheet_raw_section")) {
+                    LabeledContent(S.get("xsheet_body_size")) {
                         Text(ByteCountFormatter.string(fromByteCount: Int64(data.count), countStyle: .file))
                     }
                 }
@@ -132,9 +132,9 @@ struct XSheetPreviewView: View {
                 XSheetBodyView(data: data, sourceURL: url)
             } else {
                 ContentUnavailableView(
-                    "Invalid XSheet",
+                    S.get("preview_invalid_xsheet"),
                     systemImage: "tablecells",
-                    description: Text("Not a valid XSHEET HerInteractive file."))
+                    description: Text(S.get("preview_invalid_xsheet_desc")))
             }
         }
         .frame(minWidth: 400, minHeight: 280)
@@ -156,7 +156,7 @@ struct JSONXSheetPreviewView: View {
 
     var body: some View {
         Group {
-            if !loaded { ProgressView("Parsing…") }
+            if !loaded { ProgressView(S.get("preview_parsing")) }
             else if let body = xsheetBody {
                 XSheetBodyView(data: body, sourceURL: url)
             } else if let text = rawText {
@@ -164,7 +164,7 @@ struct JSONXSheetPreviewView: View {
                          exportData: Data(text.utf8),
                          exportName: url.deletingPathExtension().lastPathComponent)
             } else {
-                ContentUnavailableView("Cannot read file", systemImage: "doc.badge.questionmark",
+                ContentUnavailableView(S.get("preview_cannot_read"), systemImage: "doc.badge.questionmark",
                                        description: Text(url.lastPathComponent))
             }
         }

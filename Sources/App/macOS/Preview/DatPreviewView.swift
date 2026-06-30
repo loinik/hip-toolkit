@@ -62,24 +62,24 @@ struct DatPreviewView: View {
 
     var body: some View {
         Group {
-            if isLoading { ProgressView("Reading archive…") }
+            if isLoading { ProgressView(S.get("preview_reading_archive")) }
             else if let err = errorMessage {
-                ContentUnavailableView("Read Error", systemImage: "exclamationmark.triangle",
+                ContentUnavailableView(S.get("preview_read_error"), systemImage: "exclamationmark.triangle",
                                        description: Text(err))
             } else if entries.isEmpty {
-                ContentUnavailableView("Empty Archive", systemImage: "archivebox",
-                                       description: Text("No entries found in this .dat file."))
+                ContentUnavailableView(S.get("preview_empty_archive"), systemImage: "archivebox",
+                                       description: Text(S.get("preview_empty_archive_msg")))
             } else {
                 VStack(spacing: 0) {
                     HStack {
-                        Label("\(entries.count) entries", systemImage: "archivebox")
+                        Label(S.fmt("preview_entry_count", entries.count), systemImage: "archivebox")
                             .font(.caption).foregroundStyle(.secondary)
                         Spacer()
                         if !selection.isEmpty {
-                            Button("Extract \(selection.count) Selected…") { extract(entries.filter { selection.contains($0.id) }) }
+                            Button(S.fmt("preview_extract_selected", selection.count)) { extract(entries.filter { selection.contains($0.id) }) }
                                 .buttonStyle(.glass).buttonBorderShape(.capsule).controlSize(.small)
                         }
-                        Button("Extract All…") { extract(entries) }
+                        Button(S.get("preview_extract_all")) { extract(entries) }
                             .buttonStyle(.glass).buttonBorderShape(.capsule).controlSize(.small)
                         Text(ByteCountFormatter.string(
                             fromByteCount: Int64(entries.reduce(0) { $0 + $1.size }),
@@ -100,7 +100,7 @@ struct DatPreviewView: View {
                             }
                             Spacer()
                             if entry.isImage {
-                                Button("Preview") { openImagePreview(entry) }
+                                Button(S.get("preview_entry_preview")) { openImagePreview(entry) }
                                     .buttonStyle(.glass).controlSize(.mini)
                             }
                             Text(ByteCountFormatter.string(fromByteCount: Int64(entry.size),
@@ -110,8 +110,8 @@ struct DatPreviewView: View {
                         }
                         .padding(.vertical, 2)
                         .contextMenu {
-                            Button("Extract…") { extract([entry]) }
-                            if entry.isImage { Button("Preview…") { openImagePreview(entry) } }
+                            Button(S.get("preview_extract")) { extract([entry]) }
+                            if entry.isImage { Button(S.get("preview_entry_preview") + "…") { openImagePreview(entry) } }
                         }
                     }
                     .listStyle(.inset)
@@ -159,10 +159,10 @@ struct DatPreviewView: View {
         panel.canChooseDirectories    = true
         panel.canChooseFiles          = false
         panel.allowsMultipleSelection = false
-        panel.prompt                  = "Extract Here"
+        panel.prompt                  = S.get("open_panel_extract_prompt")
         panel.message                 = items.count == entries.count
-            ? "Choose the destination folder for the extracted files"
-            : "Choose the destination folder for the \(items.count) extracted file(s)"
+            ? S.get("dat_extract_dest_all")
+            : S.fmt("dat_extract_dest_some", items.count)
         NSApp.activate(ignoringOtherApps: true)
         guard panel.runModal() == .OK, let dest = panel.url else { return }
         for entry in items {

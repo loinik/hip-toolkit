@@ -31,10 +31,10 @@ struct PreviewEmptyWindowView: View {
                 Image(systemName: "eye")
                     .font(.system(size: 44, weight: .light)).foregroundStyle(.secondary)
                     .symbolEffect(.bounce, value: isDragging)
-                Text("Drop a file to preview").font(.headline)
-                Text("CIF · HIS · DAT · Lua · XSheet · JSON · OGG · PNG")
+                Text(S.get("preview_drop_title")).font(.headline)
+                Text(S.get("preview_drop_formats"))
                     .font(.subheadline).foregroundStyle(.secondary)
-                Button("Choose File…") { openPanel() }
+                Button(S.get("preview_choose_file")) { openPanel() }
                     .buttonStyle(.glass).buttonBorderShape(.capsule).controlSize(.small).padding(.top, 2)
             }
         }
@@ -84,9 +84,9 @@ struct FilePreviewWindowView: View {
             case .json:   JSONXSheetPreviewView(url: url)
             default:
                 ContentUnavailableView(
-                    "Cannot Preview",
+                    S.get("preview_cannot_preview"),
                     systemImage: "questionmark.circle",
-                    description: Text("No preview available for \(url.pathExtension.uppercased()) files."))
+                    description: Text(S.fmt("preview_no_preview_desc", url.pathExtension.uppercased())))
             }
         }
         .navigationTitle(previewTitle)
@@ -94,15 +94,15 @@ struct FilePreviewWindowView: View {
         .toolbar {
             ToolbarItem(placement: .primaryAction) {
                 Button { NSWorkspace.shared.activateFileViewerSelecting([url]) } label: {
-                    Label("Reveal in Finder", systemImage: "finder")
+                    Label(S.get("preview_reveal_finder"), systemImage: "finder")
                 }
-                .help("Reveal in Finder")
+                .help(S.get("preview_reveal_finder"))
             }
             ToolbarItem(placement: .confirmationAction) {
                 Button(action: openInspectPanel) {
-                    Label("Open…", systemImage: "folder")
+                    Label(S.get("preview_open"), systemImage: "folder")
                 }
-                .help("Open another file for inspection (⌘O)")
+                .help(S.get("preview_open_help"))
                 .keyboardShortcut("o", modifiers: .command)
             }
         }
