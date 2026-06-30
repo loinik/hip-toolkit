@@ -52,15 +52,15 @@
   "drop_title_cif_decode":     "Drag .cif files",
   "drop_title_ciftree_pack":   "Drag a folder",
   "drop_title_ciftree_unpack": "Drag a Ciftree .dat archive",
-  "drop_title_his_encode":     "Drag OGG, WAV or MP3 files",
+  "drop_title_his_encode":     "Drag WAV, OGG or MP3 files",
   "drop_title_his_decode":     "Drag .his files",
 
   "drop_subtitle_cif_encode":     "PNG/JPEG → CIF image · Lua → CIF script · XSheet / JSON → CIF sprite",
   "drop_subtitle_cif_decode":     "CIF → PNG / .lua / .json — saved next to original",
   "drop_subtitle_ciftree_pack":   "All supported files in the folder are converted and packed into .dat",
   "drop_subtitle_ciftree_unpack": "Each embedded .cif is extracted to a folder next to the archive",
-  "drop_subtitle_his_encode":     "OGG / WAV / MP3 → HIS (HeR Interactive Sound)",
-  "drop_subtitle_his_decode":     "HIS → OGG / WAV / MP3 — saved next to original",
+  "drop_subtitle_his_encode":     "WAV / OGG / MP3 → HIS (HeR Interactive Sound)",
+  "drop_subtitle_his_decode":     "HIS → WAV / OGG / MP3 — saved next to original",
 
   "history_section":  "History",
   "history_clear":    "Clear",
@@ -91,7 +91,7 @@
   "tooltip_show_explorer":"Show in Explorer",
   "tooltip_play_pause":   "Play / Pause",
 
-  "error_expected_audio": "Expected .ogg, .wav, or .mp3",
+  "error_expected_audio": "Expected .wav, .ogg, or .mp3",
   "error_expected_his":   "Expected .his",
   "error_expected_cif":   "Expected .cif",
   "error_expected_folder":"Expected a folder",
