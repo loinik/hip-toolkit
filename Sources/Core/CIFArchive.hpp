@@ -93,6 +93,25 @@ std::vector<uint8_t> decodeFromBytes(const std::vector<uint8_t>& cifBytes);
 CIFHeader readHeaderAny(const std::filesystem::path& cifPath);
 std::vector<uint8_t> decodeAny(const std::filesystem::path& cifPath);
 
+// -- Lua text encoding (the engine is single-byte/ASCII, not UTF-8) ----------
+//
+//  luadec emits every byte >= 128 in a string literal as a decimal escape
+//  ("\251\252"), so Cyrillic/accented text comes out as unreadable codes.
+//  luaDecompiledToReadable() turns those numeric escapes (\ddd decimal and
+//  \xHH hex, value >= 128) back into their raw bytes, leaving real escapes
+//  (\n, \t, \", \\, low control bytes) intact — so the decompiled .lua keeps
+//  its ORIGINAL single-byte encoding (open it with the game's code page) and
+//  shows characters instead of codes. Byte-exact / round-trip-safe.
+std::string luaDecompiledToReadable(const std::string& src);
+
+//  Best-effort UTF-8 -> single-byte for re-packing. If the source a user
+//  edited got saved as UTF-8, the engine won't understand the multi-byte
+//  sequences; this maps each code point back to one byte: U+0080–U+00FF ->
+//  that byte (Latin-1 / Western accents like é, è), Cyrillic -> Windows-1251,
+//  unmappable -> '?'. Pure-ASCII or non-UTF-8 (already single-byte) input is
+//  returned unchanged, so existing files are never altered.
+std::vector<uint8_t> utf8ToEngineBytes(const std::vector<uint8_t>& src);
+
 // -- Utilities ---------------------------------------------------------------
 
 bool isCompiledLua(const std::vector<uint8_t>& data);

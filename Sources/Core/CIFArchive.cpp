@@ -107,6 +107,74 @@ bool isCompiledLua(const std::vector<uint8_t>& data) {
            data[2] == 'u'  && data[3] == 'a';
 }
 
+// luadec writes bytes >= 128 as decimal "\ddd" (and sometimes "\xHH") escapes.
+// Turn those back into raw bytes so non-ASCII text shows as the original
+// characters; leave every other escape (\n, \t, \", \\, low control bytes)
+// untouched. The result keeps the game's original single-byte encoding.
+std::string luaDecompiledToReadable(const std::string& src) {
+    std::string out; out.reserve(src.size());
+    const size_t n = src.size();
+    auto hexVal = [](char ch)->int {
+        if (ch >= '0' && ch <= '9') return ch - '0';
+        ch = char(ch | 0x20);
+        if (ch >= 'a' && ch <= 'f') return ch - 'a' + 10;
+        return -1;
+    };
+    for (size_t i = 0; i < n; ) {
+        char c = src[i];
+        if (c != '\\' || i + 1 >= n) { out.push_back(c); ++i; continue; }
+        char d = src[i + 1];
+        if (d == '\\') { out += "\\\\"; i += 2; continue; }     // keep escaped backslash
+        if (d >= '0' && d <= '9') {
+            int v = 0, k = 0; size_t j = i + 1;
+            while (j < n && k < 3 && src[j] >= '0' && src[j] <= '9') { v = v*10 + (src[j]-'0'); ++j; ++k; }
+            if (v >= 128 && v <= 255) { out.push_back(char((unsigned char)v)); i = j; continue; }
+            out.push_back('\\'); ++i; continue;                 // keep low/literal escape
+        }
+        if (d == 'x' || d == 'X') {
+            int v = 0, k = 0; size_t j = i + 2;
+            while (j < n && k < 2) { int h = hexVal(src[j]); if (h < 0) break; v = v*16 + h; ++j; ++k; }
+            if (k > 0 && v >= 128 && v <= 255) { out.push_back(char((unsigned char)v)); i = j; continue; }
+            out.push_back('\\'); ++i; continue;
+        }
+        out.push_back('\\'); out.push_back(d); i += 2;           // \n \t \" etc.
+    }
+    return out;
+}
+
+std::vector<uint8_t> utf8ToEngineBytes(const std::vector<uint8_t>& src) {
+    bool hasHigh = false;
+    for (uint8_t b : src) if (b >= 0x80) { hasHigh = true; break; }
+    if (!hasHigh) return src;                                   // pure ASCII — nothing to do
+
+    // Decode as UTF-8; bail out unchanged if it isn't valid UTF-8 (i.e. the
+    // file is already single-byte, e.g. straight from our decompiler).
+    std::vector<uint32_t> cps; cps.reserve(src.size());
+    const size_t n = src.size();
+    for (size_t i = 0; i < n; ) {
+        uint8_t b = src[i];
+        auto cont = [&](size_t k){ return i+k < n && (src[i+k] & 0xC0) == 0x80; };
+        if (b < 0x80) { cps.push_back(b); ++i; }
+        else if ((b & 0xE0) == 0xC0 && cont(1)) {
+            cps.push_back(((b&0x1F)<<6)|(src[i+1]&0x3F)); i += 2; }
+        else if ((b & 0xF0) == 0xE0 && cont(1) && cont(2)) {
+            cps.push_back(((b&0x0F)<<12)|((src[i+1]&0x3F)<<6)|(src[i+2]&0x3F)); i += 3; }
+        else if ((b & 0xF8) == 0xF0 && cont(1) && cont(2) && cont(3)) {
+            cps.push_back(((uint32_t)(b&0x07)<<18)|((src[i+1]&0x3F)<<12)|((src[i+2]&0x3F)<<6)|(src[i+3]&0x3F)); i += 4; }
+        else return src;                                        // invalid UTF-8 → leave as-is
+    }
+    std::vector<uint8_t> out; out.reserve(cps.size());
+    for (uint32_t cp : cps) {
+        if (cp <= 0xFF) out.push_back(uint8_t(cp));             // ASCII + Latin-1 (é, è, ñ, ©…)
+        else if (cp == 0x0401) out.push_back(0xA8);            // Ё  (Windows-1251)
+        else if (cp == 0x0451) out.push_back(0xB8);            // ё
+        else if (cp >= 0x0410 && cp <= 0x044F)                 // А…я
+            out.push_back(uint8_t(cp - 0x0410 + 0xC0));
+        else out.push_back('?');                                // unmappable code point
+    }
+    return out;
+}
+
 
 // -- Encoding ----------------------------------------------------------------
 
@@ -130,6 +198,7 @@ std::vector<uint8_t> encodePNG(const std::filesystem::path& imagePath, FileType 
 
 std::vector<uint8_t> encodeLua(const std::filesystem::path& luaPath) {
     auto body = readFile(luaPath);
+    if (!isCompiledLua(body)) body = utf8ToEngineBytes(body);   // UTF-8 source → engine single-byte
     auto header = buildHeader(FileType::Lua, 0, 0, static_cast<uint32_t>(body.size()));
     std::vector<uint8_t> result;
     result.reserve(HEADER_SIZE + body.size());
@@ -141,14 +210,21 @@ std::vector<uint8_t> encodeLua(const std::filesystem::path& luaPath) {
 std::vector<uint8_t> encodeLua(const std::filesystem::path& luaPath, bool compileLua) {
     auto body = readFile(luaPath);
 
+    // Normalize UTF-8 source down to the engine's single-byte encoding before
+    // storing or compiling (no-op for ASCII or already-single-byte files).
+    if (!isCompiledLua(body)) body = utf8ToEngineBytes(body);
+
     if (compileLua && !isCompiledLua(body)) {
         lua_State* L = luaL_newstate();
         if (!L) {
             throw std::runtime_error("CIF: failed to create Lua state");
         }
         std::vector<uint8_t> bytecode;
-        const std::string luaPathNarrow = luaPath.string();
-        if (luaL_loadfile(L, luaPathNarrow.c_str()) == 0) {
+        // Load from the (transcoded) buffer; chunk name "@<path>" matches what
+        // luaL_loadfile would embed, so ASCII output stays byte-identical.
+        const std::string chunkName = "@" + luaPath.string();
+        if (luaL_loadbuffer(L, reinterpret_cast<const char*>(body.data()),
+                            body.size(), chunkName.c_str()) == 0) {
             lua_dump(L, luaDumpWriter, &bytecode);
         }
         lua_close(L);

@@ -169,7 +169,15 @@ static NSData *vecToData(const std::vector<uint8_t>& v) {
     }
 
     NSData *outputData = [[outputPipe fileHandleForReading] readDataToEndOfFile];
-    NSString *outputString = [[NSString alloc] initWithData:outputData encoding:NSUTF8StringEncoding];
+    // luadec output is ASCII with "\ddd" escapes for bytes >= 128; turn those
+    // back into raw bytes so Cyrillic/accented text reads as characters, then
+    // hand back via Latin-1 so each byte survives 1:1 (preserving the game's
+    // original single-byte encoding). Callers write the file as Latin-1 too.
+    std::string rawOut(reinterpret_cast<const char *>(outputData.bytes), outputData.length);
+    std::string readable = CIF::luaDecompiledToReadable(rawOut);
+    NSString *outputString = [[NSString alloc] initWithBytes:readable.data()
+                                                      length:readable.size()
+                                                    encoding:NSISOLatin1StringEncoding];
 
     if (task.terminationStatus != 0) {
         NSData *errorData = [[errorPipe fileHandleForReading] readDataToEndOfFile];
@@ -225,7 +233,7 @@ static NSData *vecToData(const std::vector<uint8_t>& v) {
                     } else {
                         newPath = [[fullPath stringByDeletingPathExtension] stringByAppendingPathExtension:@"lua"];
                     }
-                    [decompiledCode writeToFile:newPath atomically:YES encoding:NSUTF8StringEncoding error:nil];
+                    [decompiledCode writeToFile:newPath atomically:YES encoding:NSISOLatin1StringEncoding error:nil];
                     if (![newPath isEqualToString:fullPath]) {
                         [fm removeItemAtPath:fullPath error:nil];
                     }

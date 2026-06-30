@@ -130,5 +130,29 @@
 
   "bytecode_title": "Compiled Lua bytecode",
   "bytecode_hint":  "Use the converter (CIF → File) with Decompile Lua enabled\nto extract readable source code.",
-  "bytecode_save":  "Save Bytecode (.lua)…"
+  "bytecode_save":  "Save Bytecode (.lua)…",
+
+  "lua_action_title":     "Compiled Lua script",
+  "lua_action_message":   "“{0}” is compiled Lua bytecode. Pack it into a CIF, or decompile it back to source?",
+  "lua_action_pack":      "Pack to CIF",
+  "lua_action_decompile": "Decompile",
+  "lua_action_cancel":    "Cancel",
+
+  "lua_collision_title":          "Decompile {0}?",
+  "lua_collision_message":        "A decompiled .lua will be written to the same folder. What should happen to the original compiled file?",
+  "lua_collision_new":            "Use New Name",
+  "lua_collision_new_desc":       "Save as “{0}”, keep the original",
+  "lua_collision_rename":         "Rename Original",
+  "lua_collision_rename_desc":    "Keep the compiled file under a new name, give its name to the decompiled file",
+  "lua_collision_overwrite":      "Overwrite Original",
+  "lua_collision_overwrite_desc": "Replace the compiled file with the decompiled source",
+  "lua_collision_cancel":         "Cancel",
+
+  "lua_result_decompile_failed": "Decompilation failed — original kept: {0}",
+  "lua_result_decompile_empty":  "Decompilation produced empty output — original kept",
+  "lua_result_not_saved":        "Decompiled OK — not saved (cancelled)",
+  "lua_result_new_name":         "→ {0} · decompiled (original kept)",
+  "lua_result_renamed":          "→ decompiled · original kept as {0}",
+  "lua_result_overwritten":      "→ decompiled · original overwritten",
+  "lua_result_save_failed":      "Save failed: {0}"
 }

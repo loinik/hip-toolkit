@@ -318,6 +318,46 @@ internal static class HIPInterop
             throw new InvalidOperationException(
                 string.IsNullOrWhiteSpace(stderr) ? $"luadec exited with code {proc.ExitCode}" : stderr.Trim());
 
-        return stdout;
+        return LuaDecompiledToReadable(stdout);
+    }
+
+    /// luadec writes bytes >= 128 in string literals as decimal "\ddd" (and
+    /// sometimes "\xHH") escapes, so Cyrillic/accented text comes out as codes.
+    /// Turn those numeric escapes back into raw bytes (kept as U+00xx chars),
+    /// leaving real escapes (\n, \t, \", \\, low control bytes) intact. Write
+    /// the result with Encoding.Latin1 to preserve the original code page 1:1.
+    public static string LuaDecompiledToReadable(string src)
+    {
+        var sb = new System.Text.StringBuilder(src.Length);
+        int n = src.Length;
+        static int Hex(char ch)
+        {
+            if (ch >= '0' && ch <= '9') return ch - '0';
+            ch = char.ToLowerInvariant(ch);
+            return (ch >= 'a' && ch <= 'f') ? ch - 'a' + 10 : -1;
+        }
+        for (int i = 0; i < n;)
+        {
+            char c = src[i];
+            if (c != '\\' || i + 1 >= n) { sb.Append(c); i++; continue; }
+            char d = src[i + 1];
+            if (d == '\\') { sb.Append("\\\\"); i += 2; continue; }
+            if (d >= '0' && d <= '9')
+            {
+                int v = 0, k = 0, j = i + 1;
+                while (j < n && k < 3 && src[j] >= '0' && src[j] <= '9') { v = v * 10 + (src[j] - '0'); j++; k++; }
+                if (v >= 128 && v <= 255) { sb.Append((char)v); i = j; continue; }
+                sb.Append('\\'); i++; continue;
+            }
+            if (d == 'x' || d == 'X')
+            {
+                int v = 0, k = 0, j = i + 2;
+                while (j < n && k < 2) { int h = Hex(src[j]); if (h < 0) break; v = v * 16 + h; j++; k++; }
+                if (k > 0 && v >= 128 && v <= 255) { sb.Append((char)v); i = j; continue; }
+                sb.Append('\\'); i++; continue;
+            }
+            sb.Append('\\'); sb.Append(d); i += 2;
+        }
+        return sb.ToString();
     }
 }

@@ -17,6 +17,10 @@ public enum AppMode
 
 public enum HisOutputFormat { OGG, WAV, MP3 }
 
+public enum LuaCollisionChoice { UseNewName, RenameOriginal, Overwrite, Cancel }
+
+public enum LuaDropAction { Pack, Decompile, Cancel }
+
 
 public record ConversionResult(string Icon, string Title, string Detail, bool IsError, bool IsExpandable = false, string? RevealPath = null)
 {
@@ -112,8 +116,36 @@ public sealed class MainViewModel : INotifyPropertyChanged
 
     // ── File kind auto-detection (mirrors Swift HIPFileKind) ─────────────
 
+    /// True if the file's first four bytes are the compiled-Lua signature
+    /// (ESC 'L' 'u' 'a'). A dropped compiled .lua is content-routed straight
+    /// to decompilation regardless of the selected tab — mirroring how a
+    /// dropped .dat always unpacks and a dropped folder always packs.
+    public static bool IsCompiledLuaFile(string path)
+    {
+        if (!path.EndsWith(".lua", StringComparison.OrdinalIgnoreCase)) return false;
+        try
+        {
+            using var fs = File.OpenRead(path);
+            Span<byte> h = stackalloc byte[4];
+            return fs.Read(h) == 4 && h[0] == 0x1B && h[1] == 0x4C && h[2] == 0x75 && h[3] == 0x61;
+        }
+        catch { return false; }
+    }
+
+    /// Set by the View to ask whether a dropped compiled .lua should be packed
+    /// into a CIF or decompiled. Returns Decompile if unset.
+    public Func<string, Task<LuaDropAction>>? PromptLuaAction;
+
+    /// Set by the View to present the same-folder collision prompt
+    /// (originalName, newName) → chosen outcome. Returns Cancel if unset.
+    public Func<string, string, Task<LuaCollisionChoice>>? PromptLuaCollision;
+
     public void AutoSwitchMode(string path)
     {
+        // Compiled .lua is content-routed to decompilation regardless of the
+        // tab, so don't flip the segmented control for it.
+        if (IsCompiledLuaFile(path)) return;
+
         var ext = Path.GetExtension(path).ToLowerInvariant();
         bool isDir = Directory.Exists(path);
 
@@ -179,7 +211,9 @@ public sealed class MainViewModel : INotifyPropertyChanged
             {
                 if (token.IsCancellationRequested) break;
                 List<ConversionResult> results;
-                if (Mode == AppMode.CiftreePack)
+                if (IsCompiledLuaFile(path))
+                    results = await HandleDroppedCompiledLuaAsync(path);
+                else if (Mode == AppMode.CiftreePack)
                     results = await PackCiftreeAsync(path, onProgress, token);
                 else if (Mode == AppMode.CiftreeUnpack)
                     results = await UnpackCiftreeAsync(path, onProgress, token);
@@ -204,6 +238,89 @@ public sealed class MainViewModel : INotifyPropertyChanged
     }
 
     public void ClearResults() => Results.Clear();
+
+    // ── Drop of a compiled .lua ──────────────────────────────────────────────
+    //
+    //  First asks whether to pack the compiled bytecode into a CIF or decompile
+    //  it. For decompilation, the original file is only touched AFTER
+    //  decompilation has fully succeeded, immediately before writing the new
+    //  file — so a failed decompile can never lose the original. On a
+    //  same-folder name collision a second dialog offers three outcomes.
+    private async Task<List<ConversionResult>> HandleDroppedCompiledLuaAsync(string path)
+    {
+        var name = Path.GetFileName(path);
+        var action = PromptLuaAction is { } ask ? await ask(name) : LuaDropAction.Decompile;
+        return action switch
+        {
+            LuaDropAction.Cancel => [Warn(name, S.Get("lua_result_not_saved"))],
+            LuaDropAction.Pack   => EncodeCIF(path),
+            _                    => [await DecompileDroppedLuaAsync(path)],
+        };
+    }
+
+    private async Task<ConversionResult> DecompileDroppedLuaAsync(string path)
+    {
+        var name = Path.GetFileName(path);
+
+        // 1. Decompile (no filesystem writes yet).
+        string source;
+        try
+        {
+            source = await Task.Run(() => HIPInterop.DecompileLua(path));
+        }
+        catch (Exception ex)
+        {
+            return Fail(name, S.Fmt("lua_result_decompile_failed", ex.Message));
+        }
+        if (string.IsNullOrEmpty(source))
+            return Fail(name, S.Get("lua_result_decompile_empty"));
+
+        // 2. Decompile succeeded. Decide where to write.
+        var dir     = Path.GetDirectoryName(path) ?? ".";
+        var baseN   = Path.GetFileNameWithoutExtension(path);
+        var newPath = UniquePath(dir, $"{baseN} (decompiled)", ".lua");
+
+        var choice = PromptLuaCollision is { } prompt
+            ? await prompt(name, Path.GetFileName(newPath))
+            : LuaCollisionChoice.UseNewName;
+
+        try
+        {
+            switch (choice)
+            {
+                case LuaCollisionChoice.Cancel:
+                    return Warn(name, S.Get("lua_result_not_saved"));
+                case LuaCollisionChoice.UseNewName:
+                    await File.WriteAllTextAsync(newPath, source, System.Text.Encoding.Latin1);
+                    return Ok(name, S.Fmt("lua_result_new_name", Path.GetFileName(newPath)));
+                case LuaCollisionChoice.RenameOriginal:
+                    var renamed = UniquePath(dir, $"{baseN} (compiled)", ".lua");
+                    File.Move(path, renamed);          // preserve original (after decompile OK)
+                    await File.WriteAllTextAsync(path, source, System.Text.Encoding.Latin1);
+                    return Ok(name, S.Fmt("lua_result_renamed", Path.GetFileName(renamed)));
+                case LuaCollisionChoice.Overwrite:
+                default:
+                    await File.WriteAllTextAsync(path, source, System.Text.Encoding.Latin1);   // replaces compiled original
+                    return Ok(name, S.Get("lua_result_overwritten"));
+            }
+        }
+        catch (Exception ex)
+        {
+            return Fail(name, S.Fmt("lua_result_save_failed", ex.Message));
+        }
+    }
+
+    // First free "<base><ext>", "<base> 2<ext>", … in dir.
+    private static string UniquePath(string dir, string baseName, string ext)
+    {
+        var first = Path.Combine(dir, baseName + ext);
+        if (!File.Exists(first)) return first;
+        for (int n = 2; ; n++)
+        {
+            var p = Path.Combine(dir, $"{baseName} {n}{ext}");
+            if (!File.Exists(p)) return p;
+        }
+    }
 
     // ── CIF encode ───────────────────────────────────────────────────────
 
@@ -306,7 +423,7 @@ public sealed class MainViewModel : INotifyPropertyChanged
                     var source = HIPInterop.DecompileLua(outPath);
                     if (string.IsNullOrEmpty(source))
                         return [Warn(name, $"→ .lua  {FormatSize(data.Length)} · bytecode saved — decompilation failed: empty output")];
-                    File.WriteAllText(outPath, source, System.Text.Encoding.UTF8);
+                    File.WriteAllText(outPath, source, System.Text.Encoding.Latin1);
                     return [Ok(name, $"→ .lua  {FormatSize(source.Length)} · decompiled")];
                 }
                 catch (Exception ex)
@@ -455,7 +572,7 @@ public sealed class MainViewModel : INotifyPropertyChanged
                             var source = HIPInterop.DecompileLua(file);
                             if (!string.IsNullOrEmpty(source))
                             {
-                                File.WriteAllText(file, source, System.Text.Encoding.UTF8);
+                                File.WriteAllText(file, source, System.Text.Encoding.Latin1);
                                 System.Diagnostics.Debug.WriteLine($"[luadec] ✓ {fname}");
                                 results.Add(Ok(fname, "decompiled"));
                             }

@@ -152,8 +152,11 @@ final class AppViewModel: ObservableObject {
     }
 
     func autoSwitchMode(for urls: [URL]) {
-        guard let first = urls.first,
-              let (cat, dir) = HIPFileKind.from(first).suggestedConversionMode
+        guard let first = urls.first else { return }
+        // Compiled .lua is content-routed to decompilation regardless of the
+        // tab, so don't flip the segmented control for it.
+        if AppViewModel.isCompiledLuaFile(first) { return }
+        guard let (cat, dir) = HIPFileKind.from(first).suggestedConversionMode
         else { return }
         withAnimation(.easeInOut(duration: 0.15)) {
             category  = cat
@@ -162,6 +165,19 @@ final class AppViewModel: ObservableObject {
     }
 
     // Entry point
+
+    /// True if the file's first four bytes are the compiled-Lua signature
+    /// (ESC 'L' 'u' 'a'). Used to content-route a dropped compiled .lua to
+    /// decompilation regardless of the selected tab — mirroring how a dropped
+    /// .dat always unpacks and a dropped folder always packs.
+    nonisolated static func isCompiledLuaFile(_ url: URL) -> Bool {
+        guard url.pathExtension.lowercased() == "lua",
+              let fh = try? FileHandle(forReadingFrom: url) else { return false }
+        defer { try? fh.close() }
+        let head = try? fh.read(upToCount: 4)
+        guard let h = head, h.count == 4 else { return false }
+        return h[0] == 0x1B && h[1] == 0x4C && h[2] == 0x75 && h[3] == 0x61
+    }
 
     func processURLs(_ urls: [URL]) {
         isProcessing = true
@@ -181,24 +197,31 @@ final class AppViewModel: ObservableObject {
             for (i, url) in urls.enumerated() {
                 guard !Task.isCancelled else { break }
                 let items: [ConversionResult]
-                switch mode {
-                case .ciftreePack:
-                    items = await packCiftreeAsync(url, compileLua: compileLua,
-                                                   capitalizeNames: capitalizeNames,
-                                                   useType4PNG: useType4PNG)
-                case .ciftreeUnpack:
-                    items = await unpackCiftreeAsync(url, extractContents: extractCifContents,
-                                                     decompileLua: decompileLua)
-                default:
-                    items = await Task.detached(priority: .userInitiated) { [mode, compileLua, decompileLua, useType4PNG, hisOutputFormat] in
-                        switch mode {
-                        case .cifEncode: return [AppViewModel.encodeCIF(url, compileLua: compileLua, useType4PNG: useType4PNG)]
-                        case .cifDecode: return AppViewModel.decodeCIF(url, decompileLua: decompileLua)
-                        case .hisEncode: return [AppViewModel.encodeHIS(url)]
-                        case .hisDecode: return [AppViewModel.decodeHIS(url, format: hisOutputFormat)]
-                        default: return []
-                        }
-                    }.value
+                // Compiled .lua is content-routed independent of the selected
+                // tab: ask whether to pack it into a CIF or decompile it.
+                if AppViewModel.isCompiledLuaFile(url) {
+                    items = [await handleDroppedCompiledLua(url, compileLua: compileLua,
+                                                            useType4PNG: useType4PNG)]
+                } else {
+                    switch mode {
+                    case .ciftreePack:
+                        items = await packCiftreeAsync(url, compileLua: compileLua,
+                                                       capitalizeNames: capitalizeNames,
+                                                       useType4PNG: useType4PNG)
+                    case .ciftreeUnpack:
+                        items = await unpackCiftreeAsync(url, extractContents: extractCifContents,
+                                                         decompileLua: decompileLua)
+                    default:
+                        items = await Task.detached(priority: .userInitiated) { [mode, compileLua, decompileLua, useType4PNG, hisOutputFormat] in
+                            switch mode {
+                            case .cifEncode: return [AppViewModel.encodeCIF(url, compileLua: compileLua, useType4PNG: useType4PNG)]
+                            case .cifDecode: return AppViewModel.decodeCIF(url, decompileLua: decompileLua)
+                            case .hisEncode: return [AppViewModel.encodeHIS(url)]
+                            case .hisDecode: return [AppViewModel.decodeHIS(url, format: hisOutputFormat)]
+                            default: return []
+                            }
+                        }.value
+                    }
                 }
                 batch.append(contentsOf: items)
                 progress = (current: i + 1, total: urls.count)
@@ -209,6 +232,132 @@ final class AppViewModel: ObservableObject {
             processingTask = nil
         }
         processingTask = t
+    }
+
+    // ── Drop of a compiled .lua ──────────────────────────────────────────────
+    //
+    //  First asks the user whether to pack the compiled bytecode into a CIF or
+    //  decompile it back to source. For decompilation, the original file is
+    //  only touched AFTER decompilation has fully succeeded, immediately before
+    //  writing the new file — so a failed decompile can never lose the
+    //  original. On a same-folder name collision a second dialog offers three
+    //  outcomes.
+    private func handleDroppedCompiledLua(_ url: URL, compileLua: Bool, useType4PNG: Bool) async -> ConversionResult {
+        let name = url.lastPathComponent
+        switch compiledLuaActionChoice(name: name) {
+        case .cancel:
+            return AppViewModel.warn(name, S.get("lua_result_not_saved"))
+        case .pack:
+            return await Task.detached(priority: .userInitiated) {
+                AppViewModel.encodeCIF(url, compileLua: compileLua, useType4PNG: useType4PNG)
+            }.value
+        case .decompile:
+            return await decompileDroppedLua(url)
+        }
+    }
+
+    private func decompileDroppedLua(_ url: URL) async -> ConversionResult {
+        let name = url.lastPathComponent
+
+        // 1. Decompile (no filesystem writes yet).
+        let path = url.path
+        let source: String
+        do {
+            source = try await Task.detached(priority: .userInitiated) {
+                try HIPWrapper.decompileLua(atPath: path) as String
+            }.value
+        } catch {
+            return AppViewModel.fail(name, S.fmt("lua_result_decompile_failed", error.localizedDescription))
+        }
+        guard !source.isEmpty else {
+            return AppViewModel.fail(name, S.get("lua_result_decompile_empty"))
+        }
+
+        // 2. Decompile succeeded. Decide where to write.
+        let dir       = url.deletingLastPathComponent()
+        let base      = url.deletingPathExtension().lastPathComponent
+        let newName   = uniqueURL(in: dir, base: "\(base) (decompiled)", ext: "lua")
+
+        let choice = decompileCollisionChoice(originalName: name,
+                                              newName: newName.lastPathComponent)
+        // Latin-1 preserves the decompiler's raw single-byte output 1:1
+        // (original game code page) instead of re-encoding it to UTF-8.
+        let data = source.data(using: .isoLatin1) ?? Data(source.utf8)
+        do {
+            switch choice {
+            case .cancel:
+                return AppViewModel.warn(name, S.get("lua_result_not_saved"))
+            case .useNewName:
+                try data.write(to: newName)
+                return AppViewModel.ok(name, S.fmt("lua_result_new_name", newName.lastPathComponent))
+            case .renameOriginal:
+                // Preserve the compiled original under a free name, then take
+                // over the original name — both only now, after decompile OK.
+                let renamed = uniqueURL(in: dir, base: "\(base) (compiled)", ext: "lua")
+                try FileManager.default.moveItem(at: url, to: renamed)
+                try data.write(to: url)
+                return AppViewModel.ok(name, S.fmt("lua_result_renamed", renamed.lastPathComponent))
+            case .overwrite:
+                try data.write(to: url)   // replaces the compiled original
+                return AppViewModel.ok(name, S.get("lua_result_overwritten"))
+            }
+        } catch {
+            return AppViewModel.fail(name, S.fmt("lua_result_save_failed", error.localizedDescription))
+        }
+    }
+
+    private enum LuaDropAction { case pack, decompile, cancel }
+
+    private func compiledLuaActionChoice(name: String) -> LuaDropAction {
+        let alert = NSAlert()
+        alert.messageText = S.get("lua_action_title")
+        alert.informativeText = S.fmt("lua_action_message", name)
+        alert.alertStyle = .informational
+        alert.addButton(withTitle: S.get("lua_action_pack"))      // .alertFirstButtonReturn (default)
+        alert.addButton(withTitle: S.get("lua_action_decompile")) // .alertSecondButtonReturn
+        alert.addButton(withTitle: S.get("lua_action_cancel"))    // .alertThirdButtonReturn
+        NSApp.activate(ignoringOtherApps: true)
+        switch alert.runModal() {
+        case .alertFirstButtonReturn:  return .pack
+        case .alertSecondButtonReturn: return .decompile
+        default:                       return .cancel
+        }
+    }
+
+    private enum LuaCollisionChoice { case useNewName, renameOriginal, overwrite, cancel }
+
+    private func decompileCollisionChoice(originalName: String, newName: String) -> LuaCollisionChoice {
+        let alert = NSAlert()
+        alert.messageText = S.fmt("lua_collision_title", originalName)
+        alert.informativeText = S.get("lua_collision_message") + "\n\n"
+            + "• " + S.get("lua_collision_new")       + " — " + S.fmt("lua_collision_new_desc", newName) + "\n"
+            + "• " + S.get("lua_collision_rename")    + " — " + S.get("lua_collision_rename_desc") + "\n"
+            + "• " + S.get("lua_collision_overwrite") + " — " + S.get("lua_collision_overwrite_desc")
+        alert.alertStyle = .informational
+        alert.addButton(withTitle: S.get("lua_collision_new"))       // .alertFirstButtonReturn
+        alert.addButton(withTitle: S.get("lua_collision_rename"))    // .alertSecondButtonReturn
+        let overwriteButton = alert.addButton(withTitle: S.get("lua_collision_overwrite")) // .alertThirdButtonReturn
+        overwriteButton.hasDestructiveAction = true                  // red — replaces the original
+        alert.addButton(withTitle: S.get("lua_collision_cancel"))    // fourth
+        NSApp.activate(ignoringOtherApps: true)
+        switch alert.runModal() {
+        case .alertFirstButtonReturn:  return .useNewName
+        case .alertSecondButtonReturn: return .renameOriginal
+        case .alertThirdButtonReturn:  return .overwrite
+        default:                       return .cancel
+        }
+    }
+
+    /// First free "<base>.<ext>", "<base> 2.<ext>", … in `dir`.
+    private func uniqueURL(in dir: URL, base: String, ext: String) -> URL {
+        let first = dir.appendingPathComponent(base).appendingPathExtension(ext)
+        if !FileManager.default.fileExists(atPath: first.path) { return first }
+        var n = 2
+        while true {
+            let u = dir.appendingPathComponent("\(base) \(n)").appendingPathExtension(ext)
+            if !FileManager.default.fileExists(atPath: u.path) { return u }
+            n += 1
+        }
     }
 
     // Pack: enumerate + encode on background, NSSavePanel on main, write on background
@@ -408,9 +557,13 @@ final class AppViewModel: ObservableObject {
                         print("[luadec] ✗ \(url.lastPathComponent): empty output")
                         return [warn(name, "→ .lua  \(sizeStr(data.count)) · bytecode saved — decompilation failed: empty output")]
                     }
-                    try source.write(to: outURL, atomically: true, encoding: .utf8)
+                    // Write Latin-1 so the decompiler's raw single-byte output
+                    // (Cyrillic/accents in the game's original code page) is
+                    // preserved 1:1 instead of being re-encoded to UTF-8.
+                    let outData = source.data(using: .isoLatin1) ?? Data(source.utf8)
+                    try outData.write(to: outURL)
                     print("[luadec] ✓ \(url.lastPathComponent)")
-                    return [ok(name, "→ .lua  \(sizeStr(source.utf8.count)) · decompiled")]
+                    return [ok(name, "→ .lua  \(sizeStr(outData.count)) · decompiled")]
                 } catch {
                     print("[luadec] ✗ \(url.lastPathComponent): \(error.localizedDescription)")
                     return [warn(name, "→ .lua  \(sizeStr(data.count)) · bytecode saved — \(error.localizedDescription)")]
@@ -2015,7 +2168,9 @@ struct DatPreviewView: View {
 
 struct LuaPreviewView: View {
     let url: URL
+    @State private var data:         Data?
     @State private var source:       String?
+    @State private var isCompiled    = false
     @State private var errorMessage: String?
 
     var body: some View {
@@ -2023,6 +2178,15 @@ struct LuaPreviewView: View {
             if let err = errorMessage {
                 ContentUnavailableView("Read Error", systemImage: "exclamationmark.triangle",
                                        description: Text(err))
+            } else if isCompiled, let d = data {
+                // A compiled-bytecode .lua isn't readable text — show the same
+                // "Compiled Lua bytecode" card (with a Decompile button) that a
+                // CIF-embedded compiled script gets, instead of dumping raw
+                // bytecode bytes as garbage "source".
+                BytecodeView(bytes: d.count,
+                             exportData: d,
+                             exportName: url.deletingPathExtension().lastPathComponent,
+                             sourcePath: url.path)
             } else if let src = source {
                 CodeView(text: src, badge: "Lua source", icon: "doc.text",
                          exportData: Data(src.utf8),
@@ -2031,9 +2195,16 @@ struct LuaPreviewView: View {
         }
         .frame(minWidth: 500, minHeight: 360)
         .task {
-            do { source = try String(contentsOf: url, encoding: .utf8) } catch {
-                source = try? String(contentsOf: url, encoding: .isoLatin1)
-                if source == nil { errorMessage = error.localizedDescription }
+            guard let d = try? Data(contentsOf: url) else {
+                errorMessage = "Could not read file"; return
+            }
+            data = d
+            // Compiled-Lua magic: ESC 'L' 'u' 'a' (0x1B 4C 75 61)
+            isCompiled = d.count >= 4 && d[0] == 0x1B && d[1] == 0x4C
+                                       && d[2] == 0x75 && d[3] == 0x61
+            if !isCompiled {
+                source = String(data: d, encoding: .utf8)
+                       ?? String(data: d, encoding: .isoLatin1)
             }
         }
     }

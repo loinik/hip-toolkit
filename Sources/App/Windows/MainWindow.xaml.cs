@@ -23,6 +23,8 @@ public sealed partial class MainWindow : Window
         SetTitleBar(AppTitleBar);
         _vm = new MainViewModel(Microsoft.UI.Dispatching.DispatcherQueue.GetForCurrentThread());
         _vm.RequestAlternateSavePath = PickAlternativeSavePathAsync;
+        _vm.PromptLuaAction = PromptLuaActionAsync;
+        _vm.PromptLuaCollision = PromptLuaCollisionAsync;
         AppWindow.Closing += OnWindowClosing;
 
         ResultsList.ItemsSource = _vm.Results;
@@ -327,6 +329,87 @@ public sealed partial class MainWindow : Window
             return folder == null ? null
                 : Path.Combine(folder.Path, Path.GetFileName(defaultPath));
         }
+    }
+
+    // ── Compiled-Lua drop: pack-or-decompile prompt ──────────────────────
+    private async Task<LuaDropAction> PromptLuaActionAsync(string name)
+    {
+        var dialog = new ContentDialog
+        {
+            Title = S.Get("lua_action_title"),
+            Content = S.Fmt("lua_action_message", name),
+            PrimaryButtonText = S.Get("lua_action_pack"),
+            SecondaryButtonText = S.Get("lua_action_decompile"),
+            CloseButtonText = S.Get("lua_action_cancel"),
+            DefaultButton = ContentDialogButton.Primary,
+            XamlRoot = Content.XamlRoot
+        };
+        return await dialog.ShowAsync() switch
+        {
+            ContentDialogResult.Primary   => LuaDropAction.Pack,
+            ContentDialogResult.Secondary => LuaDropAction.Decompile,
+            _                             => LuaDropAction.Cancel,
+        };
+    }
+
+    // ── Compiled-Lua drop: same-folder collision prompt ──────────────────
+    //
+    //  Three actions (+ Cancel via the Close button). ContentDialog natively
+    //  exposes only three buttons, so the actions live as buttons in the
+    //  content area; each sets the choice and dismisses.
+    private async Task<LuaCollisionChoice> PromptLuaCollisionAsync(string originalName, string newName)
+    {
+        var choice = LuaCollisionChoice.Cancel;
+        var panel = new StackPanel { Spacing = 8 };
+        panel.Children.Add(new TextBlock
+        {
+            Text = S.Get("lua_collision_message"),
+            TextWrapping = TextWrapping.Wrap
+        });
+
+        ContentDialog dialog = null!;
+        Button MakeButton(string title, string subtitle, LuaCollisionChoice c, bool destructive = false)
+        {
+            var stack = new StackPanel();
+            var titleBlock = new TextBlock { Text = title, FontWeight = Microsoft.UI.Text.FontWeights.SemiBold };
+            stack.Children.Add(titleBlock);
+            stack.Children.Add(new TextBlock
+            {
+                Text = subtitle,
+                Opacity = 0.7,
+                FontSize = 12,
+                TextWrapping = TextWrapping.Wrap
+            });
+            var b = new Button { Content = stack, HorizontalAlignment = HorizontalAlignment.Stretch };
+            if (destructive)
+            {
+                // WinUI "critical" red (#C42B1C) — signals this replaces/destroys
+                // the original file.
+                var red = new Microsoft.UI.Xaml.Media.SolidColorBrush(
+                    Windows.UI.Color.FromArgb(0xFF, 0xC4, 0x2B, 0x1C));
+                var white = new Microsoft.UI.Xaml.Media.SolidColorBrush(Microsoft.UI.Colors.White);
+                b.Background = red;
+                b.Foreground = white;
+                titleBlock.Foreground = white;
+            }
+            b.Click += (_, _) => { choice = c; dialog.Hide(); };
+            return b;
+        }
+
+        panel.Children.Add(MakeButton(S.Get("lua_collision_new"),       S.Fmt("lua_collision_new_desc", newName), LuaCollisionChoice.UseNewName));
+        panel.Children.Add(MakeButton(S.Get("lua_collision_rename"),    S.Get("lua_collision_rename_desc"),       LuaCollisionChoice.RenameOriginal));
+        panel.Children.Add(MakeButton(S.Get("lua_collision_overwrite"), S.Get("lua_collision_overwrite_desc"),    LuaCollisionChoice.Overwrite, destructive: true));
+
+        dialog = new ContentDialog
+        {
+            Title = S.Fmt("lua_collision_title", originalName),
+            Content = panel,
+            CloseButtonText = S.Get("lua_collision_cancel"),
+            DefaultButton = ContentDialogButton.Close,
+            XamlRoot = Content.XamlRoot
+        };
+        await dialog.ShowAsync();
+        return choice;
     }
 
     // ── Conversion execution ─────────────────────────────────────────────
