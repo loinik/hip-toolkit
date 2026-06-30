@@ -154,5 +154,8 @@
   "lua_result_new_name":         "→ {0} · decompiled (original kept)",
   "lua_result_renamed":          "→ decompiled · original kept as {0}",
   "lua_result_overwritten":      "→ decompiled · original overwritten",
-  "lua_result_save_failed":      "Save failed: {0}"
+  "lua_result_save_failed":      "Save failed: {0}",
+
+  "encoding_picker_title":       "Select Text Encoding",
+  "encoding_picker_message":     "The encoding of "{0}" couldn't be determined automatically. Select the option where the preview looks correct."
 }

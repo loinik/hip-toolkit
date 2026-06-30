@@ -61,8 +61,25 @@ NS_ASSUME_NONNULL_BEGIN
 + (nullable NSData *)encodeXSheetAtPath:(NSString *)path
                                   error:(NSError **)error;
 
-/// Lua bytecode → Lua plaintext (requires bundled luadec)
+/// Lua bytecode → raw single-byte bytes (after \ddd unescaping, before encoding interpretation).
+/// Use this in interactive paths that need to show an encoding picker dialog.
++ (nullable NSData *)decompileLuaRawDataAtPath:(NSString *)path error:(NSError **)error;
+
+/// Lua bytecode → Lua plaintext with auto-detected encoding.
+/// Prepends "-- @encoding: <name>" as the first line when encoding is not UTF-8.
+/// For non-interactive paths; shows no dialog — picks the best guess if ambiguous.
 + (nullable NSString *)decompileLuaAtPath:(NSString *)path error:(NSError **)error;
+
+/// Detect the single-byte encoding of raw decompiled bytes.
+/// Returns the detected encoding, or 0 if ambiguous.
+/// outDecoded: decoded NSString (nil when 0 is returned).
+/// outCandidates: top candidates (2–4) when ambiguous, nil when confident.
++ (NSStringEncoding)detectSingleByteEncoding:(NSData *)data
+                                    decoded:(NSString * _Nullable * _Nullable)outDecoded
+                                 candidates:(NSArray<NSNumber *> * _Nullable * _Nullable)outCandidates;
+
+/// Returns the encoding name used in the -- @encoding: comment (e.g. "windows-1251").
++ (NSString *)nameForEncoding:(NSStringEncoding)enc;
 
 /// CIF → original bytes
 + (nullable NSData *)decodeAtPath:(NSString *)path

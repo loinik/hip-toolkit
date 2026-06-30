@@ -258,31 +258,57 @@ final class AppViewModel: ObservableObject {
 
     private func decompileDroppedLua(_ url: URL) async -> ConversionResult {
         let name = url.lastPathComponent
-
-        // 1. Decompile (no filesystem writes yet).
         let path = url.path
-        let source: String
+
+        // 1. Decompile to raw single-byte bytes (no filesystem writes yet).
+        let rawData: Data
         do {
-            source = try await Task.detached(priority: .userInitiated) {
-                try HIPWrapper.decompileLua(atPath: path) as String
+            rawData = try await Task.detached(priority: .userInitiated) {
+                try HIPWrapper.decompileLuaRawData(atPath: path) as Data
             }.value
         } catch {
             return AppViewModel.fail(name, S.fmt("lua_result_decompile_failed", error.localizedDescription))
         }
-        guard !source.isEmpty else {
+
+        // 2. Detect encoding (fast, on main thread — purely computational).
+        var decodedNS: NSString?
+        var candidatesNS: NSArray?
+        let detectedEnc = HIPWrapper.detectSingleByteEncoding(rawData,
+                                                               decoded: &decodedNS,
+                                                               candidates: &candidatesNS)
+
+        // 3. If ambiguous, ask the user via dialog.
+        let rawSource: String
+        let encName: String
+        if let candidates = candidatesNS as? [NSNumber], !candidates.isEmpty {
+            guard let picked = pickEncoding(for: rawData, candidates: candidates, fileName: name) else {
+                return AppViewModel.warn(name, S.get("lua_result_not_saved"))
+            }
+            rawSource = String(data: rawData, encoding: picked) ?? ""
+            encName   = HIPWrapper.name(forEncoding: picked.rawValue) ?? "windows-1251"
+        } else {
+            let enc   = detectedEnc != 0 ? detectedEnc : UInt(NSWindowsCP1251StringEncoding)
+            rawSource = (decodedNS as String?) ?? String(data: rawData,
+                                                         encoding: .init(rawValue: enc)) ?? ""
+            encName   = HIPWrapper.name(forEncoding: enc) ?? "windows-1251"
+        }
+
+        guard !rawSource.isEmpty else {
             return AppViewModel.fail(name, S.get("lua_result_decompile_empty"))
         }
 
-        // 2. Decompile succeeded. Decide where to write.
+        // 4. Prepend encoding comment so the pack direction knows the target encoding.
+        let comment = (encName == "utf-8") ? "" : "-- @encoding: \(encName)\n"
+        let source  = comment + rawSource
+
+        // Decide where to write (no filesystem writes until here).
         let dir       = url.deletingLastPathComponent()
         let base      = url.deletingPathExtension().lastPathComponent
         let newName   = uniqueURL(in: dir, base: "\(base) (decompiled)", ext: "lua")
 
         let choice = decompileCollisionChoice(originalName: name,
                                               newName: newName.lastPathComponent)
-        // Latin-1 preserves the decompiler's raw single-byte output 1:1
-        // (original game code page) instead of re-encoding it to UTF-8.
-        let data = source.data(using: .isoLatin1) ?? Data(source.utf8)
+        let data = Data(source.utf8)
         do {
             switch choice {
             case .cancel:
@@ -346,6 +372,26 @@ final class AppViewModel: ObservableObject {
         case .alertThirdButtonReturn:  return .overwrite
         default:                       return .cancel
         }
+    }
+
+    // Shows an encoding-picker dialog with a live text preview.
+    // Returns nil if the user cancels.
+    @MainActor
+    private func pickEncoding(for rawData: Data, candidates: [NSNumber],
+                               fileName: String) -> String.Encoding? {
+        let encodings = candidates.map { String.Encoding(rawValue: $0.uintValue) }
+        let names     = candidates.compactMap { HIPWrapper.name(forEncoding: $0.uintValue) }
+        let picker    = EncodingPickerController(rawData: rawData, encodings: encodings, names: names)
+
+        let alert = NSAlert()
+        alert.messageText     = S.get("encoding_picker_title")
+        alert.informativeText = S.fmt("encoding_picker_message", fileName)
+        alert.alertStyle      = .informational
+        alert.accessoryView   = picker.containerView
+        alert.addButton(withTitle: S.get("update_ok"))
+        alert.addButton(withTitle: S.get("cancel_button"))
+        NSApp.activate(ignoringOtherApps: true)
+        return alert.runModal() == .alertFirstButtonReturn ? picker.selectedEncoding : nil
     }
 
     /// First free "<base>.<ext>", "<base> 2.<ext>", … in `dir`.
@@ -557,10 +603,7 @@ final class AppViewModel: ObservableObject {
                         print("[luadec] ✗ \(url.lastPathComponent): empty output")
                         return [warn(name, "→ .lua  \(sizeStr(data.count)) · bytecode saved — decompilation failed: empty output")]
                     }
-                    // Write Latin-1 so the decompiler's raw single-byte output
-                    // (Cyrillic/accents in the game's original code page) is
-                    // preserved 1:1 instead of being re-encoded to UTF-8.
-                    let outData = source.data(using: .isoLatin1) ?? Data(source.utf8)
+                    let outData = Data(source.utf8)
                     try outData.write(to: outURL)
                     print("[luadec] ✓ \(url.lastPathComponent)")
                     return [ok(name, "→ .lua  \(sizeStr(outData.count)) · decompiled")]
@@ -2505,3 +2548,69 @@ final class WindowCloseInterceptor: NSObject, NSWindowDelegate {
 }
 
 #Preview { ContentView() }
+
+// MARK: - Encoding picker (used when encoding can't be auto-detected)
+
+@MainActor
+private final class EncodingPickerController: NSObject {
+    let containerView: NSView
+    private let popup: NSPopUpButton
+    private let rawData: Data
+    private let encodings: [String.Encoding]
+    private weak var textView: NSTextView?
+
+    var selectedEncoding: String.Encoding {
+        let i = max(0, min(popup.indexOfSelectedItem, encodings.count - 1))
+        return encodings[i]
+    }
+
+    init(rawData: Data, encodings: [String.Encoding], names: [String]) {
+        self.rawData   = rawData
+        self.encodings = encodings
+
+        let w: CGFloat = 480
+        let container  = NSView(frame: NSRect(x: 0, y: 0, width: w, height: 254))
+        containerView  = container
+        popup          = NSPopUpButton(frame: NSRect(x: 0, y: 226, width: w, height: 24))
+
+        super.init()
+
+        for name in names { popup.addItem(withTitle: Self.label(for: name)) }
+        popup.target = self
+        popup.action = #selector(selectionChanged)
+        container.addSubview(popup)
+
+        let scroll = NSScrollView(frame: NSRect(x: 0, y: 0, width: w, height: 220))
+        scroll.hasVerticalScroller = true
+        scroll.borderType = .bezelBorder
+        let tv = NSTextView(frame: NSRect(origin: .zero, size: scroll.contentSize))
+        tv.isEditable = false
+        tv.isSelectable = true
+        tv.font = .monospacedSystemFont(ofSize: 11.5, weight: .regular)
+        tv.autoresizingMask = [.width]
+        scroll.documentView = tv
+        container.addSubview(scroll)
+        textView = tv
+
+        updatePreview()
+    }
+
+    @objc private func selectionChanged() { updatePreview() }
+
+    private func updatePreview() {
+        let text = String(data: rawData, encoding: selectedEncoding) ?? "(cannot decode)"
+        textView?.string = String(text.prefix(1500))
+    }
+
+    private static func label(for name: String) -> String {
+        switch name {
+        case "windows-1251": return "Windows-1251 — Cyrillic (Russian, Bulgarian, Ukrainian…)"
+        case "windows-1252": return "Windows-1252 — Western European (German, French, Spanish…)"
+        case "windows-1250": return "Windows-1250 — Central European (Polish, Czech, Slovak…)"
+        case "windows-1253": return "Windows-1253 — Greek"
+        case "windows-1254": return "Windows-1254 — Turkish"
+        case "iso-8859-1":   return "ISO-8859-1 — Latin-1"
+        default: return name
+        }
+    }
+}

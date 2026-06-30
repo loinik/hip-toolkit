@@ -23,8 +23,9 @@ public sealed partial class MainWindow : Window
         SetTitleBar(AppTitleBar);
         _vm = new MainViewModel(Microsoft.UI.Dispatching.DispatcherQueue.GetForCurrentThread());
         _vm.RequestAlternateSavePath = PickAlternativeSavePathAsync;
-        _vm.PromptLuaAction = PromptLuaActionAsync;
+        _vm.PromptLuaAction    = PromptLuaActionAsync;
         _vm.PromptLuaCollision = PromptLuaCollisionAsync;
+        _vm.PromptEncoding     = PromptEncodingAsync;
         AppWindow.Closing += OnWindowClosing;
 
         ResultsList.ItemsSource = _vm.Results;
@@ -524,4 +525,80 @@ public sealed partial class MainWindow : Window
             _ => "\uE896"
         };
     }
+
+    // \u2500\u2500 Encoding picker dialog \u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500
+
+    private async Task<string?> PromptEncodingAsync(string fileName, byte[] rawBytes, List<string> candidates)
+    {
+        string? selected = candidates.Count > 0 ? candidates[0] : null;
+
+        var previewBlock = new TextBlock
+        {
+            TextWrapping         = TextWrapping.Wrap,
+            FontFamily           = new Microsoft.UI.Xaml.Media.FontFamily("Cascadia Mono, Consolas, monospace"),
+            FontSize             = 11.5,
+            IsTextSelectionEnabled = true,
+        };
+
+        void UpdatePreview()
+        {
+            try
+            {
+                var enc  = HIPInterop.EncodingFromName(selected ?? "windows-1251")
+                        ?? System.Text.Encoding.GetEncoding(1251);
+                var text = enc.GetString(rawBytes);
+                previewBlock.Text = text.Length > 1200 ? text[..1200] : text;
+            }
+            catch { previewBlock.Text = "(cannot decode)"; }
+        }
+
+        var combo = new ComboBox { HorizontalAlignment = HorizontalAlignment.Stretch,
+                                   Margin = new Thickness(0, 0, 0, 8) };
+        foreach (var enc in candidates)
+            combo.Items.Add(EncodingLabel(enc));
+        combo.SelectedIndex = 0;
+        combo.SelectionChanged += (_, _) => {
+            if (combo.SelectedIndex >= 0 && combo.SelectedIndex < candidates.Count)
+                selected = candidates[combo.SelectedIndex];
+            UpdatePreview();
+        };
+        UpdatePreview();
+
+        var scroll = new ScrollViewer
+        {
+            Content = previewBlock,
+            Height  = 200,
+            VerticalScrollBarVisibility   = ScrollBarVisibility.Auto,
+            HorizontalScrollBarVisibility = ScrollBarVisibility.Auto,
+        };
+
+        var panel = new StackPanel { Spacing = 0 };
+        panel.Children.Add(combo);
+        panel.Children.Add(scroll);
+
+        var dialog = new ContentDialog
+        {
+            Title              = S.Get("encoding_picker_title"),
+            Content            = panel,
+            PrimaryButtonText  = S.Get("update_ok"),
+            CloseButtonText    = S.Get("cancel_button"),
+            DefaultButton      = ContentDialogButton.Primary,
+            XamlRoot           = Content.XamlRoot,
+            MinWidth           = 520,
+        };
+
+        var result = await dialog.ShowAsync();
+        return result == ContentDialogResult.Primary ? selected : null;
+    }
+
+    private static string EncodingLabel(string name) => name switch
+    {
+        "windows-1251" => "Windows-1251 \u2014 Cyrillic (Russian, Bulgarian, Ukrainian\u2026)",
+        "windows-1252" => "Windows-1252 \u2014 Western European (German, French, Spanish\u2026)",
+        "windows-1250" => "Windows-1250 \u2014 Central European (Polish, Czech, Slovak\u2026)",
+        "windows-1253" => "Windows-1253 \u2014 Greek",
+        "windows-1254" => "Windows-1254 \u2014 Turkish",
+        "iso-8859-1"   => "ISO-8859-1 \u2014 Latin-1",
+        _              => name,
+    };
 }

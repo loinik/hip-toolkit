@@ -10,13 +10,13 @@
 		EE000001VORBISCOMPILE0001 /* vorbis_compile.c in Sources */ = {isa = PBXBuildFile; fileRef = EE000001VORBISCOMPILE0000 /* vorbis_compile.c */; settings = {COMPILER_FLAGS = "-w"; }; };
 		EE000002SHINECOMPILE0001 /* shine_compile.c in Sources */ = {isa = PBXBuildFile; fileRef = EE000002SHINECOMPILE0000 /* shine_compile.c */; settings = {COMPILER_FLAGS = "-w"; }; };
 		EE000003STBIMAGEIMPL0001 /* stb_image_impl.c in Sources */ = {isa = PBXBuildFile; fileRef = EE000003STBIMAGEIMPL0000 /* stb_image_impl.c */; settings = {COMPILER_FLAGS = "-w"; }; };
-		EE000006STBIMGWRITE0001 /* stb_image_write_impl.c in Sources */ = {isa = PBXBuildFile; fileRef = EE000006STBIMGWRITE0000 /* stb_image_write_impl.c */; settings = {COMPILER_FLAGS = "-w"; }; };
-		EE6186742F82969000EB6D27 /* CIFArchive.cpp in Sources */ = {isa = PBXBuildFile; fileRef = EE6186692F82969000EB6D27 /* CIFArchive.cpp */; };
-		EE6186752F82969000EB6D27 /* CiftreeArchive.cpp in Sources */ = {isa = PBXBuildFile; fileRef = EE61866B2F82969000EB6D27 /* CiftreeArchive.cpp */; };
 		EE000004LEGACYCIFARCH0001 /* LegacyCIFArchive.cpp in Sources */ = {isa = PBXBuildFile; fileRef = EE000004LEGACYCIFARCH0000 /* LegacyCIFArchive.cpp */; };
 		EE000005LEGACYCIFTREE0001 /* LegacyCiftreeArchive.cpp in Sources */ = {isa = PBXBuildFile; fileRef = EE000005LEGACYCIFTREE0000 /* LegacyCiftreeArchive.cpp */; };
+		EE000006STBIMGWRITE0001 /* stb_image_write_impl.c in Sources */ = {isa = PBXBuildFile; fileRef = EE000006STBIMGWRITE0000 /* stb_image_write_impl.c */; settings = {COMPILER_FLAGS = "-w"; }; };
 		EE000007LEGACYSCENEARC0001 /* LegacySceneArchive.cpp in Sources */ = {isa = PBXBuildFile; fileRef = EE000007LEGACYSCENEARC0000 /* LegacySceneArchive.cpp */; };
 		EE000008LEGACYXSHEET0001 /* LegacyXSheetArchive.cpp in Sources */ = {isa = PBXBuildFile; fileRef = EE000008LEGACYXSHEET0000 /* LegacyXSheetArchive.cpp */; };
+		EE6186742F82969000EB6D27 /* CIFArchive.cpp in Sources */ = {isa = PBXBuildFile; fileRef = EE6186692F82969000EB6D27 /* CIFArchive.cpp */; };
+		EE6186752F82969000EB6D27 /* CiftreeArchive.cpp in Sources */ = {isa = PBXBuildFile; fileRef = EE61866B2F82969000EB6D27 /* CiftreeArchive.cpp */; };
 		EE6186782F82969000EB6D27 /* HIPWrapper.mm in Sources */ = {isa = PBXBuildFile; fileRef = EE6186702F82969000EB6D27 /* HIPWrapper.mm */; };
 		EE6186792F82969000EB6D27 /* HISArchive.cpp in Sources */ = {isa = PBXBuildFile; fileRef = EE6186722F82969000EB6D27 /* HISArchive.cpp */; };
 		EE6186C52F829A4600EB6D27 /* stb_vorbis.c in Sources */ = {isa = PBXBuildFile; fileRef = EE6186BD2F829A4600EB6D27 /* stb_vorbis.c */; };
@@ -94,19 +94,19 @@
 		EE000001VORBISCOMPILE0000 /* vorbis_compile.c */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.c; name = vorbis_compile.c; path = Vendor/libvorbis/src/vorbis_compile.c; sourceTree = SOURCE_ROOT; };
 		EE000002SHINECOMPILE0000 /* shine_compile.c */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.c; name = shine_compile.c; path = Vendor/libshine/src/shine_compile.c; sourceTree = SOURCE_ROOT; };
 		EE000003STBIMAGEIMPL0000 /* stb_image_impl.c */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.c; name = stb_image_impl.c; path = Vendor/stb_image_impl.c; sourceTree = SOURCE_ROOT; };
-		EE000006STBIMGWRITE0000 /* stb_image_write_impl.c */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.c; name = stb_image_write_impl.c; path = Vendor/stb_image_write_impl.c; sourceTree = SOURCE_ROOT; };
-		EE6186682F82969000EB6D27 /* CIFArchive.hpp */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.cpp.h; path = CIFArchive.hpp; sourceTree = "<group>"; };
-		EE6186692F82969000EB6D27 /* CIFArchive.cpp */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.cpp.cpp; path = CIFArchive.cpp; sourceTree = "<group>"; };
-		EE61866A2F82969000EB6D27 /* CiftreeArchive.hpp */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.cpp.h; path = CiftreeArchive.hpp; sourceTree = "<group>"; };
-		EE61866B2F82969000EB6D27 /* CiftreeArchive.cpp */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.cpp.cpp; path = CiftreeArchive.cpp; sourceTree = "<group>"; };
 		EE000004LEGACYCIFARCH0000 /* LegacyCIFArchive.cpp */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.cpp.cpp; path = LegacyCIFArchive.cpp; sourceTree = "<group>"; };
 		EE000004LEGACYCIFARCH0002 /* LegacyCIFArchive.hpp */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.cpp.h; path = LegacyCIFArchive.hpp; sourceTree = "<group>"; };
 		EE000005LEGACYCIFTREE0000 /* LegacyCiftreeArchive.cpp */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.cpp.cpp; path = LegacyCiftreeArchive.cpp; sourceTree = "<group>"; };
 		EE000005LEGACYCIFTREE0002 /* LegacyCiftreeArchive.hpp */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.cpp.h; path = LegacyCiftreeArchive.hpp; sourceTree = "<group>"; };
+		EE000006STBIMGWRITE0000 /* stb_image_write_impl.c */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.c; name = stb_image_write_impl.c; path = Vendor/stb_image_write_impl.c; sourceTree = SOURCE_ROOT; };
 		EE000007LEGACYSCENEARC0000 /* LegacySceneArchive.cpp */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.cpp.cpp; path = LegacySceneArchive.cpp; sourceTree = "<group>"; };
 		EE000007LEGACYSCENEARC0002 /* LegacySceneArchive.hpp */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.cpp.h; path = LegacySceneArchive.hpp; sourceTree = "<group>"; };
 		EE000008LEGACYXSHEET0000 /* LegacyXSheetArchive.cpp */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.cpp.cpp; path = LegacyXSheetArchive.cpp; sourceTree = "<group>"; };
 		EE000008LEGACYXSHEET0002 /* LegacyXSheetArchive.hpp */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.cpp.h; path = LegacyXSheetArchive.hpp; sourceTree = "<group>"; };
+		EE6186682F82969000EB6D27 /* CIFArchive.hpp */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.cpp.h; path = CIFArchive.hpp; sourceTree = "<group>"; };
+		EE6186692F82969000EB6D27 /* CIFArchive.cpp */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.cpp.cpp; path = CIFArchive.cpp; sourceTree = "<group>"; };
+		EE61866A2F82969000EB6D27 /* CiftreeArchive.hpp */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.cpp.h; path = CiftreeArchive.hpp; sourceTree = "<group>"; };
+		EE61866B2F82969000EB6D27 /* CiftreeArchive.cpp */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.cpp.cpp; path = CiftreeArchive.cpp; sourceTree = "<group>"; };
 		EE61866F2F82969000EB6D27 /* HIPWrapper.h */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.h; path = HIPWrapper.h; sourceTree = "<group>"; };
 		EE6186702F82969000EB6D27 /* HIPWrapper.mm */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.cpp.objcpp; path = HIPWrapper.mm; sourceTree = "<group>"; };
 		EE6186712F82969000EB6D27 /* HISArchive.hpp */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.cpp.h; path = HISArchive.hpp; sourceTree = "<group>"; };
@@ -607,6 +607,7 @@
 					"@executable_path/../Frameworks",
 					"@executable_path/../../../../Frameworks",
 				);
+				MACOSX_DEPLOYMENT_TARGET = 26.0;
 				MARKETING_VERSION = 1.0;
 				PRODUCT_BUNDLE_IDENTIFIER = "loinik.hip-toolkit.QuickLook";
 				PRODUCT_NAME = "$(TARGET_NAME)";
@@ -638,6 +639,7 @@
 					"@executable_path/../Frameworks",
 					"@executable_path/../../../../Frameworks",
 				);
+				MACOSX_DEPLOYMENT_TARGET = 26.0;
 				MARKETING_VERSION = 1.0;
 				PRODUCT_BUNDLE_IDENTIFIER = "loinik.hip-toolkit.QuickLook";
 				PRODUCT_NAME = "$(TARGET_NAME)";

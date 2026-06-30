@@ -19,6 +19,58 @@ static NSData *vecToData(const std::vector<uint8_t>& v) {
     return [NSData dataWithBytes:v.data() length:v.size()];
 }
 
+// MARK: - Encoding helpers
+
+static NSArray<NSNumber *> *luaEncodingCandidates(void) {
+    return @[
+        @(NSWindowsCP1251StringEncoding),
+        @(NSWindowsCP1252StringEncoding),
+        @(NSWindowsCP1250StringEncoding),
+        @(NSWindowsCP1253StringEncoding),
+        @(NSWindowsCP1254StringEncoding),
+        @(NSISOLatin1StringEncoding),
+    ];
+}
+
+// Score how plausible a decoded string is for a given source encoding.
+// Positive = likely correct, negative = likely wrong encoding.
+static int scoreDecodedForEncoding(NSString *str, NSStringEncoding enc) {
+    int cyrillic = 0, western = 0, polish = 0, greek = 0, turkish = 0, control = 0;
+    NSUInteger n = MIN(str.length, 4000);
+    for (NSUInteger i = 0; i < n; i++) {
+        unichar c = [str characterAtIndex:i];
+        if      (c >= 0x0400 && c <= 0x04FF) cyrillic++;
+        else if (c >= 0x0391 && c <= 0x03C9) greek++;
+        else if (c==0x0105||c==0x0104||c==0x0119||c==0x0118||c==0x015B||c==0x015A||
+                 c==0x0142||c==0x0141||c==0x017A||c==0x0179||c==0x017C||c==0x017B||
+                 c==0x0107||c==0x0106||c==0x0144||c==0x0143) polish++;
+        else if (c==0x011E||c==0x011F||c==0x0130||c==0x0131||c==0x015E||c==0x015F) turkish++;
+        else if (c >= 0x00C0 && c <= 0x024F) western++;
+        else if (c < 0x20 && c != '\t' && c != '\n' && c != '\r') control++;
+    }
+    if (control > 2) return -1000;
+    switch (enc) {
+        case NSWindowsCP1251StringEncoding: return cyrillic*4 - western   - greek*2 - polish*3;
+        case NSWindowsCP1252StringEncoding: return (western-polish)*3 - cyrillic*4 - greek*2;
+        case NSWindowsCP1250StringEncoding: return (western+polish*4)*2  - cyrillic*4 - greek*2;
+        case NSWindowsCP1253StringEncoding: return greek*4  - cyrillic*2 - western;
+        case NSWindowsCP1254StringEncoding: return (western+turkish*5)   - cyrillic*4 - greek*2;
+        case NSISOLatin1StringEncoding:     return western  - cyrillic*2;
+        default: return 0;
+    }
+}
+
+static NSStringEncoding encodingFromCommentName(NSString *name) {
+    name = name.lowercaseString;
+    if ([name isEqualToString:@"windows-1251"]) return NSWindowsCP1251StringEncoding;
+    if ([name isEqualToString:@"windows-1252"]) return NSWindowsCP1252StringEncoding;
+    if ([name isEqualToString:@"windows-1250"]) return NSWindowsCP1250StringEncoding;
+    if ([name isEqualToString:@"windows-1253"]) return NSWindowsCP1253StringEncoding;
+    if ([name isEqualToString:@"windows-1254"]) return NSWindowsCP1254StringEncoding;
+    if ([name isEqualToString:@"iso-8859-1"] || [name isEqualToString:@"latin-1"]) return NSISOLatin1StringEncoding;
+    return NSUTF8StringEncoding;
+}
+
 // MARK: - CIFFileInfo
 
 @implementation CIFFileInfo
@@ -115,23 +167,123 @@ static NSData *vecToData(const std::vector<uint8_t>& v) {
 + (nullable NSData *)encodeLuaAtPath:(NSString *)path
                           compileLua:(BOOL)compileLua
                                error:(NSError **)error {
+    // If the source file has a -- @encoding: comment, strip it and re-encode
+    // the UTF-8 source to the specified engine encoding before compiling.
+    NSString *source = [NSString stringWithContentsOfFile:path
+                                                 encoding:NSUTF8StringEncoding error:nil];
+    if (source) {
+        NSRange nl = [source rangeOfString:@"\n"];
+        NSString *firstLine = nl.location != NSNotFound
+            ? [source substringToIndex:nl.location] : source;
+        if ([firstLine hasPrefix:@"-- @encoding:"]) {
+            NSString *encName = [[firstLine substringFromIndex:13]
+                                  stringByTrimmingCharactersInSet:NSCharacterSet.whitespaceCharacterSet];
+            NSStringEncoding targetEnc = encodingFromCommentName(encName);
+            if (targetEnc != NSUTF8StringEncoding) {
+                NSString *body = nl.location != NSNotFound
+                    ? [source substringFromIndex:nl.location + 1] : @"";
+                NSData *reencoded = [body dataUsingEncoding:targetEnc allowLossyConversion:YES];
+                if (reencoded) {
+                    NSString *tmp = [NSTemporaryDirectory()
+                                     stringByAppendingPathComponent:NSUUID.UUID.UUIDString];
+                    [reencoded writeToFile:tmp atomically:YES];
+                    NSData *result = [self encodeLuaAtPath:tmp compileLua:compileLua error:error];
+                    [NSFileManager.defaultManager removeItemAtPath:tmp error:nil];
+                    return result;
+                }
+            }
+        }
+    }
     try {
-        std::filesystem::path fsp(path.fileSystemRepresentation);
-        return vecToData(CIF::encodeLua(fsp, compileLua));
+        return vecToData(CIF::encodeLua(path.fileSystemRepresentation, compileLua));
     } catch (const std::exception &e) {
         if (error) *error = hipError(@(e.what()));
         return nil;
     }
 }
 
-+ (nullable NSString *)decompileLuaAtPath:(NSString *)path error:(NSError **)error {
++ (NSString *)nameForEncoding:(NSStringEncoding)enc {
+    switch (enc) {
+        case NSUTF8StringEncoding:          return @"utf-8";
+        case NSWindowsCP1251StringEncoding: return @"windows-1251";
+        case NSWindowsCP1252StringEncoding: return @"windows-1252";
+        case NSWindowsCP1250StringEncoding: return @"windows-1250";
+        case NSWindowsCP1253StringEncoding: return @"windows-1253";
+        case NSWindowsCP1254StringEncoding: return @"windows-1254";
+        case NSISOLatin1StringEncoding:     return @"iso-8859-1";
+        default: return [NSString localizedNameOfStringEncoding:enc];
+    }
+}
+
++ (NSStringEncoding)detectSingleByteEncoding:(NSData *)data
+                                    decoded:(NSString * _Nullable * _Nullable)outDecoded
+                                 candidates:(NSArray<NSNumber *> * _Nullable * _Nullable)outCandidates {
+    // Pure ASCII / valid UTF-8 → no encoding comment needed
+    NSString *utf8 = [[NSString alloc] initWithData:data encoding:NSUTF8StringEncoding];
+    if (utf8) {
+        if (outDecoded)    *outDecoded    = utf8;
+        if (outCandidates) *outCandidates = nil;
+        return NSUTF8StringEncoding;
+    }
+
+    // ICU statistical detection with our candidate list as hints
+    NSString *icuResult = nil;
+    BOOL lossy = YES;
+    NSStringEncoding icuEnc = [NSString stringEncodingForData:data
+        encodingOptions:@{
+            NSStringEncodingDetectionSuggestedEncodingsKey: luaEncodingCandidates(),
+            NSStringEncodingDetectionAllowLossyKey: @NO,
+        }
+        convertedString:&icuResult
+        usedLossyConversion:&lossy];
+
+    // Score every encoding that decodes the data losslessly
+    NSMutableArray<NSNumber *> *lossless = [NSMutableArray array];
+    NSMutableDictionary<NSNumber *, NSNumber *> *scoreMap = [NSMutableDictionary dictionary];
+    for (NSNumber *encNum in luaEncodingCandidates()) {
+        NSString *decoded = [[NSString alloc] initWithData:data encoding:encNum.unsignedLongValue];
+        if (!decoded) continue;
+        [lossless addObject:encNum];
+        scoreMap[encNum] = @(scoreDecodedForEncoding(decoded, encNum.unsignedLongValue));
+    }
+    [lossless sortUsingComparator:^NSComparisonResult(NSNumber *a, NSNumber *b) {
+        return [scoreMap[b] compare:scoreMap[a]];
+    }];
+
+    if (lossless.count == 0) {
+        NSString *fb = [[NSString alloc] initWithData:data encoding:NSWindowsCP1251StringEncoding];
+        if (outDecoded)    *outDecoded    = fb;
+        if (outCandidates) *outCandidates = nil;
+        return NSWindowsCP1251StringEncoding;
+    }
+
+    NSStringEncoding best       = lossless.firstObject.unsignedLongValue;
+    int              bestScore  = scoreMap[lossless.firstObject].intValue;
+    int              secondScore = lossless.count > 1 ? scoreMap[lossless[1]].intValue : INT_MIN;
+
+    BOOL confident = (icuEnc != 0 && icuEnc == best)
+                  || (lossless.count == 1)
+                  || (bestScore - secondScore >= 4);
+
+    if (confident) {
+        if (outDecoded)    *outDecoded    = [[NSString alloc] initWithData:data encoding:best];
+        if (outCandidates) *outCandidates = nil;
+        return best;
+    }
+
+    // Ambiguous — hand candidates to caller (dialog or best-guess)
+    if (outDecoded)    *outDecoded    = nil;
+    if (outCandidates) *outCandidates = [lossless subarrayWithRange:NSMakeRange(0, MIN((NSUInteger)4, lossless.count))];
+    return 0;
+}
+
+// Runs luadec and returns raw single-byte bytes (after \ddd unescaping).
+// Encoding interpretation is left to the caller.
++ (nullable NSData *)decompileLuaRawDataAtPath:(NSString *)path error:(NSError **)error {
     NSString *luadecPath = [[NSBundle mainBundle] pathForResource:@"luadec-macos-arm64" ofType:nil];
     if (!luadecPath) {
-        if (error) {
-            *error = [NSError errorWithDomain:@"HIPErrorDomain"
-                                         code:1
-                                     userInfo:@{NSLocalizedDescriptionKey: @"Luadec binary not found in application resources."}];
-        }
+        if (error) *error = [NSError errorWithDomain:@"HIPErrorDomain" code:1
+                                           userInfo:@{NSLocalizedDescriptionKey: @"Luadec binary not found in application resources."}];
         return nil;
     }
 
@@ -141,56 +293,97 @@ static NSData *vecToData(const std::vector<uint8_t>& v) {
 
     NSPipe *outputPipe = [NSPipe pipe];
     task.standardOutput = outputPipe;
-
     NSPipe *errorPipe = [NSPipe pipe];
     task.standardError = errorPipe;
 
-    if (![task launchAndReturnError:error]) {
-        return nil;
-    }
+    if (![task launchAndReturnError:error]) return nil;
 
+    // Collect output as it arrives and track when bytes last came in.
+    // The watchdog fires only if luadec produces no output for 15 s —
+    // large files that are actively decompiling are never killed prematurely.
+    static const NSTimeInterval kInactivityTimeout = 15.0;
+    static const NSTimeInterval kCheckInterval     = 2.0;
+
+    NSMutableData *outputData = [NSMutableData data];
+    dispatch_semaphore_t done = dispatch_semaphore_create(0);
+    __block NSTimeInterval lastActivity = [NSDate timeIntervalSinceReferenceDate];
     __block BOOL timedOut = NO;
-    dispatch_after(dispatch_time(DISPATCH_TIME_NOW, (int64_t)(15 * NSEC_PER_SEC)),
-                   dispatch_get_global_queue(QOS_CLASS_UTILITY, 0), ^{
-        if (task.isRunning) {
-            timedOut = YES;
-            [task terminate];
+
+    outputPipe.fileHandleForReading.readabilityHandler = ^(NSFileHandle *fh) {
+        NSData *chunk = fh.availableData;
+        if (chunk.length > 0) {
+            @synchronized(outputData) { [outputData appendData:chunk]; }
+            lastActivity = [NSDate timeIntervalSinceReferenceDate];
+            NSLog(@"[luadec] +%zu bytes (total %zu)", (size_t)chunk.length, (size_t)outputData.length);
+        } else {
+            fh.readabilityHandler = nil;
+            dispatch_semaphore_signal(done);
         }
+    };
+
+    dispatch_async(dispatch_get_global_queue(QOS_CLASS_UTILITY, 0), ^{
+        while (task.isRunning) {
+            [NSThread sleepForTimeInterval:kCheckInterval];
+            if (!task.isRunning) break;
+            NSTimeInterval idle = [NSDate timeIntervalSinceReferenceDate] - lastActivity;
+            if (idle >= kInactivityTimeout) {
+                NSLog(@"[luadec] no output for %.0f s — terminating", idle);
+                timedOut = YES;
+                [task terminate];
+                break;
+            }
+            NSLog(@"[luadec] still running (idle %.0f s, total %zu bytes)", idle, (size_t)outputData.length);
+        }
+        dispatch_semaphore_signal(done);
     });
 
     [task waitUntilExit];
+    dispatch_semaphore_wait(done, DISPATCH_TIME_FOREVER);
+    outputPipe.fileHandleForReading.readabilityHandler = nil;
 
     if (timedOut) {
-        if (error) {
-            *error = [NSError errorWithDomain:@"HIPErrorDomain" code:4
-                                   userInfo:@{NSLocalizedDescriptionKey: @"Decompilation timed out — luadec got stuck on this bytecode"}];
-        }
+        if (error) *error = [NSError errorWithDomain:@"HIPErrorDomain" code:4
+                                           userInfo:@{NSLocalizedDescriptionKey: @"Decompilation timed out — luadec produced no output for 15 s"}];
+        return nil;
+    }
+    if (task.terminationStatus != 0) {
+        NSData *errData = [[errorPipe fileHandleForReading] readDataToEndOfFile];
+        NSString *errStr = [[NSString alloc] initWithData:errData encoding:NSUTF8StringEncoding] ?: @"";
+        if (error) *error = [NSError errorWithDomain:@"HIPErrorDomain" code:3
+                                           userInfo:@{NSLocalizedDescriptionKey:
+                                               [NSString stringWithFormat:@"Decompilation error (code %d): %@",
+                                                task.terminationStatus, errStr]}];
         return nil;
     }
 
-    NSData *outputData = [[outputPipe fileHandleForReading] readDataToEndOfFile];
-    // luadec output is ASCII with "\ddd" escapes for bytes >= 128; turn those
-    // back into raw bytes so Cyrillic/accented text reads as characters, then
-    // hand back via Latin-1 so each byte survives 1:1 (preserving the game's
-    // original single-byte encoding). Callers write the file as Latin-1 too.
+    // Convert \ddd / \xHH escapes back to raw bytes (restores original single-byte encoding)
     std::string rawOut(reinterpret_cast<const char *>(outputData.bytes), outputData.length);
     std::string readable = CIF::luaDecompiledToReadable(rawOut);
-    NSString *outputString = [[NSString alloc] initWithBytes:readable.data()
-                                                      length:readable.size()
-                                                    encoding:NSISOLatin1StringEncoding];
+    return [NSData dataWithBytes:readable.data() length:readable.size()];
+}
 
-    if (task.terminationStatus != 0) {
-        NSData *errorData = [[errorPipe fileHandleForReading] readDataToEndOfFile];
-        NSString *errorString = [[NSString alloc] initWithData:errorData encoding:NSUTF8StringEncoding];
+// Auto-detects encoding and returns decoded source with a -- @encoding: comment prepended
+// when the encoding is not plain UTF-8. Used by non-interactive paths (CIF extract, preview).
++ (nullable NSString *)decompileLuaAtPath:(NSString *)path error:(NSError **)error {
+    NSData *raw = [self decompileLuaRawDataAtPath:path error:error];
+    if (!raw) return nil;
 
-        if (error) {
-            NSString *failMsg = [NSString stringWithFormat:@"Decompilation error (Code %d): %@", task.terminationStatus, errorString];
-            *error = [NSError errorWithDomain:@"HIPErrorDomain" code:3 userInfo:@{NSLocalizedDescriptionKey: failMsg}];
-        }
-        return nil;
+    NSString *decoded = nil;
+    NSArray<NSNumber *> *candidates = nil;
+    NSStringEncoding enc = [self detectSingleByteEncoding:raw decoded:&decoded candidates:&candidates];
+
+    if (enc == 0) {
+        // Ambiguous in non-interactive path: take top candidate as best-guess
+        enc     = candidates.firstObject.unsignedLongValue ?: NSWindowsCP1251StringEncoding;
+        decoded = [[NSString alloc] initWithData:raw encoding:enc];
     }
+    if (!decoded) return nil;
 
-    return outputString;
+    if (enc != NSUTF8StringEncoding) {
+        NSString *comment = [NSString stringWithFormat:@"-- @encoding: %@\n", [self nameForEncoding:enc]];
+        decoded = [comment stringByAppendingString:decoded];
+    }
+    return decoded;
 }
 
 // MARK: - Lua Auto-Decompilation
@@ -233,7 +426,7 @@ static NSData *vecToData(const std::vector<uint8_t>& v) {
                     } else {
                         newPath = [[fullPath stringByDeletingPathExtension] stringByAppendingPathExtension:@"lua"];
                     }
-                    [decompiledCode writeToFile:newPath atomically:YES encoding:NSISOLatin1StringEncoding error:nil];
+                    [decompiledCode writeToFile:newPath atomically:YES encoding:NSUTF8StringEncoding error:nil];
                     if (![newPath isEqualToString:fullPath]) {
                         [fm removeItemAtPath:fullPath error:nil];
                     }

@@ -174,9 +174,55 @@ internal static class HIPInterop
 
     public static byte[] EncodeLua(string path, bool compileLua)
     {
+        // Strip -- @encoding: comment and re-encode source to target engine encoding
+        // before handing off to the native compiler, which expects single-byte input.
+        string? source = null;
+        try { source = File.ReadAllText(path, System.Text.Encoding.UTF8); } catch { }
+        if (source != null)
+        {
+            int nl = source.IndexOf('\n');
+            var firstLine = nl >= 0 ? source[..nl] : source;
+            const string prefix = "-- @encoding:";
+            if (firstLine.StartsWith(prefix, StringComparison.Ordinal))
+            {
+                var encName = firstLine[prefix.Length..].Trim();
+                var targetEnc = EncodingFromName(encName);
+                if (targetEnc != null && targetEnc.CodePage != 65001)
+                {
+                    var body      = nl >= 0 ? source[(nl + 1)..] : "";
+                    var reencoded = targetEnc.GetBytes(body);
+                    var tmp       = Path.GetTempFileName();
+                    try
+                    {
+                        File.WriteAllBytes(tmp, reencoded);
+                        return EncodeLuaCore(tmp, compileLua);
+                    }
+                    finally { try { File.Delete(tmp); } catch { } }
+                }
+            }
+        }
+        return EncodeLuaCore(path, compileLua);
+    }
+
+    private static byte[] EncodeLuaCore(string path, bool compileLua)
+    {
         ThrowIfFailed(EncodeLuaRaw(path, compileLua ? 1 : 0, out var ptr, out var size));
         return ExtractBytes(ptr, size);
     }
+
+    // Returns the encoding for a -- @encoding: comment name, or null if unknown.
+    public static System.Text.Encoding? EncodingFromName(string name) =>
+        name.ToLowerInvariant() switch
+        {
+            "windows-1251"         => System.Text.Encoding.GetEncoding(1251),
+            "windows-1252"         => System.Text.Encoding.GetEncoding(1252),
+            "windows-1250"         => System.Text.Encoding.GetEncoding(1250),
+            "windows-1253"         => System.Text.Encoding.GetEncoding(1253),
+            "windows-1254"         => System.Text.Encoding.GetEncoding(1254),
+            "iso-8859-1" or "latin-1" => System.Text.Encoding.GetEncoding(28591),
+            "utf-8"                => System.Text.Encoding.UTF8,
+            _                      => null,
+        };
 
     public static byte[] EncodeXSheet(string path)
     {
@@ -275,15 +321,115 @@ internal static class HIPInterop
         return ExtractBytes(ptr, size);
     }
 
+    /// Runs luadec and returns raw single-byte bytes (after \ddd unescaping).
+    /// Encoding interpretation is left to the caller.
+    public static byte[] DecompileLuaRaw(string luacPath)
+    {
+        var readable = RunLuadec(luacPath);
+        // Each char in `readable` carries its original byte value in the low 8 bits;
+        // Latin1 maps U+0000–U+00FF → bytes 0x00–0xFF 1:1.
+        return System.Text.Encoding.Latin1.GetBytes(readable);
+    }
+
+    /// Auto-detects encoding, returns decoded source with "-- @encoding: <name>"
+    /// prepended when the encoding is not plain UTF-8.
+    /// For non-interactive paths (batch extract, CIF decode) — picks best-guess if ambiguous.
     public static string DecompileLua(string luacPath)
     {
+        var raw  = DecompileLuaRaw(luacPath);
+        var (encName, decoded, candidates) = DetectSingleByteEncoding(raw);
+
+        if (decoded == null && candidates?.Count > 0)
+        {
+            encName = candidates[0];
+            decoded = System.Text.Encoding.GetEncoding(EncodingFromName(encName)!.CodePage).GetString(raw);
+        }
+        if (string.IsNullOrEmpty(decoded)) return string.Empty;
+
+        return encName == "utf-8" ? decoded : $"-- @encoding: {encName}\n{decoded}";
+    }
+
+    /// Detects the single-byte encoding of raw decompiled bytes.
+    /// Returns (encName, decoded, null) when confident, or (bestGuess, null, candidates) when ambiguous.
+    public static (string EncName, string? Decoded, List<string>? Candidates)
+        DetectSingleByteEncoding(byte[] raw)
+    {
+        // 1. Pure ASCII / valid UTF-8
+        try
+        {
+            var decoded = new System.Text.UTF8Encoding(false, throwOnInvalidBytes: true).GetString(raw);
+            return ("utf-8", decoded, null);
+        }
+        catch { }
+
+        // 2. Score every candidate encoding
+        var candidateDefs = new[] {
+            (1251, "windows-1251"), (1252, "windows-1252"), (1250, "windows-1250"),
+            (1253, "windows-1253"), (1254, "windows-1254"), (28591, "iso-8859-1"),
+        };
+
+        var scored = new List<(string Name, string Decoded, int Score)>();
+        foreach (var (cp, name) in candidateDefs)
+        {
+            try
+            {
+                var dec = System.Text.Encoding.GetEncoding(cp).GetString(raw);
+                scored.Add((name, dec, ScoreDecoded(dec, name)));
+            }
+            catch { }
+        }
+        scored.Sort((a, b) => b.Score.CompareTo(a.Score));
+
+        if (scored.Count == 0)
+        {
+            var fb = System.Text.Encoding.GetEncoding(1251).GetString(raw);
+            return ("windows-1251", fb, null);
+        }
+
+        var best       = scored[0];
+        var secondScore = scored.Count > 1 ? scored[1].Score : int.MinValue;
+        bool confident  = scored.Count == 1 || (best.Score - secondScore >= 4);
+
+        if (confident) return (best.Name, best.Decoded, null);
+
+        return (best.Name, null, scored.Take(4).Select(x => x.Name).ToList());
+    }
+
+    private static int ScoreDecoded(string text, string encName)
+    {
+        int cyrillic = 0, western = 0, polish = 0, greek = 0, turkish = 0, control = 0;
+        int limit = Math.Min(text.Length, 4000);
+        for (int i = 0; i < limit; i++)
+        {
+            char c = text[i];
+            if      (c >= 0x0400 && c <= 0x04FF) cyrillic++;
+            else if (c >= 0x0391 && c <= 0x03C9) greek++;
+            else if (c is 'ą' or 'Ą' or 'ę' or 'Ę' or 'ś' or 'Ś' or 'ł' or 'Ł' or
+                        'ź' or 'Ź' or 'ż' or 'Ż' or 'ć' or 'Ć' or 'ń' or 'Ń') polish++;
+            else if (c is 'ğ' or 'Ğ' or 'ş' or 'Ş' or 'ı' or 'İ') turkish++;
+            else if (c >= 0x00C0 && c <= 0x024F) western++;
+            else if (c < 0x20 && c != '\t' && c != '\n' && c != '\r') control++;
+        }
+        if (control > 2) return -1000;
+        return encName switch
+        {
+            "windows-1251" => cyrillic * 4 - western       - greek * 2 - polish * 3,
+            "windows-1252" => (western - polish) * 3 - cyrillic * 4 - greek * 2,
+            "windows-1250" => (western + polish * 4) * 2  - cyrillic * 4 - greek * 2,
+            "windows-1253" => greek * 4 - cyrillic * 2 - western,
+            "windows-1254" => (western + turkish * 5) - cyrillic * 4 - greek * 2,
+            "iso-8859-1"   => western - cyrillic * 2,
+            _              => 0,
+        };
+    }
+
+    // Runs luadec with an inactivity watchdog: kills the process if no output
+    // arrives for 15 s, so truly stuck files don't hang the app indefinitely.
+    private static string RunLuadec(string luacPath)
+    {
         var luadecName = RuntimeInformation.ProcessArchitecture == Architecture.Arm64
-            ? "luadec-win-arm64.exe"
-            : "luadec-win-x64.exe";
-
-        var appDir = AppContext.BaseDirectory;
-        var luadecPath = Path.Combine(appDir, luadecName);
-
+            ? "luadec-win-arm64.exe" : "luadec-win-x64.exe";
+        var luadecPath = Path.Combine(AppContext.BaseDirectory, luadecName);
         if (!File.Exists(luadecPath))
             throw new InvalidOperationException($"Luadec binary not found: {luadecPath}");
 
@@ -291,34 +437,71 @@ internal static class HIPInterop
         {
             StartInfo = new ProcessStartInfo
             {
-                FileName = luadecPath,
-                Arguments = $"\"{luacPath}\"",
+                FileName               = luadecPath,
+                Arguments              = $"\"{luacPath}\"",
                 RedirectStandardOutput = true,
-                RedirectStandardError = true,
-                UseShellExecute = false,
-                CreateNoWindow = true,
+                RedirectStandardError  = true,
+                UseShellExecute        = false,
+                CreateNoWindow         = true,
+                StandardOutputEncoding = System.Text.Encoding.Latin1,
             }
         };
 
-        System.Diagnostics.Debug.WriteLine($"[luadec] launching: {luadecPath} \"{luacPath}\"");
+        Debug.WriteLine($"[luadec] launching: {luadecPath} \"{luacPath}\"");
         proc.Start();
-        // Read async to avoid pipe-buffer deadlock, kill if luadec hangs on bad bytecode
-        var stdoutTask = proc.StandardOutput.ReadToEndAsync();
+
+        var sb           = new System.Text.StringBuilder();
+        var lastActivity = DateTime.UtcNow;
+        var timedOut     = false;
+
+        // Read stdout in chunks so we can track when bytes last arrived.
+        var stdoutTask = Task.Run(async () => {
+            var buf = new char[4096];
+            while (true)
+            {
+                int n = await proc.StandardOutput.ReadAsync(buf, 0, buf.Length).ConfigureAwait(false);
+                if (n == 0) break;
+                sb.Append(buf, 0, n);
+                lastActivity = DateTime.UtcNow;
+                Debug.WriteLine($"[luadec] +{n} chars (total {sb.Length})");
+            }
+        });
+
         var stderrTask = proc.StandardError.ReadToEndAsync();
-        bool finished  = proc.WaitForExit(15_000); // 15-second timeout
-        if (!finished)
-        {
-            try { proc.Kill(); } catch { /* ignore */ }
-            throw new InvalidOperationException("Decompilation timed out — luadec got stuck on this bytecode");
-        }
-        var stdout = stdoutTask.GetAwaiter().GetResult();
-        var stderr = stderrTask.GetAwaiter().GetResult();
+
+        // Watchdog: check every 2 s; kill if idle for ≥ 15 s.
+        var watchdog = Task.Run(async () => {
+            while (!proc.HasExited)
+            {
+                await Task.Delay(2000).ConfigureAwait(false);
+                if (proc.HasExited) break;
+                var idle = (DateTime.UtcNow - lastActivity).TotalSeconds;
+                if (idle >= 15)
+                {
+                    Debug.WriteLine($"[luadec] no output for {idle:0}s — killing");
+                    timedOut = true;
+                    try { proc.Kill(); } catch { }
+                    break;
+                }
+                Debug.WriteLine($"[luadec] still running (idle {idle:0}s, {sb.Length} chars)");
+            }
+        });
+
+        Task.WaitAll(stdoutTask, stderrTask, watchdog);
+
+        if (timedOut)
+            throw new InvalidOperationException("Decompilation timed out — luadec produced no output for 15 s");
 
         if (proc.ExitCode != 0)
+        {
+            var stderr = stderrTask.Result;
             throw new InvalidOperationException(
-                string.IsNullOrWhiteSpace(stderr) ? $"luadec exited with code {proc.ExitCode}" : stderr.Trim());
+                string.IsNullOrWhiteSpace(stderr)
+                    ? $"luadec exited with code {proc.ExitCode}"
+                    : stderr.Trim());
+        }
 
-        return LuaDecompiledToReadable(stdout);
+        return LuaDecompiledToReadable(sb.ToString());
     }
 
     /// luadec writes bytes >= 128 in string literals as decimal "\ddd" (and

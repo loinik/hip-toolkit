@@ -140,6 +140,10 @@ public sealed class MainViewModel : INotifyPropertyChanged
     /// (originalName, newName) → chosen outcome. Returns Cancel if unset.
     public Func<string, string, Task<LuaCollisionChoice>>? PromptLuaCollision;
 
+    /// Set by the View to show an encoding-picker dialog when auto-detection is ambiguous.
+    /// Args: (fileName, rawBytes, candidateNames). Returns chosen encoding name, or null to cancel.
+    public Func<string, byte[], List<string>, Task<string?>>? PromptEncoding;
+
     public void AutoSwitchMode(string path)
     {
         // Compiled .lua is content-routed to decompilation regardless of the
@@ -262,20 +266,33 @@ public sealed class MainViewModel : INotifyPropertyChanged
     {
         var name = Path.GetFileName(path);
 
-        // 1. Decompile (no filesystem writes yet).
-        string source;
-        try
+        // 1. Decompile to raw single-byte bytes (no filesystem writes yet).
+        byte[] rawBytes;
+        try { rawBytes = await Task.Run(() => HIPInterop.DecompileLuaRaw(path)); }
+        catch (Exception ex) { return Fail(name, S.Fmt("lua_result_decompile_failed", ex.Message)); }
+
+        // 2. Detect encoding.
+        var (encName, decoded, candidates) = HIPInterop.DetectSingleByteEncoding(rawBytes);
+
+        // 3. If ambiguous, ask the user.
+        if (decoded == null && candidates?.Count > 0)
         {
-            source = await Task.Run(() => HIPInterop.DecompileLua(path));
+            var picked = PromptEncoding != null
+                ? await PromptEncoding(name, rawBytes, candidates)
+                : candidates[0];
+            if (picked == null) return Warn(name, S.Get("lua_result_not_saved"));
+            encName = picked;
+            decoded = HIPInterop.EncodingFromName(encName)?.GetString(rawBytes) ?? "";
         }
-        catch (Exception ex)
-        {
-            return Fail(name, S.Fmt("lua_result_decompile_failed", ex.Message));
-        }
-        if (string.IsNullOrEmpty(source))
+
+        if (string.IsNullOrEmpty(decoded))
             return Fail(name, S.Get("lua_result_decompile_empty"));
 
-        // 2. Decompile succeeded. Decide where to write.
+        // 4. Prepend encoding comment so the pack direction knows the target encoding.
+        var comment = encName == "utf-8" ? "" : $"-- @encoding: {encName}\n";
+        var source  = comment + decoded;
+
+        // 5. Decide where to write.
         var dir     = Path.GetDirectoryName(path) ?? ".";
         var baseN   = Path.GetFileNameWithoutExtension(path);
         var newPath = UniquePath(dir, $"{baseN} (decompiled)", ".lua");
@@ -291,23 +308,20 @@ public sealed class MainViewModel : INotifyPropertyChanged
                 case LuaCollisionChoice.Cancel:
                     return Warn(name, S.Get("lua_result_not_saved"));
                 case LuaCollisionChoice.UseNewName:
-                    await File.WriteAllTextAsync(newPath, source, System.Text.Encoding.Latin1);
+                    await File.WriteAllTextAsync(newPath, source, System.Text.Encoding.UTF8);
                     return Ok(name, S.Fmt("lua_result_new_name", Path.GetFileName(newPath)));
                 case LuaCollisionChoice.RenameOriginal:
                     var renamed = UniquePath(dir, $"{baseN} (compiled)", ".lua");
-                    File.Move(path, renamed);          // preserve original (after decompile OK)
-                    await File.WriteAllTextAsync(path, source, System.Text.Encoding.Latin1);
+                    File.Move(path, renamed);
+                    await File.WriteAllTextAsync(path, source, System.Text.Encoding.UTF8);
                     return Ok(name, S.Fmt("lua_result_renamed", Path.GetFileName(renamed)));
                 case LuaCollisionChoice.Overwrite:
                 default:
-                    await File.WriteAllTextAsync(path, source, System.Text.Encoding.Latin1);   // replaces compiled original
+                    await File.WriteAllTextAsync(path, source, System.Text.Encoding.UTF8);
                     return Ok(name, S.Get("lua_result_overwritten"));
             }
         }
-        catch (Exception ex)
-        {
-            return Fail(name, S.Fmt("lua_result_save_failed", ex.Message));
-        }
+        catch (Exception ex) { return Fail(name, S.Fmt("lua_result_save_failed", ex.Message)); }
     }
 
     // First free "<base><ext>", "<base> 2<ext>", … in dir.
@@ -423,7 +437,7 @@ public sealed class MainViewModel : INotifyPropertyChanged
                     var source = HIPInterop.DecompileLua(outPath);
                     if (string.IsNullOrEmpty(source))
                         return [Warn(name, $"→ .lua  {FormatSize(data.Length)} · bytecode saved — decompilation failed: empty output")];
-                    File.WriteAllText(outPath, source, System.Text.Encoding.Latin1);
+                    File.WriteAllText(outPath, source, System.Text.Encoding.UTF8);
                     return [Ok(name, $"→ .lua  {FormatSize(source.Length)} · decompiled")];
                 }
                 catch (Exception ex)
@@ -572,7 +586,7 @@ public sealed class MainViewModel : INotifyPropertyChanged
                             var source = HIPInterop.DecompileLua(file);
                             if (!string.IsNullOrEmpty(source))
                             {
-                                File.WriteAllText(file, source, System.Text.Encoding.Latin1);
+                                File.WriteAllText(file, source, System.Text.Encoding.UTF8);
                                 System.Diagnostics.Debug.WriteLine($"[luadec] ✓ {fname}");
                                 results.Add(Ok(fname, "decompiled"));
                             }

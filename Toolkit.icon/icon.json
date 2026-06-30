@@ -10,6 +10,7 @@
           "fill" : {
             "solid" : "gray:1.00000,1.00000"
           },
+          "glass" : true,
           "image-name" : "H.svg",
           "name" : "H",
           "position" : {
@@ -22,6 +23,11 @@
         }
       ],
       "lighting" : "individual",
+      "refractivity" : {
+        "depth" : 0,
+        "enabled" : false,
+        "strength" : 1
+      },
       "shadow" : {
         "kind" : "neutral",
         "opacity" : 0.5
@@ -50,7 +56,7 @@
         "kind" : "neutral",
         "opacity" : 0.5
       },
-      "specular" : true,
+      "specular" : false,
       "translucency" : {
         "enabled" : true,
         "value" : 0.5
@@ -58,9 +64,8 @@
     }
   ],
   "supported-platforms" : {
-    "circles" : [
-      "watchOS"
-    ],
-    "squares" : "shared"
+    "squares" : [
+      "macOS"
+    ]
   }
 }
