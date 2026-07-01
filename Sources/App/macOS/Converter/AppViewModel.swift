@@ -23,7 +23,8 @@ final class AppViewModel: ObservableObject {
     @Published var extractCifContents = true
     @Published var capitalizeNames    = false
     @Published var useType4PNG        = false
-    @Published var hisOutputFormat: HisOutputFormat = .wav
+    @Published var hisOutputFormat:  HisOutputFormat  = .wav
+    @Published var bikOutputFormat:  BIKOutputFormat  = .pngSequence
     @Published var showCancelConfirmation = false
 
     private var processingTask: Task<Void, Never>? = nil
@@ -55,6 +56,7 @@ final class AppViewModel: ObservableObject {
         case .cif:     return direction == .forward ? .cifEncode     : .cifDecode
         case .ciftree: return direction == .forward ? .ciftreePack   : .ciftreeUnpack
         case .his:     return direction == .forward ? .hisEncode     : .hisDecode
+        case .video:   return .bikDecode
         }
     }
 
@@ -91,6 +93,7 @@ final class AppViewModel: ObservableObject {
         let capitalizeNames    = self.capitalizeNames
         let useType4PNG        = self.useType4PNG
         let hisOutputFormat    = self.hisOutputFormat
+        let bikOutputFormat    = self.bikOutputFormat
 
         let t = Task {
             var batch: [ConversionResult] = []
@@ -109,6 +112,8 @@ final class AppViewModel: ObservableObject {
                     case .ciftreeUnpack:
                         items = await unpackCiftreeAsync(url, extractContents: extractCifContents,
                                                          decompileLua: decompileLua)
+                    case .bikDecode:
+                        items = await decodeBIKAsync(url, format: bikOutputFormat)
                     default:
                         items = await Task.detached(priority: .userInitiated) { [mode, compileLua, decompileLua, useType4PNG, hisOutputFormat] in
                             switch mode {
@@ -693,6 +698,97 @@ final class AppViewModel: ObservableObject {
             try outData.write(to: out)
             return ok(name, "→ .\(format.ext)  " + sizeStr(outData.count))
         } catch { return fail(name, error.localizedDescription) }
+    }
+
+    // MARK: BIK decode
+
+    private func decodeBIKAsync(_ url: URL, format userFormat: BIKOutputFormat) async -> [ConversionResult] {
+        let name = url.lastPathComponent
+        let stem = url.deletingPathExtension().lastPathComponent
+
+        // Validate input
+        guard url.pathExtension.lowercased() == "bik" else {
+            return [AppViewModel.fail(name, "Expected .bik")]
+        }
+
+        // Backgrounds and node panoramas are stills — they only ever make sense
+        // as PNG (single frame or sequence), so the format picker (which targets
+        // CNV/ANIM video output) is ignored for these regardless of selection.
+        let kind   = BIKKind.from(url)
+        let isStill = kind == .bgSingle || kind == .bgNode
+        let format: BIKOutputFormat = isStill ? .pngSequence : userFormat
+
+        do {
+            // Probe drives single-vs-sequence (frame count) and alpha (pix_fmt),
+            // which is more reliable than guessing from the file name.
+            let info     = try await FFmpegRunner.probe(url)
+            let hasAlpha = info.hasAlpha
+            let multi    = info.frameCount > 1
+
+            func sizeOf(_ u: URL) -> Int {
+                let attrs = try? FileManager.default.attributesOfItem(atPath: u.path)
+                return (attrs?[.size] as? Int) ?? 0
+            }
+
+            switch format {
+            case .pngSequence:
+                if multi {
+                    // PNG sequence into a subfolder next to the source
+                    let folder  = try FFmpegRunner.sequenceFolder(for: url)
+                    let pattern = FFmpegRunner.pngPattern(in: folder, stem: stem)
+                    let pixFmt  = hasAlpha ? "rgba" : "rgb24"
+                    try await FFmpegRunner.run(["-i", url.path, "-pix_fmt", pixFmt, pattern.path])
+                    let count = (try? FileManager.default.contentsOfDirectory(
+                        atPath: folder.path))?.filter { $0.hasSuffix(".png") }.count ?? 0
+                    var r = AppViewModel.ok(name,
+                        "→ \(folder.lastPathComponent)/  \(count) frame\(count == 1 ? "" : "s")")
+                    r.revealURL = folder
+                    return [r]
+                } else {
+                    // Single still → one PNG next to the source (-update for image2)
+                    let out    = FFmpegRunner.singlePNGURL(for: url)
+                    let pixFmt = hasAlpha ? "rgba" : "rgb24"
+                    try await FFmpegRunner.run(
+                        ["-i", url.path, "-frames:v", "1", "-update", "1", "-pix_fmt", pixFmt, out.path])
+                    return [AppViewModel.ok(name, "→ \(out.lastPathComponent)  \(AppViewModel.sizeStr(sizeOf(out)))")]
+                }
+
+            case .mp4:
+                let out = FFmpegRunner.videoURL(for: url, format: .mp4)
+                try await FFmpegRunner.run([
+                    "-i", url.path,
+                    "-c:v", "libx264", "-pix_fmt", "yuv420p",
+                    "-movflags", "+faststart",
+                    out.path
+                ])
+                return [AppViewModel.ok(name, "→ \(out.lastPathComponent)  \(AppViewModel.sizeStr(sizeOf(out)))")]
+
+            case .prores:
+                let out     = FFmpegRunner.videoURL(for: url, format: .prores)
+                let pix     = hasAlpha ? "yuva444p10le" : "yuv422p10le"
+                let profile = hasAlpha ? "4" : "3"  // 4444 or HQ
+                try await FFmpegRunner.run([
+                    "-i", url.path,
+                    "-c:v", "prores_ks", "-profile:v", profile,
+                    "-pix_fmt", pix,
+                    out.path
+                ])
+                return [AppViewModel.ok(name, "→ \(out.lastPathComponent)  \(AppViewModel.sizeStr(sizeOf(out)))")]
+
+            case .vp9:
+                let out = FFmpegRunner.videoURL(for: url, format: .vp9)
+                let pix = hasAlpha ? "yuva420p" : "yuv420p"
+                try await FFmpegRunner.run([
+                    "-i", url.path,
+                    "-c:v", "libvpx-vp9", "-pix_fmt", pix,
+                    "-b:v", "0", "-crf", "30",
+                    out.path
+                ])
+                return [AppViewModel.ok(name, "→ \(out.lastPathComponent)  \(AppViewModel.sizeStr(sizeOf(out)))")]
+            }
+        } catch {
+            return [AppViewModel.fail(name, error.localizedDescription)]
+        }
     }
 
     // MARK: Helpers

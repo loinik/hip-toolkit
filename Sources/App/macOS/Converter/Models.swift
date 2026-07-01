@@ -8,6 +8,7 @@ enum AppCategory: String, CaseIterable, Identifiable {
     case cif
     case ciftree
     case his
+    case video
 
     var id: Self { self }
 
@@ -16,6 +17,7 @@ enum AppCategory: String, CaseIterable, Identifiable {
         case .cif:     return S.get("category_cif")
         case .ciftree: return S.get("category_ciftree")
         case .his:     return S.get("category_his")
+        case .video:   return S.get("category_video")
         }
     }
 }
@@ -33,6 +35,7 @@ enum AppMode {
     case ciftreeUnpack
     case hisEncode
     case hisDecode
+    case bikDecode
 }
 
 enum HisOutputFormat: String, CaseIterable, Identifiable {
@@ -42,10 +45,37 @@ enum HisOutputFormat: String, CaseIterable, Identifiable {
     var label: String { rawValue.uppercased() }
 }
 
+enum BIKOutputFormat: String, CaseIterable, Identifiable {
+    case pngSequence = "png"
+    case mp4         = "mp4"
+    case prores      = "prores"
+    case vp9         = "vp9"
+
+    var id: Self { self }
+
+    var label: String {
+        switch self {
+        case .pngSequence: return "PNG"
+        case .mp4:         return "MP4"
+        case .prores:      return "ProRes"
+        case .vp9:         return "VP9"
+        }
+    }
+
+    var ext: String {
+        switch self {
+        case .pngSequence: return "png"
+        case .mp4:         return "mp4"
+        case .prores:      return "mov"
+        case .vp9:         return "webm"
+        }
+    }
+}
+
 // MARK: - File-kind detection
 
 enum HIPFileKind {
-    case cif, his, dat, lua, image, ogg, wav, mp3, xsheet, json, folder, unknown
+    case cif, his, dat, lua, image, ogg, wav, mp3, xsheet, json, bik, folder, unknown
 
     static func from(_ url: URL) -> HIPFileKind {
         if url.hasDirectoryPath { return .folder }
@@ -60,6 +90,7 @@ enum HIPFileKind {
         case "mp3":                return .mp3
         case "xsheet":             return .xsheet
         case "json":               return .json
+        case "bik":                return .bik
         default:                   return .unknown
         }
     }
@@ -75,6 +106,7 @@ enum HIPFileKind {
         case .folder:  return (.ciftree, .forward)
         case .xsheet:  return (.cif,     .forward)
         case .json:    return (.cif,     .forward)
+        case .bik:     return (.video,   .forward)
         case .unknown: return nil
         }
     }

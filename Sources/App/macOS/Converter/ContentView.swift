@@ -81,11 +81,14 @@ struct ContentView: View {
         }
         .onReceive(NotificationCenter.default.publisher(for: .hipOpenURLInPreview)) { notif in
             if let url = notif.object as? URL {
-                openWindow(id: "hip-toolkit.preview", value: url)
+                openWindow(id: "hip-toolkit.preview", value: PreviewItem(url: url))
             }
         }
         .onReceive(NotificationCenter.default.publisher(for: .hipShowPreview)) { _ in
-            openWindow(id: "hip-toolkit.preview", value: URL?.none)
+            openWindow(id: "hip-toolkit.preview", value: PreviewItem())
+        }
+        .onReceive(NotificationCenter.default.publisher(for: .hipNewPreviewTab)) { _ in
+            openWindow(id: "hip-toolkit.preview", value: PreviewItem())
         }
     }
 
@@ -129,6 +132,7 @@ struct ContentView: View {
             UTType(filenameExtension: "lua")    ?? .data,
             UTType(filenameExtension: "ogg")    ?? .data,
             UTType(filenameExtension: "xsheet") ?? .data,
+            UTType(filenameExtension: "bik")    ?? .data,
             .png,
             UTType(filenameExtension: "jpg")    ?? .data,
             UTType(filenameExtension: "jpeg")   ?? .data,
@@ -137,7 +141,7 @@ struct ContentView: View {
         if panel.runModal() == .OK {
             for url in panel.urls {
                 RecentFilesModel.shared?.note(url)
-                openWindow(id: "hip-toolkit.preview", value: url)
+                openWindow(id: "hip-toolkit.preview", value: PreviewItem(url: url))
             }
         }
     }
@@ -173,6 +177,8 @@ struct ContentView: View {
             ]
         case .hisDecode:
             panel.allowedContentTypes = [UTType(filenameExtension: "his") ?? .data]
+        case .bikDecode:
+            panel.allowedContentTypes = [UTType(filenameExtension: "bik") ?? .data]
         }
         NSApp.activate(ignoringOtherApps: true)
         if panel.runModal() == .OK { vm.processURLs(panel.urls) }
@@ -259,6 +265,14 @@ struct DropZoneView: View {
             Text(dropSubtitle)
                 .font(.subheadline).foregroundStyle(.secondary)
                 .multilineTextAlignment(.center)
+            if vm.mode == .bikDecode {
+                Label(S.get("drop_badge_bik_export_only"), systemImage: "arrow.up.doc")
+                    .font(.caption)
+                    .foregroundStyle(.orange)
+                    .padding(.horizontal, 10)
+                    .padding(.vertical, 4)
+                    .background(Color.orange.opacity(0.12), in: Capsule())
+            }
             Button(chooseLabel, action: openPanel)
                 .buttonStyle(.glass)
                 .buttonBorderShape(.capsule)
@@ -283,6 +297,7 @@ struct DropZoneView: View {
         case .ciftreeUnpack: return "archivebox.fill"
         case .hisEncode:     return "waveform.badge.plus"
         case .hisDecode:     return "waveform.badge.minus"
+        case .bikDecode:     return "film"
         }
     }
     private var dropTitle: String {
@@ -293,6 +308,7 @@ struct DropZoneView: View {
         case .ciftreeUnpack: return S.get("drop_title_ciftree_unpack")
         case .hisEncode:     return S.get("drop_title_his_encode")
         case .hisDecode:     return S.get("drop_title_his_decode")
+        case .bikDecode:     return S.get("drop_title_bik")
         }
     }
     private var dropSubtitle: String {
@@ -303,6 +319,7 @@ struct DropZoneView: View {
         case .ciftreeUnpack: return S.get("drop_subtitle_ciftree_unpack")
         case .hisEncode:     return S.get("drop_subtitle_his_encode")
         case .hisDecode:     return S.get("drop_subtitle_his_decode")
+        case .bikDecode:     return S.get("drop_subtitle_bik")
         }
     }
 }
@@ -314,13 +331,15 @@ struct SettingsBarView: View {
 
     var body: some View {
         HStack(spacing: 14) {
-            Picker("", selection: $vm.direction) {
-                Text(dirForwardLabel).tag(AppDirection.forward)
-                Text(dirBackwardLabel).tag(AppDirection.backward)
+            if vm.category != .video {
+                Picker("", selection: $vm.direction) {
+                    Text(dirForwardLabel).tag(AppDirection.forward)
+                    Text(dirBackwardLabel).tag(AppDirection.backward)
+                }
+                .pickerStyle(.segmented)
+                .fixedSize()
+                .disabled(vm.isProcessing)
             }
-            .pickerStyle(.segmented)
-            .fixedSize()
-            .disabled(vm.isProcessing)
 
             switch vm.mode {
             case .cifEncode:
@@ -383,6 +402,19 @@ struct SettingsBarView: View {
                 .fixedSize()
                 .disabled(vm.isProcessing)
 
+            case .bikDecode:
+                Text(S.get("bik_output_format_label"))
+                    .foregroundStyle(.secondary)
+                    .font(.subheadline)
+                Picker("", selection: $vm.bikOutputFormat) {
+                    ForEach(BIKOutputFormat.allCases) { f in
+                        Text(f.label).tag(f)
+                    }
+                }
+                .pickerStyle(.segmented)
+                .fixedSize()
+                .disabled(vm.isProcessing)
+
             default:
                 EmptyView()
             }
@@ -398,6 +430,7 @@ struct SettingsBarView: View {
         case .cif:     return S.get("dir_file_to_cif")
         case .ciftree: return S.get("dir_pack")
         case .his:     return S.get("dir_file_to_his")
+        case .video:   return ""
         }
     }
     private var dirBackwardLabel: String {
@@ -405,6 +438,7 @@ struct SettingsBarView: View {
         case .cif:     return S.get("dir_cif_to_file")
         case .ciftree: return S.get("dir_unpack")
         case .his:     return S.get("dir_his_to_file")
+        case .video:   return ""
         }
     }
 }

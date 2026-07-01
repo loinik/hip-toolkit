@@ -13,6 +13,29 @@ extension Notification.Name {
     static let hipCheckUpdates   = Notification.Name("hip.checkUpdates")
     static let hipDeselectAll    = Notification.Name("hip.deselectAll")
     static let hipOpenURLInPreview = Notification.Name("hip.openURLInPreview")
+    static let hipNewPreviewTab    = Notification.Name("hip.newPreviewTab")
+}
+
+// MARK: - Preview window item
+//
+// Preview windows are keyed by this wrapper instead of a bare URL so that:
+//   • Opening the same file focuses the existing window (dedup by url).
+//   • Empty "New Tab" windows are always unique (dedup by id) — each ⌘T
+//     produces a fresh tab, Safari-style.
+
+struct PreviewItem: Hashable, Codable {
+    var id  = UUID()
+    var url: URL?
+
+    init(url: URL? = nil) { self.url = url }
+
+    static func == (lhs: PreviewItem, rhs: PreviewItem) -> Bool {
+        if let l = lhs.url, let r = rhs.url { return l == r }
+        return lhs.id == rhs.id
+    }
+    func hash(into hasher: inout Hasher) {
+        if let url { hasher.combine(url) } else { hasher.combine(id) }
+    }
 }
 
 // MARK: - Recent files model
@@ -38,6 +61,11 @@ final class RecentFilesModel: ObservableObject {
 // MARK: - App Delegate
 
 class AppDelegate: NSObject, NSApplicationDelegate {
+
+    func applicationDidFinishLaunching(_ notification: Notification) {
+        // Enable native window tabbing so preview windows group into tabs.
+        NSWindow.allowsAutomaticWindowTabbing = true
+    }
 
     func applicationShouldTerminate(_ sender: NSApplication) -> NSApplication.TerminateReply {
         guard let vm = AppViewModel.shared, vm.isProcessing else { return .terminateNow }
@@ -91,6 +119,11 @@ struct hipApp: App {
             CommandGroup(replacing: .newItem) { }
 
             CommandGroup(after: .newItem) {
+                Button(S.get("menu_new_tab")) {
+                    NotificationCenter.default.post(name: .hipNewPreviewTab, object: nil)
+                }
+                .keyboardShortcut("t", modifiers: .command)
+
                 Button(S.get("menu_open")) {
                     NotificationCenter.default.post(name: .hipOpenFile, object: nil)
                 }
@@ -130,10 +163,13 @@ struct hipApp: App {
             }
         }
 
-        // ── Preview window (parameterised by URL) ─────────────────────
-        WindowGroup(id: "hip-toolkit.preview", for: URL.self) { $url in
-            PreviewWindowRootView(url: $url)
-                .onOpenURL { url = $0 }
+        // ── Preview window (parameterised by PreviewItem) ─────────────
+        WindowGroup(id: "hip-toolkit.preview", for: PreviewItem.self) { $item in
+            PreviewWindowRootView(url: Binding(
+                get: { item?.url },
+                set: { newURL in item = PreviewItem(url: newURL) }
+            ))
+            .onOpenURL { item = PreviewItem(url: $0) }
         }
         .defaultSize(width: 720, height: 520)
         .restorationBehavior(.disabled)

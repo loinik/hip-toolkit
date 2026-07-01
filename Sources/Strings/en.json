@@ -6,6 +6,7 @@
 
   "menu_check_updates":  "Check for Updates…",
   "menu_open":           "Open…",
+  "menu_new_tab":        "New Tab",
   "menu_open_recent":    "Open Recent",
   "menu_clear_recent":   "Clear Menu",
   "menu_deselect_all":   "Deselect All",
@@ -54,6 +55,7 @@
   "drop_title_ciftree_unpack": "Drag a Ciftree .dat archive",
   "drop_title_his_encode":     "Drag WAV, OGG or MP3 files",
   "drop_title_his_decode":     "Drag .his files",
+  "drop_title_bik":            "Drag Bink Video Files",
 
   "drop_subtitle_cif_encode":     "PNG/JPEG → CIF image · Lua → CIF script · XSheet / JSON → CIF sprite",
   "drop_subtitle_cif_decode":     "CIF → PNG / .lua / .json — saved next to original",
@@ -61,6 +63,10 @@
   "drop_subtitle_ciftree_unpack": "Each embedded .cif is extracted to a folder next to the archive",
   "drop_subtitle_his_encode":     "WAV / OGG / MP3 → HIS (HeR Interactive Sound)",
   "drop_subtitle_his_decode":     "HIS → WAV / OGG / MP3 — saved next to original",
+  "drop_subtitle_bik":            "Backgrounds & panoramas → PNG · Conversations & animations → PNG, MP4, ProRes or VP9",
+  "drop_badge_bik_export_only":   "Export only — .bik files cannot be created",
+
+  "bik_output_format_label":  "Output",
 
   "history_section":  "History",
   "history_clear":    "Clear",
@@ -165,7 +171,7 @@
   "encoding_picker_message":     "The encoding of \"{0}\" couldn't be determined automatically. Select the option where the preview looks correct.",
 
   "preview_drop_title":            "Drop a file to preview",
-  "preview_drop_formats":          "CIF · HIS · DAT · Lua · XSheet · JSON · OGG · PNG",
+  "preview_drop_formats":          "CIF · HIS · DAT · Lua · XSheet · BIK",
   "preview_choose_file":           "Choose File…",
   "preview_no_preview_desc":       "No preview available for {0} files.",
   "preview_open_help":             "Open another file for inspection (⌘O)",
@@ -197,5 +203,29 @@
   "preview_reading":               "Reading…",
   "preview_pack_to_cif":           "Pack to CIF…",
   "preview_loading":               "Loading…",
-  "his_ogg_size_label":            "OGG Vorbis · {0}"
+  "his_ogg_size_label":            "OGG Vorbis · {0}",
+
+  "bik_extracting_frame":          "Extracting frame…",
+  "bik_extracting_frames":         "Extracting frames…",
+  "bik_load_frame_failed":         "Could not load extracted frame",
+  "bik_no_frames_extracted":       "No frames extracted",
+  "bik_export_png":                "Export PNG",
+  "bik_export_png_sequence":       "Export PNG Sequence",
+  "bik_export_here":               "Export Here",
+  "bik_export_folder_message":     "Choose a folder to export the PNG sequence into",
+  "bik_converting":                "Converting…",
+  "bik_converting_progress":       "Converting… {0} / {1}",
+  "bik_play_pause_help":           "Play / Pause (Space)",
+  "bik_previous_frame_help":       "Previous frame",
+  "bik_next_frame_help":           "Next frame",
+  "bik_loop_help":                 "Loop",
+  "bik_volume_help":               "Volume",
+  "bik_export_ellipsis":           "Export…",
+  "bik_export_title":              "Export",
+  "bik_export_format_label":       "Format",
+  "bik_cancel":                    "Cancel",
+  "bik_frame_counter":             "{0} / {1}",
+  "bik_fps_label":                 "{0} fps",
+  "bik_bink2_unsupported_title":   "Bink 2 video is not supported",
+  "bik_bink2_unsupported_desc":    "This file uses the Bink 2 codec (KB2g), which is not implemented in the bundled ffmpeg. Only Bink 1 files can be previewed."
 }

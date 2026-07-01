@@ -82,6 +82,7 @@ struct FilePreviewWindowView: View {
             case .ogg:    OGGPreviewView(url: url)
             case .xsheet: XSheetPreviewView(url: url)
             case .json:   JSONXSheetPreviewView(url: url)
+            case .bik:    BIKPreviewView(url: url)
             default:
                 ContentUnavailableView(
                     S.get("preview_cannot_preview"),
@@ -132,6 +133,7 @@ struct FilePreviewWindowView: View {
             UTType(filenameExtension: "lua")    ?? .data,
             UTType(filenameExtension: "ogg")    ?? .data,
             UTType(filenameExtension: "xsheet") ?? .data,
+            UTType(filenameExtension: "bik")    ?? .data,
             .png,
             UTType(filenameExtension: "jpg")    ?? .data,
             UTType(filenameExtension: "jpeg")   ?? .data,
@@ -140,7 +142,7 @@ struct FilePreviewWindowView: View {
         if panel.runModal() == .OK {
             for u in panel.urls {
                 RecentFilesModel.shared?.note(u)
-                openWindow(id: "hip-toolkit.preview", value: u)
+                openWindow(id: "hip-toolkit.preview", value: PreviewItem(url: u))
             }
         }
     }

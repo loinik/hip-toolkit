@@ -6,6 +6,18 @@
 	<array>
 		<dict>
 			<key>CFBundleTypeName</key>
+			<string>Bink Video</string>
+			<key>CFBundleTypeRole</key>
+			<string>Viewer</string>
+			<key>LSHandlerRank</key>
+			<string>Alternate</string>
+			<key>LSItemContentTypes</key>
+			<array>
+				<string>com.radgametools.bink</string>
+			</array>
+		</dict>
+		<dict>
+			<key>CFBundleTypeName</key>
 			<string>CIF File</string>
 			<key>CFBundleTypeRole</key>
 			<string>Viewer</string>
@@ -39,6 +51,29 @@
 			<array>
 				<string>com.herinteractive.his</string>
 			</array>
+		</dict>
+	</array>
+	<key>UTImportedTypeDeclarations</key>
+	<array>
+		<dict>
+			<key>UTTypeConformsTo</key>
+			<array>
+				<string>public.audiovisual-content</string>
+			</array>
+			<key>UTTypeDescription</key>
+			<string>Bink Video</string>
+			<key>UTTypeIcons</key>
+			<dict/>
+			<key>UTTypeIdentifier</key>
+			<string>com.radgametools.bink</string>
+			<key>UTTypeTagSpecification</key>
+			<dict>
+				<key>public.filename-extension</key>
+				<array>
+					<string>bik</string>
+					<string>bk2</string>
+				</array>
+			</dict>
 		</dict>
 	</array>
 	<key>UTExportedTypeDeclarations</key>

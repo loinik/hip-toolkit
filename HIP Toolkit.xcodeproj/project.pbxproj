@@ -53,6 +53,7 @@
 		EE6187342F829A8100EB6D27 /* ltable.c in Sources */ = {isa = PBXBuildFile; fileRef = EE6187082F829A8100EB6D27 /* ltable.c */; };
 		EE6187352F829A8100EB6D27 /* lstate.c in Sources */ = {isa = PBXBuildFile; fileRef = EE6187032F829A8100EB6D27 /* lstate.c */; };
 		EE6187372F82A42800EB6D27 /* luadec-macos-arm64 in Resources */ = {isa = PBXBuildFile; fileRef = EE6187362F82A42800EB6D27 /* luadec-macos-arm64 */; };
+		EEBIK0010DEADBEEF00000002 /* ffmpeg-macos-arm64 in Resources */ = {isa = PBXBuildFile; fileRef = EEBIK0010DEADBEEF00000001 /* ffmpeg-macos-arm64 */; };
 		EE61873F2F82B9D100EB6D27 /* Quartz.framework in Frameworks */ = {isa = PBXBuildFile; fileRef = EE61873E2F82B9D100EB6D27 /* Quartz.framework */; };
 		EE61874B2F82B9D100EB6D27 /* HIP Quick Look.appex in Embed Foundation Extensions */ = {isa = PBXBuildFile; fileRef = EE61873C2F82B9D100EB6D27 /* HIP Quick Look.appex */; settings = {ATTRIBUTES = (RemoveHeadersOnCopy, ); }; };
 		EE61877F2F83721300EB6D27 /* Assets.xcassets in Resources */ = {isa = PBXBuildFile; fileRef = EE61877B2F83721300EB6D27 /* Assets.xcassets */; };
@@ -72,6 +73,8 @@
 		EE01A00BDEADBEEF00000002 /* LuaPreviewView.swift in Sources */ = {isa = PBXBuildFile; fileRef = EE01A00BDEADBEEF00000001 /* LuaPreviewView.swift */; };
 		EE01A00CDEADBEEF00000002 /* PlainImagePreviewView.swift in Sources */ = {isa = PBXBuildFile; fileRef = EE01A00CDEADBEEF00000001 /* PlainImagePreviewView.swift */; };
 		EE01A00DDEADBEEF00000002 /* OGGPreviewView.swift in Sources */ = {isa = PBXBuildFile; fileRef = EE01A00DDEADBEEF00000001 /* OGGPreviewView.swift */; };
+		EEBIK0001DEADBEEF00000002 /* FFmpegRunner.swift in Sources */ = {isa = PBXBuildFile; fileRef = EEBIK0001DEADBEEF00000001 /* FFmpegRunner.swift */; };
+		EEBIK0002DEADBEEF00000002 /* BIKPreviewView.swift in Sources */ = {isa = PBXBuildFile; fileRef = EEBIK0002DEADBEEF00000001 /* BIKPreviewView.swift */; };
 		EE77C5682FEA85DB00965EC2 /* Info.plist in Resources */ = {isa = PBXBuildFile; fileRef = EE77C5642FEA85DB00965EC2 /* Info.plist */; };
 		EEA0BB01CC000001DEADBEEF /* Strings.swift in Sources */ = {isa = PBXBuildFile; fileRef = EEA0BB02CC000001DEADBEEF /* Strings.swift */; };
 		EEA0BB03CC000001DEADBEEF /* en.json in Resources */ = {isa = PBXBuildFile; fileRef = EEA0BB04CC000001DEADBEEF /* en.json */; };
@@ -183,6 +186,7 @@
 		EE6187152F829A8100EB6D27 /* Makefile */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.make; path = Makefile; sourceTree = "<group>"; };
 		EE6187162F829A8100EB6D27 /* print.c */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.c; path = print.c; sourceTree = "<group>"; };
 		EE6187362F82A42800EB6D27 /* luadec-macos-arm64 */ = {isa = PBXFileReference; lastKnownFileType = "compiled.mach-o.executable"; path = "luadec-macos-arm64"; sourceTree = "<group>"; };
+		EEBIK0010DEADBEEF00000001 /* ffmpeg-macos-arm64 */ = {isa = PBXFileReference; lastKnownFileType = "compiled.mach-o.executable"; path = "ffmpeg-macos-arm64"; sourceTree = "<group>"; };
 		EE61873C2F82B9D100EB6D27 /* HIP Quick Look.appex */ = {isa = PBXFileReference; explicitFileType = "wrapper.app-extension"; includeInIndex = 0; path = "HIP Quick Look.appex"; sourceTree = BUILT_PRODUCTS_DIR; };
 		EE61873E2F82B9D100EB6D27 /* Quartz.framework */ = {isa = PBXFileReference; lastKnownFileType = wrapper.framework; name = Quartz.framework; path = System/Library/Frameworks/Quartz.framework; sourceTree = SDKROOT; };
 		EE61877B2F83721300EB6D27 /* Assets.xcassets */ = {isa = PBXFileReference; lastKnownFileType = folder.assetcatalog; path = Assets.xcassets; sourceTree = "<group>"; };
@@ -204,6 +208,8 @@
 		EE01A00BDEADBEEF00000001 /* LuaPreviewView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = LuaPreviewView.swift; sourceTree = "<group>"; };
 		EE01A00CDEADBEEF00000001 /* PlainImagePreviewView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = PlainImagePreviewView.swift; sourceTree = "<group>"; };
 		EE01A00DDEADBEEF00000001 /* OGGPreviewView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = OGGPreviewView.swift; sourceTree = "<group>"; };
+		EEBIK0001DEADBEEF00000001 /* FFmpegRunner.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = FFmpegRunner.swift; sourceTree = "<group>"; };
+		EEBIK0002DEADBEEF00000001 /* BIKPreviewView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = BIKPreviewView.swift; sourceTree = "<group>"; };
 		EE77C5642FEA85DB00965EC2 /* Info.plist */ = {isa = PBXFileReference; lastKnownFileType = text.plist.xml; path = Info.plist; sourceTree = "<group>"; };
 		EEA0BB02CC000001DEADBEEF /* Strings.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Strings.swift; sourceTree = "<group>"; };
 		EEA0BB04CC000001DEADBEEF /* en.json */ = {isa = PBXFileReference; lastKnownFileType = text.json; name = en.json; path = Sources/Strings/en.json; sourceTree = SOURCE_ROOT; };
@@ -313,6 +319,7 @@
 				EE6186BC2F829A4600EB6D27 /* lua */,
 				EE6186BD2F829A4600EB6D27 /* stb_vorbis.c */,
 				EE6187362F82A42800EB6D27 /* luadec-macos-arm64 */,
+				EEBIK0010DEADBEEF00000001 /* ffmpeg-macos-arm64 */,
 				EE618702AA000001DEADBEEF /* nlohmann_json.hpp */,
 				EE000001VORBISCOMPILE0000 /* vorbis_compile.c */,
 				EE000002SHINECOMPILE0000 /* shine_compile.c */,
@@ -449,6 +456,7 @@
 				EE01A002DEADBEEF00000001 /* AppViewModel.swift */,
 				EE01A003DEADBEEF00000001 /* DataHelpers.swift */,
 				EE01A004DEADBEEF00000001 /* WindowHooks.swift */,
+				EEBIK0001DEADBEEF00000001 /* FFmpegRunner.swift */,
 			);
 			path = Converter;
 			sourceTree = "<group>";
@@ -465,6 +473,7 @@
 				EE01A00BDEADBEEF00000001 /* LuaPreviewView.swift */,
 				EE01A00CDEADBEEF00000001 /* PlainImagePreviewView.swift */,
 				EE01A00DDEADBEEF00000001 /* OGGPreviewView.swift */,
+				EEBIK0002DEADBEEF00000001 /* BIKPreviewView.swift */,
 			);
 			path = Preview;
 			sourceTree = "<group>";
@@ -571,6 +580,7 @@
 				EEE5AB292F84E9E200365579 /* Toolkit.icon in Resources */,
 				EE61877F2F83721300EB6D27 /* Assets.xcassets in Resources */,
 				EE6187372F82A42800EB6D27 /* luadec-macos-arm64 in Resources */,
+				EEBIK0010DEADBEEF00000002 /* ffmpeg-macos-arm64 in Resources */,
 				EEA0BB03CC000001DEADBEEF /* en.json in Resources */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
@@ -648,6 +658,8 @@
 				EE01A00BDEADBEEF00000002 /* LuaPreviewView.swift in Sources */,
 				EE01A00CDEADBEEF00000002 /* PlainImagePreviewView.swift in Sources */,
 				EE01A00DDEADBEEF00000002 /* OGGPreviewView.swift in Sources */,
+				EEBIK0001DEADBEEF00000002 /* FFmpegRunner.swift in Sources */,
+				EEBIK0002DEADBEEF00000002 /* BIKPreviewView.swift in Sources */,
 				EE6187342F829A8100EB6D27 /* ltable.c in Sources */,
 				EE6187352F829A8100EB6D27 /* lstate.c in Sources */,
 			);

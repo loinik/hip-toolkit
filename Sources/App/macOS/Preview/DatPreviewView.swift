@@ -151,7 +151,7 @@ struct DatPreviewView: View {
         try? url.path.write(to: dir.appendingPathComponent(entry.name + ".png.source"),
                             atomically: true, encoding: .utf8)
         RecentFilesModel.shared?.note(url)
-        openWindow(id: "hip-toolkit.preview", value: tmp)
+        openWindow(id: "hip-toolkit.preview", value: PreviewItem(url: tmp))
     }
 
     private func extract(_ items: [DatEntry]) {
