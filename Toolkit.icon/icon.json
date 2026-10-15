@@ -53,7 +53,7 @@
       ],
       "opacity" : 0.25,
       "shadow" : {
-        "kind" : "neutral",
+        "kind" : "none",
         "opacity" : 0.5
       },
       "specular" : false,

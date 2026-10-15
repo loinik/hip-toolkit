@@ -55,7 +55,7 @@ This document is a comprehensive guide to the Lua-based scripting system used in
 │           Native C++ Engine Core            │
 │  (rendering, input, audio, file I/O, Lua)   │
 ├─────────────────────────────────────────────┤
-│         AR — Assets Renderer (Lua API)      │
+│          AR — Action Record (Lua API)       │
 │  Scene graph, node lifecycle, z-ordering    │
 ├──────────┬──────────┬───────────────────────┤
 │  Flags   │  Brain   │  VarTables            │
@@ -73,7 +73,7 @@ The engine is a **node-based scene graph** running on Lua 5.1. Every visible ele
 
 ---
 
-## AR — The Assets Renderer
+## AR — The Action Record
 
 `AR` is the central singleton exposed to Lua by the native engine. It is **not** defined in any Lua file — it is a C++ object bound into the Lua runtime. Think of it as a factory that creates scene-graph nodes:
 

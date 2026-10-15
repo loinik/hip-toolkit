@@ -216,6 +216,29 @@ static std::vector<uint8_t> rgbaToRGB888(const uint8_t* rgba, int w, int h) {
     return out;
 }
 
+// v2 ciftree archives (games 6+) store 24/32-bit pixels in Windows DIB
+// order — BGR / BGRA.
+static std::vector<uint8_t> rgbaToBGR888(const uint8_t* rgba, int w, int h) {
+    std::vector<uint8_t> out(static_cast<size_t>(w) * h * 3);
+    for (size_t i = 0; i < static_cast<size_t>(w) * h; ++i) {
+        out[3 * i + 0] = rgba[4 * i + 2]; // B
+        out[3 * i + 1] = rgba[4 * i + 1]; // G
+        out[3 * i + 2] = rgba[4 * i + 0]; // R
+    }
+    return out;
+}
+
+static std::vector<uint8_t> rgbaToBGRA8888(const uint8_t* rgba, int w, int h) {
+    std::vector<uint8_t> out(static_cast<size_t>(w) * h * 4);
+    for (size_t i = 0; i < static_cast<size_t>(w) * h; ++i) {
+        out[4 * i + 0] = rgba[4 * i + 2]; // B
+        out[4 * i + 1] = rgba[4 * i + 1]; // G
+        out[4 * i + 2] = rgba[4 * i + 0]; // R
+        out[4 * i + 3] = rgba[4 * i + 3]; // A
+    }
+    return out;
+}
+
 // ── Decoded legacy pixels → RGBA8 (inverse of rgbaToRGB555/888) ──────────────
 
 static std::vector<uint8_t> legacyPixelsToRGBAImpl(const uint8_t* pixels,
@@ -242,6 +265,20 @@ static std::vector<uint8_t> legacyPixelsToRGBAImpl(const uint8_t* pixels,
             out[4 * i + 1] = pixels[3 * i + 1];
             out[4 * i + 2] = pixels[3 * i + 2];
             out[4 * i + 3] = 0xFF;
+        }
+    } else if (fmt == PixelFormat::BGR888) {
+        for (size_t i = 0; i < numPx; ++i) {
+            out[4 * i + 0] = pixels[3 * i + 2];
+            out[4 * i + 1] = pixels[3 * i + 1];
+            out[4 * i + 2] = pixels[3 * i + 0];
+            out[4 * i + 3] = 0xFF;
+        }
+    } else if (fmt == PixelFormat::BGRA8888) {
+        for (size_t i = 0; i < numPx; ++i) {
+            out[4 * i + 0] = pixels[4 * i + 2];
+            out[4 * i + 1] = pixels[4 * i + 1];
+            out[4 * i + 2] = pixels[4 * i + 0];
+            out[4 * i + 3] = pixels[4 * i + 3];
         }
     }
     return out;
@@ -321,6 +358,15 @@ static std::vector<uint8_t> buildTGA(const uint8_t* pixels,
             *dst++ = pixels[3 * i + 2];
             *dst++ = pixels[3 * i + 1];
             *dst++ = pixels[3 * i + 0];
+        }
+    } else if (fmt == PixelFormat::BGR888) {
+        // Already BGR — TGA's native order.
+        std::memcpy(dst, pixels, numPx * 3);
+    } else if (fmt == PixelFormat::BGRA8888) {
+        for (size_t i = 0; i < numPx; ++i) {   // drop alpha for 24-bit TGA
+            *dst++ = pixels[4 * i + 0];
+            *dst++ = pixels[4 * i + 1];
+            *dst++ = pixels[4 * i + 2];
         }
     }
     return out;
@@ -522,8 +568,10 @@ std::vector<uint8_t> loadImageAsCIFPixels(
     std::vector<uint8_t> out;
     try {
         switch (targetFormat) {
-            case PixelFormat::RGB555: out = rgbaToRGB555(px, w, h); break;
-            case PixelFormat::RGB888: out = rgbaToRGB888(px, w, h); break;
+            case PixelFormat::RGB555:   out = rgbaToRGB555(px, w, h);   break;
+            case PixelFormat::RGB888:   out = rgbaToRGB888(px, w, h);   break;
+            case PixelFormat::BGR888:   out = rgbaToBGR888(px, w, h);   break;
+            case PixelFormat::BGRA8888: out = rgbaToBGRA8888(px, w, h); break;
             default:
                 throw std::runtime_error(
                     "loadImageAsCIFPixels: unsupported target format");
@@ -578,7 +626,7 @@ std::vector<uint8_t> entryToTGA(const LegacyEntry& entry) {
     if (entry.ftype != 0x02 || entry.pixels == PixelFormat::None) return {};
     if (entry.width == 0 || entry.height == 0 || entry.data.empty()) return {};
 
-    const size_t bytesPerPx = (entry.pixels == PixelFormat::RGB555) ? 2 : 3;
+    const size_t bytesPerPx = bytesPerPixel(entry.pixels);
     const size_t expectedBytes =
         static_cast<size_t>(entry.width) * entry.height * bytesPerPx;
     if (entry.data.size() < expectedBytes) return {};
@@ -593,7 +641,7 @@ std::vector<uint8_t> entryToPNG(const LegacyEntry& entry) {
     if (entry.ftype != 0x02 || entry.pixels == PixelFormat::None) return {};
     if (entry.width == 0 || entry.height == 0 || entry.data.empty()) return {};
 
-    const size_t bytesPerPx = (entry.pixels == PixelFormat::RGB555) ? 2 : 3;
+    const size_t bytesPerPx = bytesPerPixel(entry.pixels);
     const size_t expectedBytes =
         static_cast<size_t>(entry.width) * entry.height * bytesPerPx;
     if (entry.data.size() < expectedBytes) return {};
@@ -635,7 +683,9 @@ void unpackCiftreeToTGA(const std::filesystem::path& datPath,
                 writeFile(outPath, tga);
             } else {
                 const std::string ext =
-                    (entry.pixels == PixelFormat::RGB555) ? ".rgb555" : ".rgb888";
+                    (entry.pixels == PixelFormat::RGB555)   ? ".rgb555" :
+                    (entry.pixels == PixelFormat::BGR888)   ? ".bgr888" :
+                    (entry.pixels == PixelFormat::BGRA8888) ? ".bgra8888" : ".rgb888";
                 outPath = outDir / (entry.name + ext);
                 if (!entry.data.empty()) writeFile(outPath, entry.data);
             }

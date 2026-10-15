@@ -18,6 +18,7 @@
 #include <algorithm>
 #include <array>
 #include <cstring>
+#include <limits>
 #include <stdexcept>
 
 namespace CIF {
@@ -40,27 +41,98 @@ uint32_t rU32LE(const uint8_t* p) {
     return uint32_t(p[0]) | uint32_t(p[1])<<8 | uint32_t(p[2])<<16 | uint32_t(p[3])<<24;
 }
 
-// The games' text is Windows-1252/Latin-1, not UTF-8 — bytes like 0x92 (curly
-// apostrophe) are invalid UTF-8 and make nlohmann::dump() throw. We transcode
-// every string that enters JSON as Latin-1 → UTF-8 (a 1:1 byte↔codepoint map
-// for 0x00-0xFF, so it's lossless) and reverse it on the way back out, keeping
-// the on-disk bytes byte-exact.
-std::string latin1ToUtf8(const std::string& s) {
-    std::string o; o.reserve(s.size());
+// The games' text is single-byte, not UTF-8 — Windows-1252/Latin-1 for the
+// Western releases and Windows-1251 for the Russian localisations. Raw bytes
+// like 0x92 (curly apostrophe) are invalid UTF-8 and make nlohmann::dump()
+// throw, and Cyrillic shown as Latin-1 is mojibake. We transcode every string
+// that enters JSON to real UTF-8 and reverse it on the way back out.
+//
+// Which code page? Per string, by a shape heuristic: Cyrillic words are
+// unbroken runs of bytes ≥0xC0 (cp1251 puts А-Яа-я at 0xC0-0xFF), while
+// Western accented characters ("café", "Straße") appear as isolated high
+// bytes between ASCII. Two or more consecutive 0xC0+ bytes → cp1251,
+// otherwise Latin-1.
+//
+// Round-tripping stays byte-exact either way: utf8ToEngine() maps Cyrillic
+// and cp1251 punctuation codepoints to their cp1251 bytes and U+0080-00FF
+// straight to Latin-1 bytes, so it inverts both decode flavours — and every
+// caller that must be lossless already verifies re-encode == original and
+// falls back to a raw representation if not.
+
+// cp1251 bytes 0x80-0xBF → Unicode (0xC0-0xFF are А..я = U+0410 + (b-0xC0)).
+// 0x98 is unassigned in cp1251; map it to U+0098 so it still round-trips.
+constexpr uint16_t kCp1251Hi[64] = {
+    0x0402,0x0403,0x201A,0x0453,0x201E,0x2026,0x2020,0x2021,
+    0x20AC,0x2030,0x0409,0x2039,0x040A,0x040C,0x040B,0x040F,
+    0x0452,0x2018,0x2019,0x201C,0x201D,0x2022,0x2013,0x2014,
+    0x0098,0x2122,0x0459,0x203A,0x045A,0x045C,0x045B,0x045F,
+    0x00A0,0x040E,0x045E,0x0408,0x00A4,0x0490,0x00A6,0x00A7,
+    0x0401,0x00A9,0x0404,0x00AB,0x00AC,0x00AD,0x00AE,0x0407,
+    0x00B0,0x00B1,0x0406,0x0456,0x0491,0x00B5,0x00B6,0x00B7,
+    0x0451,0x2116,0x0454,0x00BB,0x0458,0x0405,0x0455,0x0457,
+};
+
+void appendUtf8(std::string& o, uint32_t cp) {
+    if (cp < 0x80) o.push_back(char(cp));
+    else if (cp < 0x800) {
+        o.push_back(char(0xC0 | (cp >> 6)));
+        o.push_back(char(0x80 | (cp & 0x3F)));
+    } else {
+        o.push_back(char(0xE0 | (cp >> 12)));
+        o.push_back(char(0x80 | ((cp >> 6) & 0x3F)));
+        o.push_back(char(0x80 | (cp & 0x3F)));
+    }
+}
+
+bool looksLikeCp1251(const std::string& s) {
+    int run = 0;
     for (unsigned char c : s) {
-        if (c < 0x80) o.push_back(char(c));
-        else { o.push_back(char(0xC0 | (c >> 6))); o.push_back(char(0x80 | (c & 0x3F))); }
+        if (c >= 0xC0 || c == 0xA8 || c == 0xB8) {   // А-я, Ё, ё
+            if (++run >= 2) return true;
+        } else run = 0;
+    }
+    return false;
+}
+
+std::string engineToUtf8(const std::string& s) {
+    const bool cyr = looksLikeCp1251(s);
+    std::string o; o.reserve(s.size() * 2);
+    for (unsigned char c : s) {
+        if (c < 0x80)      o.push_back(char(c));
+        else if (!cyr)     appendUtf8(o, c);                       // Latin-1
+        else if (c >= 0xC0) appendUtf8(o, 0x0410 + (c - 0xC0));    // А..я
+        else               appendUtf8(o, kCp1251Hi[c - 0x80]);
     }
     return o;
 }
-std::string utf8ToLatin1(const std::string& s) {
+
+// UTF-8 → engine single-byte. Inverts engineToUtf8() for both code pages:
+// U+0080-00FF go straight to their Latin-1 byte, Cyrillic and cp1251
+// punctuation go to their cp1251 byte. Unmappable codepoints become '?'.
+std::string utf8ToEngine(const std::string& s) {
     std::string o; o.reserve(s.size());
-    for (size_t i=0; i<s.size(); ) {
-        unsigned char c = s[i];
-        if (c < 0x80) { o.push_back(char(c)); ++i; }
-        else if ((c & 0xE0)==0xC0 && i+1<s.size() && (uint8_t(s[i+1])&0xC0)==0x80) {
-            o.push_back(char(((c & 0x1F) << 6) | (uint8_t(s[i+1]) & 0x3F))); i+=2;
-        } else { o.push_back(char(c)); ++i; }   // passthrough (shouldn't happen for our data)
+    size_t i = 0;
+    while (i < s.size()) {
+        const unsigned char c = s[i];
+        uint32_t cp; size_t len;
+        if (c < 0x80)                            { cp = c; len = 1; }
+        else if ((c & 0xE0) == 0xC0 && i+1 < s.size() && (uint8_t(s[i+1]) & 0xC0) == 0x80)
+            { cp = ((c & 0x1F) << 6) | (uint8_t(s[i+1]) & 0x3F); len = 2; }
+        else if ((c & 0xF0) == 0xE0 && i+2 < s.size() && (uint8_t(s[i+1]) & 0xC0) == 0x80
+                                                       && (uint8_t(s[i+2]) & 0xC0) == 0x80)
+            { cp = ((c & 0x0F) << 12) | ((uint8_t(s[i+1]) & 0x3F) << 6)
+                 | (uint8_t(s[i+2]) & 0x3F); len = 3; }
+        else { o.push_back(char(c)); ++i; continue; }   // passthrough garbage byte
+
+        if (cp < 0x100)                    o.push_back(char(cp));         // ASCII/Latin-1
+        else if (cp >= 0x0410 && cp <= 0x044F) o.push_back(char(0xC0 + (cp - 0x0410)));
+        else {
+            char b = '?';
+            for (int k = 0; k < 64; ++k)
+                if (kCp1251Hi[k] == cp) { b = char(0x80 + k); break; }
+            o.push_back(b);
+        }
+        i += len;
     }
     return o;
 }
@@ -68,7 +140,7 @@ std::string utf8ToLatin1(const std::string& s) {
 // Read a NUL-terminated fixed field as a JSON-safe (UTF-8) string.
 std::string cstr(const uint8_t* p, size_t maxLen) {
     size_t n=0; while (n<maxLen && p[n]!=0) ++n;
-    return latin1ToUtf8(std::string(reinterpret_cast<const char*>(p), n));
+    return engineToUtf8(std::string(reinterpret_cast<const char*>(p), n));
 }
 
 // ── base64 ──────────────────────────────────────────────────────────────────
@@ -161,19 +233,28 @@ std::vector<uint8_t> readBin(const json& t) {
 
 // ── ACT payload token model (lossless) ──────────────────────────────────────
 // parts = ordered list of text slots and numeric/byte spans.
+// A byte counts as text if it's printable ASCII or a cp1251 letter
+// (0xC0-0xFF plus Ё/ё) — so Cyrillic strings from the Russian localisations
+// come out as readable text runs, not u16 arrays. The ≥4 run threshold and
+// the callers' re-encode == original verification keep binary data from
+// being misread as text in any way that matters.
+bool isTextByte(uint8_t c) {
+    return (c >= 0x20 && c <= 0x7E) || c >= 0xC0 || c == 0xA8 || c == 0xB8;
+}
 json tokenize(const uint8_t* p, size_t n) {
     json parts = json::array();
     size_t i=0;
     while (i<n) {
         size_t j=i;
-        while (j<n && p[j]>=0x20 && p[j]<=0x7E) ++j;
+        while (j<n && isTextByte(p[j])) ++j;
         if (j-i>=4) {
             size_t k=j; while (k<n && p[k]==0) ++k;
-            // "width" is the slot's fixed byte size (text + NUL padding).
+            // "width" is the slot's fixed byte size (text + NUL padding),
+            // counted in engine (single-byte) characters — NOT UTF-8 bytes.
             // detokenize() always writes exactly this many bytes, so an edit
             // never changes a record's size — matching the engine-validated
             // fixed-layout behaviour (an over-long edit is truncated to fit).
-            parts.push_back({{"text", std::string(reinterpret_cast<const char*>(p+i), j-i)},
+            parts.push_back({{"text", engineToUtf8(std::string(reinterpret_cast<const char*>(p+i), j-i))},
                              {"width", k-i}});
             i=k;
         } else {
@@ -181,7 +262,7 @@ json tokenize(const uint8_t* p, size_t n) {
             size_t start=i;
             while (i<n) {
                 size_t j2=i;
-                while (j2<n && p[j2]>=0x20 && p[j2]<=0x7E) ++j2;
+                while (j2<n && isTextByte(p[j2])) ++j2;
                 if (j2-i>=4) break;
                 i = (j2>i)? j2 : i+1;
             }
@@ -194,10 +275,11 @@ std::vector<uint8_t> detokenize(const json& parts) {
     std::vector<uint8_t> out;
     for (const auto& t : parts) {
         if (t.contains("text")) {
-            std::string s = t.value("text", std::string{});
-            // width = fixed slot size; truncate or NUL-pad the (possibly
-            // edited) text to exactly that many bytes so record sizes never
-            // shift. Falls back to text-length for legacy "pad"-style parts.
+            std::string s = utf8ToEngine(t.value("text", std::string{}));
+            // width = fixed slot size in engine bytes; truncate or NUL-pad
+            // the (possibly edited) text to exactly that many bytes so
+            // record sizes never shift. Falls back to text-length for
+            // legacy "pad"-style parts.
             size_t width = t.contains("width") ? t.value("width", size_t{0})
                                                : s.size() + t.value("pad", size_t{0});
             if (s.size() > width) s.resize(width);
@@ -395,7 +477,7 @@ std::vector<uint8_t> encodeStruct(const json& in, const std::vector<Field>& fs) 
             case F_S32:  pU32(uint32_t(in.value(f.name,0))); break;
             case F_RECT: { auto r=in.value(f.name,json::array());
                 for(int i=0;i<4;++i) pU32(uint32_t(i<(int)r.size()? r[i].get<int32_t>():0)); } break;
-            case F_CSTR: { std::string s=utf8ToLatin1(in.value(f.name,std::string{}));
+            case F_CSTR: { std::string s=utf8ToEngine(in.value(f.name,std::string{}));
                 for(int i=0;i<f.n;++i) out.push_back(i<(int)s.size()? uint8_t(s[i]):0); } break;
             case F_EFLAGS: { auto a=in.value(f.name,json::array());
                 for(int i=0;i<f.n;++i){ if(i<(int)a.size()){ pU16(uint16_t(a[i].value("flag",0)));
@@ -474,7 +556,7 @@ json decodeACT(const std::vector<uint8_t>& d, size_t s, size_t e) {
     if (at == AT_TEXTBOX_WRITE && plen >= 2) {
         int cnt = (int16_t)rU16LE(pl);
         if (cnt >= 0 && (size_t)(2+cnt) <= plen) {
-            a["fields"] = json{{"text", latin1ToUtf8(std::string(reinterpret_cast<const char*>(pl+2), cnt))}};
+            a["fields"] = json{{"text", engineToUtf8(std::string(reinterpret_cast<const char*>(pl+2), cnt))}};
             if ((size_t)(2+cnt) < plen) a["deps"] = tokenize(pl+2+cnt, plen-2-cnt);
             return a;
         }
@@ -494,7 +576,7 @@ std::vector<uint8_t> encodeACT(const json& a) {
         if (const auto* fs = fieldsForAT(at)) {
             payload = encodeStruct(a["fields"], *fs); built = true;
         } else if (at == AT_TEXTBOX_WRITE) {
-            std::string t = utf8ToLatin1(a["fields"].value("text", std::string{}));
+            std::string t = utf8ToEngine(a["fields"].value("text", std::string{}));
             payload.push_back(uint8_t(t.size())); payload.push_back(uint8_t(t.size()>>8));
             payload.insert(payload.end(), t.begin(), t.end()); built = true;
         }
@@ -506,7 +588,7 @@ std::vector<uint8_t> encodeACT(const json& a) {
     }
 
     std::vector<uint8_t> rec(48, 0);
-    std::string nm = utf8ToLatin1(a.value("name", std::string{}));
+    std::string nm = utf8ToEngine(a.value("name", std::string{}));
     std::memcpy(rec.data(), nm.data(), std::min<size_t>(nm.size(), 48));
     rec.push_back(at); rec.push_back(execType);
     rec.insert(rec.end(), payload.begin(), payload.end());
@@ -514,32 +596,55 @@ std::vector<uint8_t> encodeACT(const json& a) {
 }
 
 // ── whole-scene model decode/encode ─────────────────────────────────────────
-json decodeModel(const std::vector<uint8_t>& raw) {
-    if (raw.size()<8 || std::memcmp(raw.data(),"DATA",4)!=0)
-        throw std::runtime_error("LegacyScene: not a DATA container");
-    uint32_t size=rU32BE(raw.data()+4);
-    size_t ps=8, pe=ps+size;
-    if (pe>raw.size()) pe=raw.size();
+// One DATA form → the classic single-container model {form, summary?,
+// actions, chunks?}. Files from the v2-era games (6+) are streams of
+// several concatenated DATA forms (e.g. FLAG + SCEN, FLAG + BOOT) — those
+// become {"containers": [model, model, …]} with the same per-container
+// shape inside.
+json decodeOneContainer(const std::vector<uint8_t>& raw, size_t ps, size_t pe) {
     json m;
     m["form"] = cstr(raw.data()+ps, 4);
     json acts = json::array();
     json others = json::array();
-    bool haveSummary=false;
     for (const auto& c : walk(raw, ps+4, pe)) {
         if (c.tag=="SSUM" && c.end-c.start==SSUM_SIZE) {
             m["summary"] = decodeSSUM(raw.data()+c.start);
-            haveSummary=true;
         } else if (c.tag=="ACT") {
             acts.push_back(decodeACT(raw, c.start, c.end));
         } else {
-            // any other chunk (BOOT tables, or unexpected) -> tag + lossless parts
+            // Any other chunk (BOOT tables, v2 TSUM, or unexpected) → tag +
+            // lossless parts. "at" = how many ACT records precede it, so
+            // encodeOneContainer() can put it back in the same spot (v2
+            // scenes have TSUM *before* the ACTs; old JSONs without "at"
+            // keep the classic after-the-actions placement).
             others.push_back({{"tag", c.tag},
+                              {"at", acts.size()},
                               {"parts", tokenize(raw.data()+c.start, c.end-c.start)}});
         }
     }
-    if (haveSummary) { /* summary already set */ }
     m["actions"] = acts;
     if (!others.empty()) m["chunks"] = others;
+    return m;
+}
+
+json decodeModel(const std::vector<uint8_t>& raw) {
+    if (raw.size()<8 || std::memcmp(raw.data(),"DATA",4)!=0)
+        throw std::runtime_error("LegacyScene: not a DATA container");
+
+    json containers = json::array();
+    size_t pos = 0;
+    while (pos + 8 <= raw.size()) {
+        if (std::memcmp(raw.data()+pos, "DATA", 4) != 0)
+            throw std::runtime_error("LegacyScene: junk between DATA containers");
+        const uint32_t size = rU32BE(raw.data()+pos+4);
+        size_t ps = pos+8, pe = ps+size;
+        if (pe > raw.size()) pe = raw.size();
+        containers.push_back(decodeOneContainer(raw, ps, pe));
+        pos = pe + (size & 1);
+    }
+    if (containers.size() == 1) return containers[0];
+    json m;
+    m["containers"] = containers;
     return m;
 }
 
@@ -555,19 +660,44 @@ void appendChunk(std::vector<uint8_t>& inner, const std::string& tag,
     if (body.size()&1) inner.push_back(0);
 }
 
-std::vector<uint8_t> encodeModel(const json& m) {
+std::vector<uint8_t> encodeOneContainer(const json& m) {
     std::vector<uint8_t> inner;
-    std::string form = m.value("form", std::string("SCEN"));
+    std::string form = utf8ToEngine(m.value("form", std::string("SCEN")));
     char f[4]={' ',' ',' ',' '};
     for (size_t i=0;i<4 && i<form.size();++i) f[i]=form[i];
     for (size_t i=form.size();i<4;++i) f[i]='\0';
     inner.insert(inner.end(), f, f+4);
 
     if (m.contains("summary")) appendChunk(inner, "SSUM", encodeSSUM(m["summary"]));
-    for (const auto& a : m.value("actions", json::array()))
+
+    // Interleave actions with the other chunks by their recorded "at"
+    // position (chunks without one — pre-existing JSONs — go after all
+    // actions, which is where the old code always put them).
+    const json actions = m.value("actions", json::array());
+    const json chunks  = m.value("chunks",  json::array());
+    size_t ci = 0;
+    auto chunkAt = [&](size_t i) -> size_t {
+        return chunks[i].contains("at") ? chunks[i].value("at", size_t{0})
+                                        : std::numeric_limits<size_t>::max();
+    };
+    auto emitChunksUpTo = [&](size_t pos) {
+        while (ci < chunks.size() && chunkAt(ci) <= pos) {
+            appendChunk(inner, chunks[ci].value("tag", std::string{}),
+                        detokenize(chunks[ci].value("parts", json::array())));
+            ++ci;
+        }
+    };
+    size_t ai = 0;
+    for (const auto& a : actions) {
+        emitChunksUpTo(ai);
         appendChunk(inner, "ACT", encodeACT(a));
-    for (const auto& c : m.value("chunks", json::array()))
-        appendChunk(inner, c.value("tag", std::string{}), detokenize(c.value("parts", json::array())));
+        ++ai;
+    }
+    while (ci < chunks.size()) {
+        appendChunk(inner, chunks[ci].value("tag", std::string{}),
+                    detokenize(chunks[ci].value("parts", json::array())));
+        ++ci;
+    }
 
     std::vector<uint8_t> out;
     out.insert(out.end(), {'D','A','T','A'});
@@ -575,6 +705,18 @@ std::vector<uint8_t> encodeModel(const json& m) {
     out.insert(out.end(), inner.begin(), inner.end());
     if (inner.size()&1) out.push_back(0);
     return out;
+}
+
+std::vector<uint8_t> encodeModel(const json& m) {
+    if (m.contains("containers")) {
+        std::vector<uint8_t> out;
+        for (const auto& c : m["containers"]) {
+            auto one = encodeOneContainer(c);
+            out.insert(out.end(), one.begin(), one.end());
+        }
+        return out;
+    }
+    return encodeOneContainer(m);
 }
 
 } // anonymous namespace
@@ -593,10 +735,15 @@ std::string sceneToEditableJson(const std::vector<uint8_t>& raw, const std::stri
     json out;
     out["container"] = "WayneSikes.Scene";
     if (!gameVersion.empty()) out["version"] = gameVersion;
-    out["form"] = model.value("form", std::string("SCEN"));
-    if (model.contains("summary")) out["summary"] = model["summary"];
-    out["actions"] = model.value("actions", json::array());
-    if (model.contains("chunks")) out["chunks"] = model["chunks"];
+    if (model.contains("containers")) {
+        // v2-era stream of several DATA forms (FLAG + SCEN, FLAG + BOOT, …).
+        out["containers"] = model["containers"];
+    } else {
+        out["form"] = model.value("form", std::string("SCEN"));
+        if (model.contains("summary")) out["summary"] = model["summary"];
+        out["actions"] = model.value("actions", json::array());
+        if (model.contains("chunks")) out["chunks"] = model["chunks"];
+    }
     if (!clean) out["_raw"] = b64encode(raw);
     try {
         return out.dump(2);
@@ -620,10 +767,14 @@ std::vector<uint8_t> sceneFromEditableJson(const std::string& jsonStr) {
         return b64decode(j.value("_raw", std::string{}));
     // reconstruct from the structured model
     json model;
-    model["form"]     = j.value("form", std::string("SCEN"));
-    if (j.contains("summary")) model["summary"] = j["summary"];
-    model["actions"]  = j.value("actions", json::array());
-    if (j.contains("chunks")) model["chunks"] = j["chunks"];
+    if (j.contains("containers")) {
+        model["containers"] = j["containers"];
+    } else {
+        model["form"]     = j.value("form", std::string("SCEN"));
+        if (j.contains("summary")) model["summary"] = j["summary"];
+        model["actions"]  = j.value("actions", json::array());
+        if (j.contains("chunks")) model["chunks"] = j["chunks"];
+    }
     return encodeModel(model);
 }
 

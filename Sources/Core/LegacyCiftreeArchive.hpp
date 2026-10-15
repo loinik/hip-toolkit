@@ -23,14 +23,34 @@ namespace Legacy {
 //
 //  N1      — 38-byte entries; unique header size and table start
 //  N2      — 70-byte entries
-//  N3to5   — 94-byte entries; field positions differ from N6to12
-//  N6to12  — 94-byte entries; standard layout used through game 12
-//  N13plus — identical field positions to N6to12; BPP byte selects pixel depth
+//  N3to5   — 94-byte entries; field positions differ from the v2 layout
+//  N6to11  — 94-byte "v2" entries (games 6-11): same magic as N3to5
+//             ("CIF TREE WayneSikes") but restructured fields — the hash
+//             chain moved to +0x27, src/dest RECTs were added, and the
+//             hash function changed (see v2HashBucket)
+//  N12plus — identical v2 entry layout; new magic
+//             ("CIF TREE HerInteractive") and a version-stamped header.
+//             Verified byte-exact against a real game-13 archive; the
+//             HIP tool 6.x shipped alongside game 14 writes the same.
 //
-enum class GameVersion { N1, N2, N3to5, N6to12, N13plus };
+enum class GameVersion { N1, N2, N3to5, N6to11, N12plus };
 
 // ── Pixel format for image entries (ftype 0x02) ───────────────────────────
-enum class PixelFormat { None, RGB555, RGB888 };
+//  Old-layout games store RGB-ordered 24-bit pixels; v2 archives store
+//  BGR/BGRA (Windows DIB order — verified visually against game-13 art).
+//  16-bit is RGB555 in every version.
+enum class PixelFormat { None, RGB555, RGB888, BGR888, BGRA8888 };
+
+inline unsigned bytesPerPixel(PixelFormat f) {
+    switch (f) {
+        case PixelFormat::RGB555:   return 2;
+        case PixelFormat::RGB888:
+        case PixelFormat::BGR888:   return 3;
+        case PixelFormat::BGRA8888: return 4;
+        case PixelFormat::None:     return 0;
+    }
+    return 0;
+}
 
 // ── Extracted entry ───────────────────────────────────────────────────────
 struct LegacyEntry {
@@ -45,10 +65,12 @@ struct LegacyEntry {
 using ProgressFn = std::function<void(int, int)>;
 
 // ── Quick magic check ──────────────────────────────────────────────────────
-// True if the buffer starts with the legacy ("CIF TREE WayneSikes") magic,
-// as opposed to the modern ("CIF FILE HerInteractive") Ciftree container
-// magic. Non-throwing — used by the bridge layer to dispatch unpack
-// requests transparently, before any version-specific parsing is attempted.
+// True if the buffer starts with either legacy tree magic —
+// "CIF TREE WayneSikes" (games 1-11) or "CIF TREE HerInteractive"
+// (games 12+) — as opposed to the modern ("CIF FILE HerInteractive")
+// single-CIF container magic. Non-throwing — used by the bridge layer to
+// dispatch unpack requests transparently, before any version-specific
+// parsing is attempted.
 bool isLegacyCiftreeBytes(const std::vector<uint8_t>& data);
 
 // True if folderPath looks like it was produced by unpackLegacyToFolder()

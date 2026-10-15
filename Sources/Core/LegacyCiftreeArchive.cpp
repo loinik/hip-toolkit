@@ -64,15 +64,29 @@ namespace {
 //    [87..90] packed size
 //    [91]     ftype
 //
-//  N6to12 / N13plus (94-byte entries, headerSize=0x20)
-//    [0..31]  name
-//    [35..38] abs. data offset
-//    [49..50] width
-//    [53..54] height
-//    [79]     bpp       (0x10=RGB555, 0x18=RGB888)
+//  N6to11 / N12plus — the "v2" layout (94-byte entries, headerSize=0x20).
+//  Fully mapped: field-for-field against ScummVM's nancy-engine CifTree
+//  reader, cross-checked by disassembling HIP tool 6.x's own lookup
+//  routine, and verified byte-exact against a real game-13 archive
+//  (2409 entries — hash chains, offsets and sizes all reproduce).
+//    [0..32]  name (33-byte buffer, NUL-terminated)
+//    [33..34] entry's own table index (LE u16)
+//    [35..38] abs. data offset (LE u32)
+//    [39..40] hash-chain "next" index (LE u16), 0xFFFF = end
+//    [41..56] src RECT  (4 × LE i32) — for images (0,0,w-1,h-1)
+//    [57..72] dest RECT (4 × LE i32) — zero in every observed entry
+//    [73..74] width  (LE u16, actual)
+//    [75..76] pitch  (LE u16, = width × bytesPerPixel)
+//    [77..78] height (LE u16, actual)
+//    [79]     depth  (0x10=RGB555, 0x18=BGR888, 0x20=BGRA8888)
+//    [80]     compression type (always 2 = LZSS + position-cipher)
 //    [81..84] unpacked size
+//    [85..88] obsolete size field (always 0)
 //    [89..92] packed size
-//    [93]     ftype
+//    [93]     ftype (0=empty placeholder, 2=image, 3=data)
+//  widthPos/heightPos below point into the src RECT's right/bottom words
+//  (dimsPlusOne=true → actual = stored + 1), which keeps the shared
+//  unpack code path identical across versions.
 
 struct Layout {
     uint32_t headerSize;
@@ -126,15 +140,40 @@ static Layout layoutFor(GameVersion v) {
                      32,  0x4B, 0x2B, 0x2F, 0x49, 0x4F, 0x57, 0x5B, true, 0x5E - 2,
                      0x21,
                      67, 69, 71, 74 };
-        case GameVersion::N6to12:
-        case GameVersion::N13plus:
+        case GameVersion::N6to11:
+        case GameVersion::N12plus:
             return { 0x20, 0x0800, 0x0820, 0x5E,
-                     32,  0x23, 0x31, 0x35, 0x4F, 0x51, 0x59, 0x5D, true, 0x5E - 2,
-                     kSelfIndexUnconfirmed,
-                     kSelfIndexUnconfirmed, kSelfIndexUnconfirmed, kSelfIndexUnconfirmed, kSelfIndexUnconfirmed };
+                     32,  0x23, 0x31, 0x35, 0x4F, 0x51, 0x59, 0x5D, true, 0x27,
+                     0x21,
+                     0x49, 0x4B, 0x4D, 0x50 };
     }
     // Unreachable; silence compiler warning.
-    return layoutFor(GameVersion::N6to12);
+    return layoutFor(GameVersion::N6to11);
+}
+
+static bool isV2Layout(GameVersion v) {
+    return v == GameVersion::N6to11 || v == GameVersion::N12plus;
+}
+
+// Stable string tags for PixelFormat — used as both the .meta "format"
+// value and the raw-dump file extension.
+static const char* pixelFormatTag(PixelFormat f) {
+    switch (f) {
+        case PixelFormat::RGB555:   return "rgb555";
+        case PixelFormat::RGB888:   return "rgb888";
+        case PixelFormat::BGR888:   return "bgr888";
+        case PixelFormat::BGRA8888: return "bgra8888";
+        case PixelFormat::None:     break;
+    }
+    return "none";
+}
+
+static PixelFormat pixelFormatFromTag(const std::string& s) {
+    if (s == "rgb555")   return PixelFormat::RGB555;
+    if (s == "rgb888")   return PixelFormat::RGB888;
+    if (s == "bgr888")   return PixelFormat::BGR888;
+    if (s == "bgra8888") return PixelFormat::BGRA8888;
+    return PixelFormat::None;
 }
 
 // ── Byte helpers ──────────────────────────────────────────────────────────
@@ -192,19 +231,55 @@ static uint32_t legacyHashBucket(const std::string& name) {
     return sum % 1024;
 }
 
+// The v2 hash (N6to11/N12plus), lifted verbatim from HIP tool 6.x's own
+// lookup routine (disassembled at .text:0x40E6AA) and verified against all
+// 2409 entries of a real game-13 archive:
+//
+//   1. Scene files get a fast path: a 5-char name "S####" (case-insensitive
+//      'S', atoi of the rest in [1000, 9999]) hashes to  number % 1024.
+//   2. Everything else: h = 0; for each char AFTER the first (the first
+//      character is skipped entirely!), h = h*31 + (signed char)c. The
+//      terminating NUL takes part in one final iteration, so the whole
+//      accumulated sum gets one extra *31. bucket = h & 0x3FF.
+static uint32_t v2HashBucket(const std::string& name) {
+    if (name.size() == 5 && (name[0] == 'S' || name[0] == 's')) {
+        // atoi semantics: consume leading digits only.
+        uint32_t val = 0;
+        size_t k = 1;
+        while (k < name.size() && name[k] >= '0' && name[k] <= '9')
+            val = val * 10 + static_cast<uint32_t>(name[k++] - '0');
+        const uint16_t num = static_cast<uint16_t>(val);
+        if (static_cast<uint16_t>(num - 1000) <= 8999)
+            return num % 1024;
+    }
+    int32_t h = 0;
+    if (!name.empty()) {
+        for (size_t i = 1; i <= name.size(); ++i) {
+            h *= 31;                                       // wraps in int32
+            h += (i < name.size()) ? static_cast<int8_t>(name[i]) : 0;
+        }
+    }
+    return static_cast<uint32_t>(h) & 0x3FF;
+}
+
+static uint32_t hashBucketFor(GameVersion version, const std::string& name) {
+    return isV2Layout(version) ? v2HashBucket(name) : legacyHashBucket(name);
+}
+
 static constexpr uint16_t kHashChainEnd = 0xFFFF;
 
 // Shared by buildHashTableFromScratch() (below) and the CIFHASHL/CIFHASHS
 // debug-manifest regenerator (see generateDebugManifestEntries) — both need
 // the same heads[1024]/next[] chain structure, just packaged differently.
 static std::vector<uint16_t> computeHashChains(
-        const std::vector<LegacyEntry>& entries, std::vector<uint16_t>& nextOut) {
+        const std::vector<LegacyEntry>& entries, GameVersion version,
+        std::vector<uint16_t>& nextOut) {
     std::vector<uint16_t> heads(1024, kHashChainEnd);
     std::vector<uint16_t> tails(1024, kHashChainEnd);
     nextOut.assign(entries.size(), kHashChainEnd);
 
     for (size_t i = 0; i < entries.size(); ++i) {
-        const uint32_t b = legacyHashBucket(entries[i].name);
+        const uint32_t b = hashBucketFor(version, entries[i].name);
         if (heads[b] == kHashChainEnd) {
             heads[b] = static_cast<uint16_t>(i);
         } else {
@@ -216,8 +291,9 @@ static std::vector<uint16_t> computeHashChains(
 }
 
 static std::vector<uint8_t> buildHashTableFromScratch(
-        const std::vector<LegacyEntry>& entries, std::vector<uint16_t>& nextOut) {
-    const std::vector<uint16_t> heads = computeHashChains(entries, nextOut);
+        const std::vector<LegacyEntry>& entries, GameVersion version,
+        std::vector<uint16_t>& nextOut) {
+    const std::vector<uint16_t> heads = computeHashChains(entries, version, nextOut);
     std::vector<uint8_t> hashBin(1024 * 2, 0x00);
     for (size_t b = 0; b < 1024; ++b)
         wU16(hashBin.data() + b * 2, heads[b]);
@@ -253,7 +329,8 @@ static std::vector<uint8_t> toBytes(const std::string& s) {
     return std::vector<uint8_t>(s.begin(), s.end());
 }
 
-static void appendDebugManifestEntries(std::vector<LegacyEntry>& entries) {
+static void appendDebugManifestEntries(std::vector<LegacyEntry>& entries,
+                                        GameVersion version) {
     entries.erase(
         std::remove_if(entries.begin(), entries.end(),
                         [](const LegacyEntry& e) { return isDebugManifestName(e.name); }),
@@ -270,7 +347,7 @@ static void appendDebugManifestEntries(std::vector<LegacyEntry>& entries) {
     }
 
     std::vector<uint16_t> next;
-    const std::vector<uint16_t> heads = computeHashChains(entries, next);
+    const std::vector<uint16_t> heads = computeHashChains(entries, version, next);
 
     // bucket -> ordered list of entry indices (walking the chain from head).
     std::vector<std::vector<uint16_t>> bucketRecords(1024);
@@ -331,12 +408,27 @@ static void appendDebugManifestEntries(std::vector<LegacyEntry>& entries) {
 //  is truly nothing to anchor to.
 static std::vector<uint8_t> buildLegacyHeaderFromScratch(GameVersion version,
                                                            uint16_t numEntries) {
+    const Layout L = layoutFor(version);
+    std::vector<uint8_t> h(L.headerSize, 0x00);
+
+    if (version == GameVersion::N12plus) {
+        // Confirmed against a real game-13 archive:
+        //   [0..23]  "CIF TREE HerInteractive\0"
+        //   [24..25] u16 LE — format version major = 2
+        //   [26..27] u16 LE — format version minor = 2
+        //   [28..31] u32 LE — numEntries
+        static constexpr char MAGIC[] = "CIF TREE HerInteractive";  // 23 + NUL
+        std::memcpy(h.data(), MAGIC, 24);
+        wU16(h.data() + 24, 2);
+        wU16(h.data() + 26, 2);
+        wU32(h.data() + 28, numEntries);
+        return h;
+    }
+
     static constexpr uint8_t MAGIC[20] = {
         'C','I','F',' ','T','R','E','E',' ',
         'W','a','y','n','e','S','i','k','e','s', 0x00
     };
-    const Layout L = layoutFor(version);
-    std::vector<uint8_t> h(L.headerSize, 0x00);
     std::memcpy(h.data(), MAGIC, sizeof(MAGIC));
     if (L.headerSize >= 26) wU16(h.data() + 24, 2);
     if (L.headerSize >= 28) wU16(h.data() + 26, 1);
@@ -357,7 +449,7 @@ static std::vector<uint8_t> buildEntriesTableFromScratch(
     std::vector<uint8_t> table(entries.size() * L.entrySize, 0x00);
 
     std::vector<uint16_t> next;
-    buildHashTableFromScratch(entries, next);
+    buildHashTableFromScratch(entries, version, next);
 
     for (size_t i = 0; i < entries.size(); ++i) {
         uint8_t* ep = table.data() + i * L.entrySize;
@@ -368,8 +460,10 @@ static std::vector<uint8_t> buildEntriesTableFromScratch(
 
         ep[L.ftypePos] = e.ftype;
         const uint8_t bpp =
-            (e.pixels == PixelFormat::RGB555) ? 0x10 :
-            (e.pixels == PixelFormat::RGB888) ? 0x18 : 0x00;
+            (e.pixels == PixelFormat::RGB555)   ? 0x10 :
+            (e.pixels == PixelFormat::RGB888)   ? 0x18 :
+            (e.pixels == PixelFormat::BGR888)   ? 0x18 :
+            (e.pixels == PixelFormat::BGRA8888) ? 0x20 : 0x00;
         ep[L.bppPos] = bpp;
 
         // Non-image entries store width/height as plain 0 in the real
@@ -392,7 +486,7 @@ static std::vector<uint8_t> buildEntriesTableFromScratch(
         if (L.constantBytePos != kSelfIndexUnconfirmed)
             ep[L.constantBytePos] = 2;
         if (isImage && L.widthDupPos != kSelfIndexUnconfirmed) {
-            const uint16_t bytesPerPx = (bpp == 0x10) ? 2 : (bpp == 0x18) ? 3 : 0;
+            const uint16_t bytesPerPx = static_cast<uint16_t>(bytesPerPixel(e.pixels));
             wU16(ep + L.widthDupPos,  e.width);
             wU16(ep + L.heightDupPos, e.height);
             wU16(ep + L.stridePos,    static_cast<uint16_t>(e.width * bytesPerPx));
@@ -622,13 +716,21 @@ static bool layoutFits(const std::vector<uint8_t>& data,
 //    3. For N6to12 vs N13plus (same entry layout) scan the table for any
 //       image entry with bpp == 0x18 (RGB888) — that signals N13plus.
 
+// Helper shared by isLegacyCiftreeBytes / detectVersion. Distinguishes the
+// two on-disk tree magics ("CIF TREE …" — a legacy multi-entry archive; the
+// modern single-CIF container uses "CIF FILE …" and never matches here).
+static bool hasWayneSikesMagic(const uint8_t* p, size_t n) {
+    static constexpr char M[] = "CIF TREE WayneSikes";
+    return n >= 19 && std::memcmp(p, M, 19) == 0;
+}
+static bool hasHerInteractiveTreeMagic(const uint8_t* p, size_t n) {
+    static constexpr char M[] = "CIF TREE HerInteractive";
+    return n >= 23 && std::memcmp(p, M, 23) == 0;
+}
+
 bool isLegacyCiftreeBytes(const std::vector<uint8_t>& data) {
-    static constexpr uint8_t MAGIC[20] = {
-        'C','I','F',' ','T','R','E','E',' ',
-        'W','a','y','n','e','S','i','k','e','s'
-    };
-    return data.size() >= sizeof(MAGIC) &&
-           std::memcmp(data.data(), MAGIC, sizeof(MAGIC)) == 0;
+    return hasWayneSikesMagic(data.data(), data.size()) ||
+           hasHerInteractiveTreeMagic(data.data(), data.size());
 }
 
 GameVersion detectVersion(const std::filesystem::path& datPath) {
@@ -636,36 +738,32 @@ GameVersion detectVersion(const std::filesystem::path& datPath) {
     if (data.size() < 0x0822)
         throw std::runtime_error("LegacyCiftree: file too small to detect version");
 
-    // numEntries is at 0x1C in every version's header.
+    // numEntries is at 0x1C in every version's header (u16 for the
+    // WayneSikes headers, low half of a u32 for HerInteractive — the
+    // 0xFFFF hash-chain terminator caps real archives well below 65535).
     const uint16_t numEntries = rU16(data.data() + 0x1C);
     if (numEntries == 0)
         throw std::runtime_error("LegacyCiftree: entry count is zero");
 
-    // Try in ascending entry-size order so the smallest that is consistent wins.
+    // Games 12+ announce themselves by magic; the entry layout is v2.
+    if (hasHerInteractiveTreeMagic(data.data(), data.size())) {
+        if (!layoutFits(data, GameVersion::N12plus, numEntries))
+            throw std::runtime_error(
+                "LegacyCiftree: HerInteractive tree with an unrecognised layout "
+                "(possibly a newer format revision)");
+        return GameVersion::N12plus;
+    }
+
+    // WayneSikes magic covers games 1-11 with four incompatible layouts.
+    // Try in ascending entry-size order so the smallest consistent one wins.
     static const GameVersion candidates[] = {
         GameVersion::N1, GameVersion::N2,
-        GameVersion::N3to5, GameVersion::N6to12
+        GameVersion::N3to5, GameVersion::N6to11
     };
 
-    for (auto v : candidates) {
-        if (!layoutFits(data, v, numEntries)) continue;
+    for (auto v : candidates)
+        if (layoutFits(data, v, numEntries)) return v;
 
-        // N6to12 and N13plus share the same layout; distinguish by BPP.
-        if (v == GameVersion::N6to12) {
-            const Layout L = layoutFor(v);
-            for (uint16_t i = 0; i < numEntries; ++i) {
-                const uint8_t* ep = data.data()
-                                  + L.tableStart
-                                  + static_cast<size_t>(i) * L.entrySize;
-                const uint8_t ft  = ep[L.ftypePos];
-                const uint8_t bpp = ep[L.bppPos];
-                if (ft == 0x02 && bpp == 0x18)
-                    return GameVersion::N13plus;
-            }
-        }
-
-        return v;
-    }
     throw std::runtime_error("LegacyCiftree: unrecognised archive layout");
 }
 
@@ -730,8 +828,15 @@ std::vector<LegacyEntry> unpackLegacyCiftree(const std::filesystem::path& datPat
             entry.height = L.dimsPlusOne ? static_cast<uint16_t>(hRaw + 1) : hRaw;
 
             const uint8_t bpp = ep[L.bppPos];
+            // 24-bit pixels are RGB-ordered in the old layouts but BGR in
+            // v2 archives (verified visually against game-13 art); 32-bit
+            // BGRA exists only in v2.
             if      (bpp == 0x10) entry.pixels = PixelFormat::RGB555;
-            else if (bpp == 0x18) entry.pixels = PixelFormat::RGB888;
+            else if (bpp == 0x18) entry.pixels = isV2Layout(version)
+                                               ? PixelFormat::BGR888
+                                               : PixelFormat::RGB888;
+            else if (bpp == 0x20 && isV2Layout(version))
+                entry.pixels = PixelFormat::BGRA8888;
         }
 
         result.push_back(std::move(entry));
@@ -789,11 +894,15 @@ std::vector<uint8_t> packLegacyCiftree(const std::vector<LegacyEntry>& entriesIn
     // width/height, and omitting an entirely separate dimensions/stride/
     // constant-byte block at offsets 67-74 that the engine actually reads.
     // Both are fixed now and verified byte-exact against a real archive.
-    const bool synthesizing = originalHash.empty() && originalEntries.empty();
+    // v2 archives don't carry the old plain-text debug manifests — the 6.x
+    // tool leaves zero-size placeholder entries (CIFTREE, CIFHASHDETAILS, …)
+    // instead, which flow through packing as ordinary ftype-0 entries.
+    const bool synthesizing = originalHash.empty() && originalEntries.empty()
+                            && !isV2Layout(version);
     std::vector<LegacyEntry> entriesBuf;
     if (synthesizing) {
         entriesBuf = entriesIn;
-        appendDebugManifestEntries(entriesBuf);
+        appendDebugManifestEntries(entriesBuf, version);
     }
     const std::vector<LegacyEntry>& entries = synthesizing ? entriesBuf : entriesIn;
 
@@ -818,7 +927,7 @@ std::vector<uint8_t> packLegacyCiftree(const std::vector<LegacyEntry>& entriesIn
 
     std::vector<uint16_t> dummyNext;
     const std::vector<uint8_t> hash = originalHash.empty()
-        ? buildHashTableFromScratch(entries, dummyNext)
+        ? buildHashTableFromScratch(entries, version, dummyNext)
         : originalHash;
 
     // Absolute offset where data blobs start in the output file.
@@ -904,14 +1013,30 @@ void unpackLegacyToFolder(const std::filesystem::path& datPath,
         (version == GameVersion::N1)      ? "N1"      :
         (version == GameVersion::N2)      ? "N2"      :
         (version == GameVersion::N3to5)   ? "N3to5"   :
-        (version == GameVersion::N6to12)  ? "N6to12"  :
-        (version == GameVersion::N13plus) ? "N13plus" : "unknown";
+        (version == GameVersion::N6to11)  ? "N6to11"  :
+        (version == GameVersion::N12plus) ? "N12plus" : "unknown";
 
     const int total = static_cast<int>(entries.size());
     int done = 0;
 
     for (const auto& entry : entries) {
         if (entry.data.empty()) {
+            // v2 archives contain zero-size placeholder entries (ftype 0 —
+            // assets that live in other .DAT files, plus build-tool stamps
+            // like CIFTREE/CIFHASHDETAILS). They're part of the hash chains,
+            // so keep them recreatable: a content-less .meta sidecar is all
+            // that's needed. The couple of unnamed structural placeholders
+            // ("" and ".") can't become files and are simply dropped —
+            // lookups never ask for those names.
+            if (entry.ftype == 0x00 && !entry.name.empty() && entry.name != "." &&
+                isV2Layout(version)) {
+                nlohmann::json meta;
+                meta["ftype"]   = 0;
+                meta["version"] = vStr;
+                const std::string s = meta.dump();
+                writeFile(outDir / (entry.name + ".meta"),
+                          std::vector<uint8_t>(s.begin(), s.end()));
+            }
             ++done;
             if (progress) progress(done, total);
             continue;
@@ -923,9 +1048,9 @@ void unpackLegacyToFolder(const std::filesystem::path& datPath,
                 writeFile(outDir / (entry.name + ".png"), png);
                 // Width/height come back from the PNG itself when
                 // repacking; only a non-default pixel format needs saving.
-                if (entry.pixels == PixelFormat::RGB888) {
+                if (entry.pixels != PixelFormat::RGB555) {
                     nlohmann::json meta;
-                    meta["format"] = "rgb888";
+                    meta["format"] = pixelFormatTag(entry.pixels);
                     const std::string s = meta.dump();
                     writeFile(outDir / (entry.name + ".meta"),
                               std::vector<uint8_t>(s.begin(), s.end()));
@@ -933,11 +1058,10 @@ void unpackLegacyToFolder(const std::filesystem::path& datPath,
             } else {
                 // Raw dump has no embedded dimensions — width/height must
                 // be saved alongside it.
-                const std::string ext =
-                    (entry.pixels == PixelFormat::RGB555) ? ".rgb555" : ".rgb888";
+                const std::string ext = std::string(".") + pixelFormatTag(entry.pixels);
                 writeFile(outDir / (entry.name + ext), entry.data);
                 nlohmann::json meta;
-                meta["format"] = (entry.pixels == PixelFormat::RGB555) ? "rgb555" : "rgb888";
+                meta["format"] = pixelFormatTag(entry.pixels);
                 meta["width"]  = entry.width;
                 meta["height"] = entry.height;
                 const std::string s = meta.dump();
@@ -1000,8 +1124,12 @@ static GameVersion parseVersionTag(const std::string& s) {
     if (s == "N1")      return GameVersion::N1;
     if (s == "N2")      return GameVersion::N2;
     if (s == "N3to5")   return GameVersion::N3to5;
-    if (s == "N6to12")  return GameVersion::N6to12;
-    if (s == "N13plus") return GameVersion::N13plus;
+    if (s == "N6to11")  return GameVersion::N6to11;
+    if (s == "N12plus") return GameVersion::N12plus;
+    // Aliases from before the v2 layout was actually implemented — old
+    // unpacks can't realistically carry them, but accept them anyway.
+    if (s == "N6to12")  return GameVersion::N6to11;
+    if (s == "N13plus") return GameVersion::N12plus;
     throw std::runtime_error("LegacyCiftree: unknown version tag '" + s + "'");
 }
 
@@ -1020,7 +1148,7 @@ static std::filesystem::path findEntryFileKnown(const std::filesystem::path& dir
             auto p = dir / (name + ext);
             if (std::filesystem::exists(p)) return p;
         }
-        const std::string raw = (fmt == PixelFormat::RGB555) ? ".rgb555" : ".rgb888";
+        const std::string raw = std::string(".") + pixelFormatTag(fmt);
         auto p = dir / (name + raw);
         if (std::filesystem::exists(p)) return p;
     } else {
@@ -1062,6 +1190,10 @@ static LegacyEntry resolveEntryContentKnown(const std::filesystem::path& inDir,
     e.name = name; e.ftype = ftype; e.pixels = pixels;
     e.width = width; e.height = height;
 
+    // Zero-size placeholders (v2 archives; also the unnamed structural
+    // entries a donor table may carry) have no content file by design.
+    if (ftype == 0x00) return e;
+
     auto src = findEntryFileKnown(inDir, name, pixels, ftype);
     if (src.empty())
         throw std::runtime_error(
@@ -1069,7 +1201,8 @@ static LegacyEntry resolveEntryContentKnown(const std::filesystem::path& inDir,
 
     const std::string ext = src.extension().string();
     const bool isImageEntry = (ftype == 0x02 && pixels != PixelFormat::None);
-    const bool isRawDump = (ext == ".rgb555" || ext == ".rgb888");
+    const bool isRawDump = (ext == ".rgb555" || ext == ".rgb888" ||
+                            ext == ".bgr888" || ext == ".bgra8888");
     const bool isBin = (ext == ".bin");
 
     if (ext == ".json" && decodeContainerJson(src, e.data)) {
@@ -1080,7 +1213,7 @@ static LegacyEntry resolveEntryContentKnown(const std::filesystem::path& inDir,
         e.data = readFile(src);
         if (isImageEntry) {
             const size_t expectedBytes =
-                static_cast<size_t>(width) * height * (pixels == PixelFormat::RGB555 ? 2 : 3);
+                static_cast<size_t>(width) * height * bytesPerPixel(pixels);
             if (e.data.size() != expectedBytes)
                 throw std::runtime_error(
                     "LegacyCiftree: raw pixel file '" + src.string() +
@@ -1112,7 +1245,8 @@ static std::optional<nlohmann::json> readOptionalMeta(const std::filesystem::pat
 static LegacyEntry resolveEntryContent(const std::filesystem::path& inDir,
                                         const std::filesystem::path& src) {
     const std::string ext  = src.extension().string();
-    const bool isRawDump   = (ext == ".rgb555" || ext == ".rgb888");
+    const bool isRawDump   = (ext == ".rgb555" || ext == ".rgb888" ||
+                              ext == ".bgr888" || ext == ".bgra8888");
     const bool isBin       = (ext == ".bin");
     const bool isImageExt  =
         ext == ".png" || ext == ".jpg" || ext == ".jpeg" ||
@@ -1126,8 +1260,9 @@ static LegacyEntry resolveEntryContent(const std::filesystem::path& inDir,
     } else if (isImageExt) {
         e.ftype = 0x02;
         auto meta = readOptionalMeta(inDir, e.name);
-        e.pixels = (meta && meta->value("format", "rgb555") == "rgb888")
-                 ? PixelFormat::RGB888 : PixelFormat::RGB555;
+        e.pixels = meta ? pixelFormatFromTag(meta->value("format", "rgb555"))
+                        : PixelFormat::RGB555;
+        if (e.pixels == PixelFormat::None) e.pixels = PixelFormat::RGB555;
         int w = 0, h = 0;
         probeImageSize(src, w, h);  // image file is the source of truth
         e.width  = static_cast<uint16_t>(w);
@@ -1140,13 +1275,13 @@ static LegacyEntry resolveEntryContent(const std::filesystem::path& inDir,
             throw std::runtime_error(
                 "LegacyCiftree: '" + src.string() + "' needs a <name>.meta with "
                 "width/height/format — a raw pixel dump has no dimensions of its own");
-        e.pixels = (meta->value("format", "rgb555") == "rgb888")
-                 ? PixelFormat::RGB888 : PixelFormat::RGB555;
+        e.pixels = pixelFormatFromTag(meta->value("format", "rgb555"));
+        if (e.pixels == PixelFormat::None) e.pixels = PixelFormat::RGB555;
         e.width  = static_cast<uint16_t>(meta->value("width",  0));
         e.height = static_cast<uint16_t>(meta->value("height", 0));
         e.data = readFile(src);
         const size_t expectedBytes =
-            static_cast<size_t>(e.width) * e.height * (e.pixels == PixelFormat::RGB555 ? 2 : 3);
+            static_cast<size_t>(e.width) * e.height * bytesPerPixel(e.pixels);
         if (e.data.size() != expectedBytes)
             throw std::runtime_error(
                 "LegacyCiftree: raw pixel file '" + src.string() + "' has wrong size "
@@ -1169,23 +1304,45 @@ static LegacyEntry resolveEntryContent(const std::filesystem::path& inDir,
 static std::vector<LegacyEntry> buildEntriesFromFolderScan(
         const std::filesystem::path& inDir, ProgressFn progress) {
     std::vector<std::filesystem::path> files;
+    std::vector<std::filesystem::path> metas;
     for (const auto& dirEntry : std::filesystem::directory_iterator(inDir)) {
         if (!dirEntry.is_regular_file()) continue;
         const auto& p = dirEntry.path();
         const std::string ext = p.extension().string();
-        if (ext == ".meta") continue;
+        if (ext == ".meta") { metas.push_back(p); continue; }
         if (ext == ".png" || ext == ".jpg" || ext == ".jpeg" || ext == ".tga" ||
-            ext == ".bmp" || ext == ".gif" || ext == ".rgb555" || ext == ".rgb888" ||
+            ext == ".bmp" || ext == ".gif" ||
+            ext == ".rgb555" || ext == ".rgb888" ||
+            ext == ".bgr888" || ext == ".bgra8888" ||
             ext == ".json" || ext == ".bin")
             files.push_back(p);
     }
     std::sort(files.begin(), files.end());
-    if (files.empty())
+
+    // A .meta with {"ftype":0} and no content file of its own is a v2
+    // zero-size placeholder entry — recreate it (they participate in the
+    // hash chains, so dropping them would change lookups for those names).
+    std::vector<LegacyEntry> placeholders;
+    for (const auto& m : metas) {
+        const std::string base = m.stem().string();
+        const bool hasContent = std::any_of(files.begin(), files.end(),
+            [&](const std::filesystem::path& f) { return f.stem().string() == base; });
+        if (hasContent) continue;
+        auto meta = readOptionalMeta(inDir, base);
+        if (meta && meta->value("ftype", -1) == 0) {
+            LegacyEntry e;
+            e.name  = base;
+            e.ftype = 0x00;
+            placeholders.push_back(std::move(e));
+        }
+    }
+
+    if (files.empty() && placeholders.empty())
         throw std::runtime_error(
             "LegacyCiftree: no recognised content files found in '" + inDir.string() + "'");
 
     std::vector<LegacyEntry> entries;
-    entries.reserve(files.size());
+    entries.reserve(files.size() + placeholders.size());
     const int total = static_cast<int>(files.size());
     int done = 0;
     for (const auto& f : files) {
@@ -1193,6 +1350,9 @@ static std::vector<LegacyEntry> buildEntriesFromFolderScan(
         ++done;
         if (progress) progress(done, total);
     }
+    entries.insert(entries.end(),
+                   std::make_move_iterator(placeholders.begin()),
+                   std::make_move_iterator(placeholders.end()));
     return entries;
 }
 
@@ -1293,9 +1453,11 @@ void packLegacyFromFolder(const std::filesystem::path& inDir,
             const uint8_t ftype = ep[L.ftypePos];
             const uint8_t bpp   = ep[L.bppPos];
             const PixelFormat pixels =
-                (bpp == 0x10) ? PixelFormat::RGB555 :
-                (bpp == 0x18) ? PixelFormat::RGB888 :
-                                PixelFormat::None;
+                (bpp == 0x10)                       ? PixelFormat::RGB555 :
+                (bpp == 0x18 &&  isV2Layout(version)) ? PixelFormat::BGR888 :
+                (bpp == 0x18)                       ? PixelFormat::RGB888 :
+                (bpp == 0x20 &&  isV2Layout(version)) ? PixelFormat::BGRA8888 :
+                                                      PixelFormat::None;
             uint16_t width  = rU16(ep + L.widthPos);
             uint16_t height = rU16(ep + L.heightPos);
             if (L.dimsPlusOne) { width += 1; height += 1; }
