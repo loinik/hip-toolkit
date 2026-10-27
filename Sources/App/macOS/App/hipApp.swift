@@ -160,6 +160,7 @@ struct hipApp: App {
                     NotificationCenter.default.post(name: .hipShowPreview, object: nil)
                 }
                 .keyboardShortcut("1", modifiers: [.command, .shift])
+                OpenFontGeneratorButton()
             }
         }
 
@@ -173,5 +174,11 @@ struct hipApp: App {
         }
         .defaultSize(width: 720, height: 520)
         .restorationBehavior(.disabled)
+
+        // ── Bitmap font generator ─────────────────────────────────────
+        Window(S.get("fontgen_window_title"), id: "hip-toolkit.fontgen") {
+            FontGeneratorView()
+        }
+        .defaultSize(width: 980, height: 720)
     }
 }

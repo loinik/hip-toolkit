@@ -1,0 +1,19 @@
+{
+  "version": 2,
+  "dgSpecHash": "nfvXKHlfFjg=",
+  "success": true,
+  "projectFilePath": "Y:\\Documents\\hip\\Sources\\App\\Windows\\HIP Toolkit.csproj",
+  "expectedPackageFiles": [
+    "C:\\Users\\michelloinik\\.nuget\\packages\\microsoft.web.webview2\\1.0.2651.64\\microsoft.web.webview2.1.0.2651.64.nupkg.sha512",
+    "C:\\Users\\michelloinik\\.nuget\\packages\\microsoft.windows.sdk.buildtools\\10.0.28000.2705\\microsoft.windows.sdk.buildtools.10.0.28000.2705.nupkg.sha512",
+    "C:\\Users\\michelloinik\\.nuget\\packages\\microsoft.windowsappsdk\\1.6.250602001\\microsoft.windowsappsdk.1.6.250602001.nupkg.sha512",
+    "C:\\Users\\michelloinik\\.nuget\\packages\\microsoft.netcore.app.runtime.win-x64\\8.0.32\\microsoft.netcore.app.runtime.win-x64.8.0.32.nupkg.sha512",
+    "C:\\Users\\michelloinik\\.nuget\\packages\\microsoft.netcore.app.runtime.win-arm64\\8.0.32\\microsoft.netcore.app.runtime.win-arm64.8.0.32.nupkg.sha512",
+    "C:\\Users\\michelloinik\\.nuget\\packages\\microsoft.windowsdesktop.app.runtime.win-x64\\8.0.32\\microsoft.windowsdesktop.app.runtime.win-x64.8.0.32.nupkg.sha512",
+    "C:\\Users\\michelloinik\\.nuget\\packages\\microsoft.windowsdesktop.app.runtime.win-arm64\\8.0.32\\microsoft.windowsdesktop.app.runtime.win-arm64.8.0.32.nupkg.sha512",
+    "C:\\Users\\michelloinik\\.nuget\\packages\\microsoft.aspnetcore.app.runtime.win-x64\\8.0.32\\microsoft.aspnetcore.app.runtime.win-x64.8.0.32.nupkg.sha512",
+    "C:\\Users\\michelloinik\\.nuget\\packages\\microsoft.aspnetcore.app.runtime.win-arm64\\8.0.32\\microsoft.aspnetcore.app.runtime.win-arm64.8.0.32.nupkg.sha512",
+    "C:\\Users\\michelloinik\\.nuget\\packages\\microsoft.windows.sdk.net.ref\\10.0.19041.57\\microsoft.windows.sdk.net.ref.10.0.19041.57.nupkg.sha512"
+  ],
+  "logs": []
+}

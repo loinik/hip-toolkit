@@ -24,6 +24,7 @@ final class AppViewModel: ObservableObject {
     @Published var capitalizeNames    = false
     @Published var useType4PNG        = false
     @Published var hisOutputFormat:  HisOutputFormat  = .wav
+    @Published var hisPhoneFilter     = false
     @Published var bikOutputFormat:  BIKOutputFormat  = .pngSequence
     @Published var showCancelConfirmation = false
 
@@ -93,6 +94,7 @@ final class AppViewModel: ObservableObject {
         let capitalizeNames    = self.capitalizeNames
         let useType4PNG        = self.useType4PNG
         let hisOutputFormat    = self.hisOutputFormat
+        let hisPhoneFilter     = self.hisPhoneFilter
         let bikOutputFormat    = self.bikOutputFormat
 
         let t = Task {
@@ -114,6 +116,8 @@ final class AppViewModel: ObservableObject {
                                                          decompileLua: decompileLua)
                     case .bikDecode:
                         items = await decodeBIKAsync(url, format: bikOutputFormat)
+                    case .hisEncode where hisPhoneFilter:
+                        items = [await AppViewModel.encodeHISPhone(url)]
                     default:
                         items = await Task.detached(priority: .userInitiated) { [mode, compileLua, decompileLua, useType4PNG, hisOutputFormat] in
                             switch mode {
@@ -682,6 +686,30 @@ final class AppViewModel: ObservableObject {
             let out  = url.deletingPathExtension().appendingPathExtension("his")
             try data.write(to: out)
             return ok(name, "→ .his  " + sizeStr(data.count))
+        } catch { return fail(name, error.localizedDescription) }
+    }
+
+    /// Telephone line: band-limited to 300–3400 Hz, compressed and slightly crushed, so a
+    /// voice recorded clean sounds like it comes through a phone (the game's calls).
+    nonisolated static let phoneFilter =
+        "highpass=f=300:poles=2,lowpass=f=3400:poles=2,acompressor=threshold=0.125:ratio=4:attack=5:release=60:makeup=2,acrusher=bits=12:mix=0.3"
+
+    /// Like encodeHIS, but runs the audio through `phoneFilter` (bundled ffmpeg) first.
+    nonisolated static func encodeHISPhone(_ url: URL) async -> ConversionResult {
+        let name = url.lastPathComponent
+        let ext  = url.pathExtension.lowercased()
+        guard ext == "wav" || ext == "ogg" || ext == "mp3" else {
+            return fail(name, S.get("error_expected_audio"))
+        }
+        let tmp = FileManager.default.temporaryDirectory
+            .appendingPathComponent(UUID().uuidString).appendingPathExtension("wav")
+        defer { try? FileManager.default.removeItem(at: tmp) }
+        do {
+            try await FFmpegRunner.run(["-i", url.path, "-af", phoneFilter, "-c:a", "pcm_s16le", tmp.path])
+            let data = try HIPWrapper.encodeHISFromAudio(atPath: tmp.path) as Data
+            let out  = url.deletingPathExtension().appendingPathExtension("his")
+            try data.write(to: out)
+            return ok(name, "→ .his  " + sizeStr(data.count) + "  " + S.get("toggle_phone_filter"))
         } catch { return fail(name, error.localizedDescription) }
     }
 

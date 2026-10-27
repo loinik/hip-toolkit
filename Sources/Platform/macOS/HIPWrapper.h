@@ -184,4 +184,67 @@ NS_ASSUME_NONNULL_BEGIN
 
 @end
 
+// MARK: - Bitmap font generator (BitmapFontGenerator.hpp)
+
+/// One style's source face. An empty path derives the style from Regular
+/// (BoldItalic from Bold when Bold has a file), synthesizing as GDI did.
+@interface HIPFontGenStyle : NSObject
+@property (nonatomic, copy, nullable) NSString *fontPath;
+@property (nonatomic) NSInteger faceIndex;
+@property (nonatomic) BOOL synthBold;
+@property (nonatomic) BOOL synthItalic;
+@property (nonatomic) BOOL enabled;
+- (instancetype)init;
+@end
+
+@interface HIPFontGenOptions : NSObject
+@property (nonatomic, copy) NSString *name;                 ///< "Tahoma_12"
+@property (nonatomic) NSInteger pixelSize;                  ///< em (or cell, see cellHeight) size in px
+@property (nonatomic) BOOL cellHeight;                      ///< pixelSize is the cell height (GDI lfHeight > 0)
+/// A stock preset (+fontGenStockPresets) whose measured rendering settings
+/// and per-style metrics replace the ones below; nil = custom.
+@property (nonatomic, copy, nullable) NSString *preset;
+@property (nonatomic, copy) NSArray<HIPFontGenStyle *> *styles; ///< Regular, Bold, Italic, BoldItalic
+@property (nonatomic) BOOL unicode;                         ///< encoding = "unicode" (else cp1252)
+@property (nonatomic, copy) NSArray<NSString *> *charsetIDs;///< see +fontGenCharsets
+@property (nonatomic, copy) NSString *extraCharacters;      ///< any additional characters
+@property (nonatomic) NSInteger hinting;                    ///< 0 classic (GDI), 1 modern, 2 light, 3 none
+@property (nonatomic) NSInteger antialias;                  ///< 0 GDI 65 levels, 1 smooth 256, 2 none
+@property (nonatomic) BOOL whiteRGB;                        ///< RGB white (else RGB = alpha, most stock fonts)
+@property (nonatomic) NSInteger padding;                    ///< empty px left/above each cell
+@property (nonatomic) BOOL kerning;
+@property (nonatomic) NSInteger spacing;                    ///< 0 = auto
+@property (nonatomic) NSInteger atlasWidth;                 ///< 0 = auto
+@property (nonatomic) BOOL powerOfTwoHeight;
+- (instancetype)init;
+@end
+
+@interface HIPFontGenStyleResult : NSObject
+@property (nonatomic, readonly) BOOL present;
+@property (nonatomic, readonly, copy) NSString *ovlName;
+@property (nonatomic, readonly, strong) NSData *png;
+@property (nonatomic, readonly) NSInteger width;
+@property (nonatomic, readonly) NSInteger height;
+@property (nonatomic, readonly) NSInteger glyphCount;
+@property (nonatomic, readonly) NSInteger lineHeight;
+@property (nonatomic, readonly, copy) NSString *missingCharacters;
+@end
+
+@interface HIPFontGenResult : NSObject
+@property (nonatomic, readonly, copy) NSString *lua;
+@property (nonatomic, readonly, copy) NSArray<HIPFontGenStyleResult *> *styles;
+/// White text rendered with a generated style (0..3), `scale`× zoom.
+- (nullable NSImage *)sampleForStyle:(NSInteger)style text:(NSString *)text
+                            maxWidth:(NSInteger)maxWidth scale:(NSInteger)scale;
+@end
+
+@interface HIPWrapper (FontGen)
+/// [[id, title], ...] — repertoires for the generator UI.
++ (NSArray<NSArray<NSString *> *> *)fontGenCharsets;
+/// [[name, family, pixelSize], ...] — presets matching the stock TMB/SEA fonts.
++ (NSArray<NSArray *> *)fontGenStockPresets;
++ (nullable HIPFontGenResult *)generateBitmapFont:(HIPFontGenOptions *)options
+                                            error:(NSError **)error;
+@end
+
 NS_ASSUME_NONNULL_END

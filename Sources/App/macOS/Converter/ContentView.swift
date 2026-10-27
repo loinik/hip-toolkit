@@ -388,6 +388,12 @@ struct SettingsBarView: View {
                 .toggleStyle(.checkbox)
                 .help(S.get("tooltip_decompile_lua"))
 
+            case .hisEncode:
+                Divider().frame(height: 18)
+                Toggle(S.get("toggle_phone_filter"), isOn: $vm.hisPhoneFilter)
+                    .toggleStyle(.checkbox)
+                    .help(S.get("tooltip_phone_filter"))
+
             case .hisDecode:
                 Divider().frame(height: 18)
                 Text(S.get("his_output_format_label"))

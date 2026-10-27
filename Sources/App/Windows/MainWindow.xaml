@@ -33,6 +33,14 @@
                         Background="Transparent" BorderBrush="Transparent" Padding="8">
                     <FontIcon Glyph="&#xED25;" FontSize="16"/>
                 </Button>
+                <Button x:Name="BtnFontGen" Click="FontGen_Click"
+                        ToolTipService.ToolTip="Bitmap Font Generator (Ctrl+Shift+B)"
+                        Background="Transparent" BorderBrush="Transparent" Padding="8">
+                    <FontIcon Glyph="&#xE8D2;" FontSize="16"/>
+                    <Button.KeyboardAccelerators>
+                        <KeyboardAccelerator Modifiers="Control,Shift" Key="B"/>
+                    </Button.KeyboardAccelerators>
+                </Button>
                 <Button x:Name="BtnDonate" Click="Donate_Click"
                         ToolTipService.ToolTip="Support Us"
                         Background="Transparent" BorderBrush="Transparent" Padding="8">

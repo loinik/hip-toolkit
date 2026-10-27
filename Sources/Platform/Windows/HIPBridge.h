@@ -113,6 +113,44 @@ HIP_API int HIP_XSheetBodyToJson(const uint8_t* body, uint32_t bodyLen,
 HIP_API int HIP_XSheetJsonToBody(const char* json,
                                   uint8_t** outBody, uint32_t* outBodyLen);
 
+// ── Bitmap font generator (BitmapFontGenerator.hpp) ──────────────────────
+//
+// JSON in, opaque handle out. Options (all optional except name/styles[0]):
+//   { "name": "Tahoma_12", "pixelSize": 12, "cellHeight": true,
+//     "preset": "Tahoma_12",            // stock look + measured metrics
+//     "styles": [ { "path": "C:\\...\\tahoma.ttf", "faceIndex": 0,
+//                   "synthBold": false, "synthItalic": false, "enabled": true }, x4 ],
+//     "unicode": true, "charsets": ["cp1252", "ru"], "extra": "ẞ",
+//     "hinting": 4,                     // 0 classic, 1 modern, 2 light, 3 none, 4 GDI
+//     "antialias": 0, "whiteRGB": false, "padding": 0,
+//     "kerning": true, "spacing": 0 }
+
+typedef void* HIP_FontGen;
+
+/// Generate a font. On success *outHandle must be released with HIP_FontGenFree.
+HIP_API int HIP_FontGenGenerate(const char* optionsJson, HIP_FontGen* outHandle);
+
+/// {"lua": "...", "styles": [{"present", "ovlName", "width", "height",
+///   "glyphCount", "lineHeight", "emSize", "missing"}, x4]} (free with HIP_Free).
+HIP_API int HIP_FontGenInfo(HIP_FontGen h, char** outJson);
+
+/// The encoded atlas PNG of style 0..3 (free with HIP_Free).
+HIP_API int HIP_FontGenPNG(HIP_FontGen h, int style, uint8_t** outData, uint32_t* outSize);
+
+/// Sample text (UTF-8) rendered white on transparent, straight RGBA,
+/// `scale`x nearest-neighbour zoom (free with HIP_Free).
+HIP_API int HIP_FontGenSample(HIP_FontGen h, int style, const char* text, int maxWidth, int scale,
+                              uint8_t** outRGBA, uint32_t* outWidth, uint32_t* outHeight);
+
+HIP_API void HIP_FontGenFree(HIP_FontGen h);
+
+/// [{"id","title"}] repertoires; [{"name","family","pixelSize"}] stock presets;
+/// installed faces as [{"family","style","path","faceIndex","bold","italic","weight","width"}]
+/// scanned from the system and per-user font folders (free with HIP_Free).
+HIP_API int HIP_FontGenCharsets(char** outJson);
+HIP_API int HIP_FontGenPresets(char** outJson);
+HIP_API int HIP_FontGenListInstalled(char** outJson);
+
 // ── Error info ───────────────────────────────────────────────────────────
 
 /// After any function returns non-zero, call this to get the error message.

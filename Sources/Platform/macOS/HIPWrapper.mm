@@ -8,6 +8,9 @@
 #include "XSheetArchive.hpp"
 #include "LegacyCiftreeArchive.hpp"
 #include "LegacyCIFArchive.hpp"
+#include "BitmapFontGenerator.hpp"
+#include <algorithm>
+#include <memory>
 
 // MARK: - Helpers
 
@@ -715,6 +718,148 @@ extern "C" int stb_vorbis_decode_memory(const unsigned char *mem, int len,
     auto body = XSheet::fromJson(s);
     if (body.empty()) return nil;
     return [NSData dataWithBytes:body.data() length:body.size()];
+}
+
+@end
+
+// MARK: - Bitmap font generator
+
+@implementation HIPFontGenStyle
+- (instancetype)init { if ((self = [super init])) { _enabled = YES; } return self; }
+@end
+
+@implementation HIPFontGenOptions
+- (instancetype)init {
+    if ((self = [super init])) {
+        _name = @"Font_12"; _pixelSize = 12; _unicode = YES; _kerning = YES;
+        _powerOfTwoHeight = YES; _charsetIDs = @[@"cp1252"]; _extraCharacters = @"";
+        _styles = @[[HIPFontGenStyle new], [HIPFontGenStyle new], [HIPFontGenStyle new], [HIPFontGenStyle new]];
+    }
+    return self;
+}
+@end
+
+@interface HIPFontGenStyleResult ()
+@property (nonatomic, readwrite) BOOL present;
+@property (nonatomic, readwrite, copy) NSString *ovlName;
+@property (nonatomic, readwrite, strong) NSData *png;
+@property (nonatomic, readwrite) NSInteger width, height, glyphCount, lineHeight;
+@property (nonatomic, readwrite, copy) NSString *missingCharacters;
+@end
+@implementation HIPFontGenStyleResult
+@end
+
+@interface HIPFontGenResult () {
+    std::shared_ptr<hip::BFResult> _result;
+}
+@property (nonatomic, readwrite, copy) NSString *lua;
+@property (nonatomic, readwrite, copy) NSArray<HIPFontGenStyleResult *> *styles;
+- (void)setNative:(std::shared_ptr<hip::BFResult>)r;
+@end
+
+@implementation HIPFontGenResult
+- (void)setNative:(std::shared_ptr<hip::BFResult>)r { _result = r; }
+- (nullable NSImage *)sampleForStyle:(NSInteger)style text:(NSString *)text
+                            maxWidth:(NSInteger)maxWidth scale:(NSInteger)scale {
+    if (!_result || style < 0 || style > 3) return nil;
+    hip::BFSample s;
+    if (!hip::bfRenderSample(_result->styles[style], text.UTF8String ?: "", (int)maxWidth, (int)scale, s))
+        return nil;
+    NSBitmapImageRep *rep = [[NSBitmapImageRep alloc]
+        initWithBitmapDataPlanes:NULL pixelsWide:s.width pixelsHigh:s.height bitsPerSample:8
+        samplesPerPixel:4 hasAlpha:YES isPlanar:NO colorSpaceName:NSDeviceRGBColorSpace
+        bitmapFormat:NSBitmapFormatAlphaNonpremultiplied bytesPerRow:s.width * 4 bitsPerPixel:32];
+    memcpy(rep.bitmapData, s.rgba.data(), s.rgba.size());
+    NSImage *img = [[NSImage alloc] initWithSize:NSMakeSize(s.width, s.height)];
+    [img addRepresentation:rep];
+    return img;
+}
+@end
+
+@implementation HIPWrapper (FontGen)
+
++ (NSArray<NSArray<NSString *> *> *)fontGenCharsets {
+    NSMutableArray *a = [NSMutableArray array];
+    for (const auto &c : hip::bfCharsets())
+        [a addObject:@[@(c.id), @(c.title)]];
+    return a;
+}
+
++ (NSArray<NSArray *> *)fontGenStockPresets {
+    NSMutableArray *a = [NSMutableArray array];
+    for (const auto &p : hip::bfStockPresets())
+        [a addObject:@[@(p.name), @(p.family), @(p.pixelSize)]];
+    return a;
+}
+
++ (nullable HIPFontGenResult *)generateBitmapFont:(HIPFontGenOptions *)o error:(NSError **)error {
+    hip::BFOptions opt;
+    opt.name = o.name.UTF8String ?: "";
+    opt.pixelSize = (int)o.pixelSize;
+    opt.sizeMode = o.cellHeight ? hip::BFSizeMode::Cell : hip::BFSizeMode::Em;
+    for (NSUInteger i = 0; i < 4 && i < o.styles.count; i++) {
+        HIPFontGenStyle *st = o.styles[i];
+        opt.styles[i].fontPath = st.fontPath.length ? st.fontPath.fileSystemRepresentation : "";
+        opt.styles[i].faceIndex = (int)st.faceIndex;
+        opt.styles[i].synthBold = st.synthBold;
+        opt.styles[i].synthItalic = st.synthItalic;
+        opt.styles[i].enabled = st.enabled;
+    }
+    opt.encoding = o.unicode ? hip::BFEncoding::Unicode : hip::BFEncoding::Cp1252;
+    std::vector<std::string> ids;
+    for (NSString *s in o.charsetIDs) ids.push_back(s.UTF8String);
+    std::vector<uint32_t> cps = hip::bfCharsetCodepoints(ids);
+    NSData *u32 = [o.extraCharacters dataUsingEncoding:NSUTF32LittleEndianStringEncoding];
+    const uint32_t *u = (const uint32_t *)u32.bytes;
+    for (NSUInteger k = 0; k < u32.length / 4; k++)
+        if (u[k] >= 32) cps.push_back(u[k]);
+    std::sort(cps.begin(), cps.end());
+    cps.erase(std::unique(cps.begin(), cps.end()), cps.end());
+    opt.codepoints = cps;
+    opt.hinting = (hip::BFHinting)std::clamp((int)o.hinting, 0, 3);
+    opt.antialias = (hip::BFAntialias)std::clamp((int)o.antialias, 0, 2);
+    opt.color = o.whiteRGB ? hip::BFColor::White : hip::BFColor::Gray;
+    opt.padding = (int)o.padding;
+    opt.kerning = o.kerning;
+    opt.spacing = (int)o.spacing;
+    opt.atlasWidth = (int)o.atlasWidth;
+    opt.powerOfTwoHeight = o.powerOfTwoHeight;
+    if (o.preset.length) {
+        if (const hip::BFPreset *p = hip::bfFindPreset(o.preset.UTF8String)) {
+            const std::string keepName = opt.name;
+            hip::bfApplyPreset(*p, opt);
+            if (!keepName.empty()) opt.name = keepName;
+        }
+    }
+
+    auto res = std::make_shared<hip::BFResult>();
+    std::string err;
+    if (!hip::bfGenerate(opt, *res, err)) {
+        if (error) *error = hipError(@(err.c_str()));
+        return nil;
+    }
+    HIPFontGenResult *out = [HIPFontGenResult new];
+    out.lua = @(res->lua.c_str());
+    NSMutableArray *styles = [NSMutableArray array];
+    for (const auto &st : res->styles) {
+        HIPFontGenStyleResult *r = [HIPFontGenStyleResult new];
+        r.present = st.present;
+        r.ovlName = @(st.ovlName.c_str());
+        r.png = vecToData(st.png);
+        r.width = st.width; r.height = st.height;
+        r.glyphCount = st.glyphCount; r.lineHeight = st.lineHeight;
+        NSMutableString *miss = [NSMutableString string];
+        for (uint32_t cp : st.missing) {
+            UTF32Char c = cp;
+            NSString *ch = [[NSString alloc] initWithBytes:&c length:4 encoding:NSUTF32LittleEndianStringEncoding];
+            if (ch) [miss appendString:ch];
+        }
+        r.missingCharacters = miss;
+        [styles addObject:r];
+    }
+    out.styles = styles;
+    [out setNative:res];
+    return out;
 }
 
 @end

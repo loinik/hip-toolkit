@@ -1,0 +1,1 @@
+FreeType 2.13.3 (https://download.savannah.gnu.org/releases/freetype/freetype-2.13.3.tar.xz, sha256 0550350666d427c74daeb85d5ac7bb353acba5f76956395995311a9c6f063289) — include/ and src/ only, unmodified. Compiled through Vendor/freetype/units/*.c (one wrapper per module, see there).

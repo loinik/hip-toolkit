@@ -173,10 +173,17 @@
     <ClCompile Include="..\..\Core\LegacyCiftreeArchive.cpp" />
     <ClCompile Include="..\..\Core\LegacySceneArchive.cpp" />
     <ClCompile Include="..\..\Core\LegacyCIFArchive.cpp" />
+    <ClCompile Include="..\..\Core\LegacyXSheetArchive.cpp" />
     <ClCompile Include="..\..\Core\HISArchive.cpp">
       <DisableSpecificWarnings>4244;4267;4505</DisableSpecificWarnings>
     </ClCompile>
     <ClCompile Include="..\..\Core\XSheetArchive.cpp" />
+    <ClCompile Include="..\..\Core\BitmapFontGenerator.cpp" />
+    <!-- FreeType: one translation unit per module (Vendor/freetype/units defines FT2_BUILD_LIBRARY) -->
+    <ClCompile Include="..\..\..\Vendor\freetype\units\*.c">
+      <WarningLevel>TurnOffAllWarnings</WarningLevel>
+      <SDLCheck>false</SDLCheck>
+    </ClCompile>
     <ClCompile Include="..\..\..\Vendor\lua\*.c" Exclude="..\..\..\Vendor\lua\print.c">
       <!-- Suppress warnings in Lua C source that are noise for third-party code -->
       <DisableSpecificWarnings>4324;4334;4244;4267;4310;4701;4703</DisableSpecificWarnings>
@@ -204,8 +211,10 @@
     <ClInclude Include="..\..\Core\LegacyCiftreeArchive.hpp" />
     <ClInclude Include="..\..\Core\LegacySceneArchive.hpp" />
     <ClInclude Include="..\..\Core\LegacyCIFArchive.hpp" />
+    <ClInclude Include="..\..\Core\LegacyXSheetArchive.hpp" />
     <ClInclude Include="..\..\Core\HISArchive.hpp" />
     <ClInclude Include="..\..\Core\XSheetArchive.hpp" />
+    <ClInclude Include="..\..\Core\BitmapFontGenerator.hpp" />
     <ClInclude Include="..\..\..\Vendor\nlohmann_json.hpp" />
     <ClInclude Include="..\..\..\Vendor\stb_image.h" />
     <ClInclude Include="..\..\..\Vendor\stb_image_write.h" />

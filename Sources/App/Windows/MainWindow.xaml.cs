@@ -163,6 +163,8 @@ public sealed partial class MainWindow : Window
             _ = Windows.System.Launcher.LaunchUriAsync(new Uri("https://instagram.com/nancydrewhub"));
     }
 
+    private void FontGen_Click(object sender, RoutedEventArgs e) => FontGeneratorWindow.ShowSingle();
+
     private async void OpenFile_Click(object sender, RoutedEventArgs e)
     {
         var picker = new FileOpenPicker();

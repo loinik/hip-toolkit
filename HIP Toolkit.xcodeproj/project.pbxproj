@@ -80,6 +80,50 @@
 		EEA0BB03CC000001DEADBEEF /* en.json in Resources */ = {isa = PBXBuildFile; fileRef = EEA0BB04CC000001DEADBEEF /* en.json */; };
 		EEE5AB292F84E9E200365579 /* Toolkit.icon in Resources */ = {isa = PBXBuildFile; fileRef = EEE5AB282F84E9E200365579 /* Toolkit.icon */; };
 		EEE5AB2A2F84E9E200365579 /* Toolkit.icon in Resources */ = {isa = PBXBuildFile; fileRef = EEE5AB282F84E9E200365579 /* Toolkit.icon */; };
+		EEF70000FREETYPE00000001 /* ft_autofit_autofit.c in Sources */ = {isa = PBXBuildFile; fileRef = EEF70000FREETYPE00000000 /* ft_autofit_autofit.c */; settings = {COMPILER_FLAGS = "-w"; }; };
+		EEF70001FREETYPE00000001 /* ft_base_ftbase.c in Sources */ = {isa = PBXBuildFile; fileRef = EEF70001FREETYPE00000000 /* ft_base_ftbase.c */; settings = {COMPILER_FLAGS = "-w"; }; };
+		EEF70002FREETYPE00000001 /* ft_base_ftbbox.c in Sources */ = {isa = PBXBuildFile; fileRef = EEF70002FREETYPE00000000 /* ft_base_ftbbox.c */; settings = {COMPILER_FLAGS = "-w"; }; };
+		EEF70003FREETYPE00000001 /* ft_base_ftbdf.c in Sources */ = {isa = PBXBuildFile; fileRef = EEF70003FREETYPE00000000 /* ft_base_ftbdf.c */; settings = {COMPILER_FLAGS = "-w"; }; };
+		EEF70004FREETYPE00000001 /* ft_base_ftbitmap.c in Sources */ = {isa = PBXBuildFile; fileRef = EEF70004FREETYPE00000000 /* ft_base_ftbitmap.c */; settings = {COMPILER_FLAGS = "-w"; }; };
+		EEF70005FREETYPE00000001 /* ft_base_ftcid.c in Sources */ = {isa = PBXBuildFile; fileRef = EEF70005FREETYPE00000000 /* ft_base_ftcid.c */; settings = {COMPILER_FLAGS = "-w"; }; };
+		EEF70006FREETYPE00000001 /* ft_base_ftdebug.c in Sources */ = {isa = PBXBuildFile; fileRef = EEF70006FREETYPE00000000 /* ft_base_ftdebug.c */; settings = {COMPILER_FLAGS = "-w"; }; };
+		EEF70007FREETYPE00000001 /* ft_base_ftfstype.c in Sources */ = {isa = PBXBuildFile; fileRef = EEF70007FREETYPE00000000 /* ft_base_ftfstype.c */; settings = {COMPILER_FLAGS = "-w"; }; };
+		EEF70008FREETYPE00000001 /* ft_base_ftgasp.c in Sources */ = {isa = PBXBuildFile; fileRef = EEF70008FREETYPE00000000 /* ft_base_ftgasp.c */; settings = {COMPILER_FLAGS = "-w"; }; };
+		EEF70009FREETYPE00000001 /* ft_base_ftglyph.c in Sources */ = {isa = PBXBuildFile; fileRef = EEF70009FREETYPE00000000 /* ft_base_ftglyph.c */; settings = {COMPILER_FLAGS = "-w"; }; };
+		EEF70010FREETYPE00000001 /* ft_base_ftgxval.c in Sources */ = {isa = PBXBuildFile; fileRef = EEF70010FREETYPE00000000 /* ft_base_ftgxval.c */; settings = {COMPILER_FLAGS = "-w"; }; };
+		EEF70011FREETYPE00000001 /* ft_base_ftinit.c in Sources */ = {isa = PBXBuildFile; fileRef = EEF70011FREETYPE00000000 /* ft_base_ftinit.c */; settings = {COMPILER_FLAGS = "-w"; }; };
+		EEF70012FREETYPE00000001 /* ft_base_ftmm.c in Sources */ = {isa = PBXBuildFile; fileRef = EEF70012FREETYPE00000000 /* ft_base_ftmm.c */; settings = {COMPILER_FLAGS = "-w"; }; };
+		EEF70013FREETYPE00000001 /* ft_base_ftotval.c in Sources */ = {isa = PBXBuildFile; fileRef = EEF70013FREETYPE00000000 /* ft_base_ftotval.c */; settings = {COMPILER_FLAGS = "-w"; }; };
+		EEF70014FREETYPE00000001 /* ft_base_ftpatent.c in Sources */ = {isa = PBXBuildFile; fileRef = EEF70014FREETYPE00000000 /* ft_base_ftpatent.c */; settings = {COMPILER_FLAGS = "-w"; }; };
+		EEF70015FREETYPE00000001 /* ft_base_ftpfr.c in Sources */ = {isa = PBXBuildFile; fileRef = EEF70015FREETYPE00000000 /* ft_base_ftpfr.c */; settings = {COMPILER_FLAGS = "-w"; }; };
+		EEF70016FREETYPE00000001 /* ft_base_ftstroke.c in Sources */ = {isa = PBXBuildFile; fileRef = EEF70016FREETYPE00000000 /* ft_base_ftstroke.c */; settings = {COMPILER_FLAGS = "-w"; }; };
+		EEF70017FREETYPE00000001 /* ft_base_ftsynth.c in Sources */ = {isa = PBXBuildFile; fileRef = EEF70017FREETYPE00000000 /* ft_base_ftsynth.c */; settings = {COMPILER_FLAGS = "-w"; }; };
+		EEF70018FREETYPE00000001 /* ft_base_ftsystem.c in Sources */ = {isa = PBXBuildFile; fileRef = EEF70018FREETYPE00000000 /* ft_base_ftsystem.c */; settings = {COMPILER_FLAGS = "-w"; }; };
+		EEF70019FREETYPE00000001 /* ft_base_fttype1.c in Sources */ = {isa = PBXBuildFile; fileRef = EEF70019FREETYPE00000000 /* ft_base_fttype1.c */; settings = {COMPILER_FLAGS = "-w"; }; };
+		EEF70020FREETYPE00000001 /* ft_base_ftwinfnt.c in Sources */ = {isa = PBXBuildFile; fileRef = EEF70020FREETYPE00000000 /* ft_base_ftwinfnt.c */; settings = {COMPILER_FLAGS = "-w"; }; };
+		EEF70021FREETYPE00000001 /* ft_bdf_bdf.c in Sources */ = {isa = PBXBuildFile; fileRef = EEF70021FREETYPE00000000 /* ft_bdf_bdf.c */; settings = {COMPILER_FLAGS = "-w"; }; };
+		EEF70022FREETYPE00000001 /* ft_bzip2_ftbzip2.c in Sources */ = {isa = PBXBuildFile; fileRef = EEF70022FREETYPE00000000 /* ft_bzip2_ftbzip2.c */; settings = {COMPILER_FLAGS = "-w"; }; };
+		EEF70023FREETYPE00000001 /* ft_cache_ftcache.c in Sources */ = {isa = PBXBuildFile; fileRef = EEF70023FREETYPE00000000 /* ft_cache_ftcache.c */; settings = {COMPILER_FLAGS = "-w"; }; };
+		EEF70024FREETYPE00000001 /* ft_cff_cff.c in Sources */ = {isa = PBXBuildFile; fileRef = EEF70024FREETYPE00000000 /* ft_cff_cff.c */; settings = {COMPILER_FLAGS = "-w"; }; };
+		EEF70025FREETYPE00000001 /* ft_cid_type1cid.c in Sources */ = {isa = PBXBuildFile; fileRef = EEF70025FREETYPE00000000 /* ft_cid_type1cid.c */; settings = {COMPILER_FLAGS = "-w"; }; };
+		EEF70026FREETYPE00000001 /* ft_gzip_ftgzip.c in Sources */ = {isa = PBXBuildFile; fileRef = EEF70026FREETYPE00000000 /* ft_gzip_ftgzip.c */; settings = {COMPILER_FLAGS = "-w"; }; };
+		EEF70027FREETYPE00000001 /* ft_lzw_ftlzw.c in Sources */ = {isa = PBXBuildFile; fileRef = EEF70027FREETYPE00000000 /* ft_lzw_ftlzw.c */; settings = {COMPILER_FLAGS = "-w"; }; };
+		EEF70028FREETYPE00000001 /* ft_pcf_pcf.c in Sources */ = {isa = PBXBuildFile; fileRef = EEF70028FREETYPE00000000 /* ft_pcf_pcf.c */; settings = {COMPILER_FLAGS = "-w"; }; };
+		EEF70029FREETYPE00000001 /* ft_pfr_pfr.c in Sources */ = {isa = PBXBuildFile; fileRef = EEF70029FREETYPE00000000 /* ft_pfr_pfr.c */; settings = {COMPILER_FLAGS = "-w"; }; };
+		EEF70030FREETYPE00000001 /* ft_psaux_psaux.c in Sources */ = {isa = PBXBuildFile; fileRef = EEF70030FREETYPE00000000 /* ft_psaux_psaux.c */; settings = {COMPILER_FLAGS = "-w"; }; };
+		EEF70031FREETYPE00000001 /* ft_pshinter_pshinter.c in Sources */ = {isa = PBXBuildFile; fileRef = EEF70031FREETYPE00000000 /* ft_pshinter_pshinter.c */; settings = {COMPILER_FLAGS = "-w"; }; };
+		EEF70032FREETYPE00000001 /* ft_psnames_psnames.c in Sources */ = {isa = PBXBuildFile; fileRef = EEF70032FREETYPE00000000 /* ft_psnames_psnames.c */; settings = {COMPILER_FLAGS = "-w"; }; };
+		EEF70033FREETYPE00000001 /* ft_raster_raster.c in Sources */ = {isa = PBXBuildFile; fileRef = EEF70033FREETYPE00000000 /* ft_raster_raster.c */; settings = {COMPILER_FLAGS = "-w"; }; };
+		EEF70034FREETYPE00000001 /* ft_sdf_sdf.c in Sources */ = {isa = PBXBuildFile; fileRef = EEF70034FREETYPE00000000 /* ft_sdf_sdf.c */; settings = {COMPILER_FLAGS = "-w"; }; };
+		EEF70035FREETYPE00000001 /* ft_sfnt_sfnt.c in Sources */ = {isa = PBXBuildFile; fileRef = EEF70035FREETYPE00000000 /* ft_sfnt_sfnt.c */; settings = {COMPILER_FLAGS = "-w"; }; };
+		EEF70036FREETYPE00000001 /* ft_smooth_smooth.c in Sources */ = {isa = PBXBuildFile; fileRef = EEF70036FREETYPE00000000 /* ft_smooth_smooth.c */; settings = {COMPILER_FLAGS = "-w"; }; };
+		EEF70037FREETYPE00000001 /* ft_svg_svg.c in Sources */ = {isa = PBXBuildFile; fileRef = EEF70037FREETYPE00000000 /* ft_svg_svg.c */; settings = {COMPILER_FLAGS = "-w"; }; };
+		EEF70038FREETYPE00000001 /* ft_truetype_truetype.c in Sources */ = {isa = PBXBuildFile; fileRef = EEF70038FREETYPE00000000 /* ft_truetype_truetype.c */; settings = {COMPILER_FLAGS = "-w"; }; };
+		EEF70039FREETYPE00000001 /* ft_type1_type1.c in Sources */ = {isa = PBXBuildFile; fileRef = EEF70039FREETYPE00000000 /* ft_type1_type1.c */; settings = {COMPILER_FLAGS = "-w"; }; };
+		EEF70040FREETYPE00000001 /* ft_type42_type42.c in Sources */ = {isa = PBXBuildFile; fileRef = EEF70040FREETYPE00000000 /* ft_type42_type42.c */; settings = {COMPILER_FLAGS = "-w"; }; };
+		EEF70041FREETYPE00000001 /* ft_winfonts_winfnt.c in Sources */ = {isa = PBXBuildFile; fileRef = EEF70041FREETYPE00000000 /* ft_winfonts_winfnt.c */; settings = {COMPILER_FLAGS = "-w"; }; };
+		EEBF00000BMFONTGEN00001 /* BitmapFontGenerator.cpp in Sources */ = {isa = PBXBuildFile; fileRef = EEBF00000BMFONTGEN00000 /* BitmapFontGenerator.cpp */; };
+		EEBF00002BMFONTGEN00001 /* FontGeneratorView.swift in Sources */ = {isa = PBXBuildFile; fileRef = EEBF00002BMFONTGEN00000 /* FontGeneratorView.swift */; };
 /* End PBXBuildFile section */
 
 /* Begin PBXContainerItemProxy section */
@@ -214,6 +258,51 @@
 		EEA0BB02CC000001DEADBEEF /* Strings.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Strings.swift; sourceTree = "<group>"; };
 		EEA0BB04CC000001DEADBEEF /* en.json */ = {isa = PBXFileReference; lastKnownFileType = text.json; name = en.json; path = Sources/Strings/en.json; sourceTree = SOURCE_ROOT; };
 		EEE5AB282F84E9E200365579 /* Toolkit.icon */ = {isa = PBXFileReference; lastKnownFileType = folder.iconcomposer.icon; path = Toolkit.icon; sourceTree = "<group>"; };
+		EEF70000FREETYPE00000000 /* ft_autofit_autofit.c */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.c; name = ft_autofit_autofit.c; path = Vendor/freetype/units/ft_autofit_autofit.c; sourceTree = SOURCE_ROOT; };
+		EEF70001FREETYPE00000000 /* ft_base_ftbase.c */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.c; name = ft_base_ftbase.c; path = Vendor/freetype/units/ft_base_ftbase.c; sourceTree = SOURCE_ROOT; };
+		EEF70002FREETYPE00000000 /* ft_base_ftbbox.c */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.c; name = ft_base_ftbbox.c; path = Vendor/freetype/units/ft_base_ftbbox.c; sourceTree = SOURCE_ROOT; };
+		EEF70003FREETYPE00000000 /* ft_base_ftbdf.c */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.c; name = ft_base_ftbdf.c; path = Vendor/freetype/units/ft_base_ftbdf.c; sourceTree = SOURCE_ROOT; };
+		EEF70004FREETYPE00000000 /* ft_base_ftbitmap.c */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.c; name = ft_base_ftbitmap.c; path = Vendor/freetype/units/ft_base_ftbitmap.c; sourceTree = SOURCE_ROOT; };
+		EEF70005FREETYPE00000000 /* ft_base_ftcid.c */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.c; name = ft_base_ftcid.c; path = Vendor/freetype/units/ft_base_ftcid.c; sourceTree = SOURCE_ROOT; };
+		EEF70006FREETYPE00000000 /* ft_base_ftdebug.c */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.c; name = ft_base_ftdebug.c; path = Vendor/freetype/units/ft_base_ftdebug.c; sourceTree = SOURCE_ROOT; };
+		EEF70007FREETYPE00000000 /* ft_base_ftfstype.c */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.c; name = ft_base_ftfstype.c; path = Vendor/freetype/units/ft_base_ftfstype.c; sourceTree = SOURCE_ROOT; };
+		EEF70008FREETYPE00000000 /* ft_base_ftgasp.c */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.c; name = ft_base_ftgasp.c; path = Vendor/freetype/units/ft_base_ftgasp.c; sourceTree = SOURCE_ROOT; };
+		EEF70009FREETYPE00000000 /* ft_base_ftglyph.c */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.c; name = ft_base_ftglyph.c; path = Vendor/freetype/units/ft_base_ftglyph.c; sourceTree = SOURCE_ROOT; };
+		EEF70010FREETYPE00000000 /* ft_base_ftgxval.c */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.c; name = ft_base_ftgxval.c; path = Vendor/freetype/units/ft_base_ftgxval.c; sourceTree = SOURCE_ROOT; };
+		EEF70011FREETYPE00000000 /* ft_base_ftinit.c */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.c; name = ft_base_ftinit.c; path = Vendor/freetype/units/ft_base_ftinit.c; sourceTree = SOURCE_ROOT; };
+		EEF70012FREETYPE00000000 /* ft_base_ftmm.c */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.c; name = ft_base_ftmm.c; path = Vendor/freetype/units/ft_base_ftmm.c; sourceTree = SOURCE_ROOT; };
+		EEF70013FREETYPE00000000 /* ft_base_ftotval.c */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.c; name = ft_base_ftotval.c; path = Vendor/freetype/units/ft_base_ftotval.c; sourceTree = SOURCE_ROOT; };
+		EEF70014FREETYPE00000000 /* ft_base_ftpatent.c */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.c; name = ft_base_ftpatent.c; path = Vendor/freetype/units/ft_base_ftpatent.c; sourceTree = SOURCE_ROOT; };
+		EEF70015FREETYPE00000000 /* ft_base_ftpfr.c */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.c; name = ft_base_ftpfr.c; path = Vendor/freetype/units/ft_base_ftpfr.c; sourceTree = SOURCE_ROOT; };
+		EEF70016FREETYPE00000000 /* ft_base_ftstroke.c */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.c; name = ft_base_ftstroke.c; path = Vendor/freetype/units/ft_base_ftstroke.c; sourceTree = SOURCE_ROOT; };
+		EEF70017FREETYPE00000000 /* ft_base_ftsynth.c */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.c; name = ft_base_ftsynth.c; path = Vendor/freetype/units/ft_base_ftsynth.c; sourceTree = SOURCE_ROOT; };
+		EEF70018FREETYPE00000000 /* ft_base_ftsystem.c */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.c; name = ft_base_ftsystem.c; path = Vendor/freetype/units/ft_base_ftsystem.c; sourceTree = SOURCE_ROOT; };
+		EEF70019FREETYPE00000000 /* ft_base_fttype1.c */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.c; name = ft_base_fttype1.c; path = Vendor/freetype/units/ft_base_fttype1.c; sourceTree = SOURCE_ROOT; };
+		EEF70020FREETYPE00000000 /* ft_base_ftwinfnt.c */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.c; name = ft_base_ftwinfnt.c; path = Vendor/freetype/units/ft_base_ftwinfnt.c; sourceTree = SOURCE_ROOT; };
+		EEF70021FREETYPE00000000 /* ft_bdf_bdf.c */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.c; name = ft_bdf_bdf.c; path = Vendor/freetype/units/ft_bdf_bdf.c; sourceTree = SOURCE_ROOT; };
+		EEF70022FREETYPE00000000 /* ft_bzip2_ftbzip2.c */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.c; name = ft_bzip2_ftbzip2.c; path = Vendor/freetype/units/ft_bzip2_ftbzip2.c; sourceTree = SOURCE_ROOT; };
+		EEF70023FREETYPE00000000 /* ft_cache_ftcache.c */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.c; name = ft_cache_ftcache.c; path = Vendor/freetype/units/ft_cache_ftcache.c; sourceTree = SOURCE_ROOT; };
+		EEF70024FREETYPE00000000 /* ft_cff_cff.c */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.c; name = ft_cff_cff.c; path = Vendor/freetype/units/ft_cff_cff.c; sourceTree = SOURCE_ROOT; };
+		EEF70025FREETYPE00000000 /* ft_cid_type1cid.c */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.c; name = ft_cid_type1cid.c; path = Vendor/freetype/units/ft_cid_type1cid.c; sourceTree = SOURCE_ROOT; };
+		EEF70026FREETYPE00000000 /* ft_gzip_ftgzip.c */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.c; name = ft_gzip_ftgzip.c; path = Vendor/freetype/units/ft_gzip_ftgzip.c; sourceTree = SOURCE_ROOT; };
+		EEF70027FREETYPE00000000 /* ft_lzw_ftlzw.c */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.c; name = ft_lzw_ftlzw.c; path = Vendor/freetype/units/ft_lzw_ftlzw.c; sourceTree = SOURCE_ROOT; };
+		EEF70028FREETYPE00000000 /* ft_pcf_pcf.c */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.c; name = ft_pcf_pcf.c; path = Vendor/freetype/units/ft_pcf_pcf.c; sourceTree = SOURCE_ROOT; };
+		EEF70029FREETYPE00000000 /* ft_pfr_pfr.c */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.c; name = ft_pfr_pfr.c; path = Vendor/freetype/units/ft_pfr_pfr.c; sourceTree = SOURCE_ROOT; };
+		EEF70030FREETYPE00000000 /* ft_psaux_psaux.c */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.c; name = ft_psaux_psaux.c; path = Vendor/freetype/units/ft_psaux_psaux.c; sourceTree = SOURCE_ROOT; };
+		EEF70031FREETYPE00000000 /* ft_pshinter_pshinter.c */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.c; name = ft_pshinter_pshinter.c; path = Vendor/freetype/units/ft_pshinter_pshinter.c; sourceTree = SOURCE_ROOT; };
+		EEF70032FREETYPE00000000 /* ft_psnames_psnames.c */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.c; name = ft_psnames_psnames.c; path = Vendor/freetype/units/ft_psnames_psnames.c; sourceTree = SOURCE_ROOT; };
+		EEF70033FREETYPE00000000 /* ft_raster_raster.c */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.c; name = ft_raster_raster.c; path = Vendor/freetype/units/ft_raster_raster.c; sourceTree = SOURCE_ROOT; };
+		EEF70034FREETYPE00000000 /* ft_sdf_sdf.c */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.c; name = ft_sdf_sdf.c; path = Vendor/freetype/units/ft_sdf_sdf.c; sourceTree = SOURCE_ROOT; };
+		EEF70035FREETYPE00000000 /* ft_sfnt_sfnt.c */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.c; name = ft_sfnt_sfnt.c; path = Vendor/freetype/units/ft_sfnt_sfnt.c; sourceTree = SOURCE_ROOT; };
+		EEF70036FREETYPE00000000 /* ft_smooth_smooth.c */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.c; name = ft_smooth_smooth.c; path = Vendor/freetype/units/ft_smooth_smooth.c; sourceTree = SOURCE_ROOT; };
+		EEF70037FREETYPE00000000 /* ft_svg_svg.c */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.c; name = ft_svg_svg.c; path = Vendor/freetype/units/ft_svg_svg.c; sourceTree = SOURCE_ROOT; };
+		EEF70038FREETYPE00000000 /* ft_truetype_truetype.c */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.c; name = ft_truetype_truetype.c; path = Vendor/freetype/units/ft_truetype_truetype.c; sourceTree = SOURCE_ROOT; };
+		EEF70039FREETYPE00000000 /* ft_type1_type1.c */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.c; name = ft_type1_type1.c; path = Vendor/freetype/units/ft_type1_type1.c; sourceTree = SOURCE_ROOT; };
+		EEF70040FREETYPE00000000 /* ft_type42_type42.c */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.c; name = ft_type42_type42.c; path = Vendor/freetype/units/ft_type42_type42.c; sourceTree = SOURCE_ROOT; };
+		EEF70041FREETYPE00000000 /* ft_winfonts_winfnt.c */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.c; name = ft_winfonts_winfnt.c; path = Vendor/freetype/units/ft_winfonts_winfnt.c; sourceTree = SOURCE_ROOT; };
+		EEBF00000BMFONTGEN00000 /* BitmapFontGenerator.cpp */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.cpp.cpp; path = BitmapFontGenerator.cpp; sourceTree = "<group>"; };
+		EEBF00001BMFONTGEN00000 /* BitmapFontGenerator.hpp */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.cpp.h; path = BitmapFontGenerator.hpp; sourceTree = "<group>"; };
+		EEBF00002BMFONTGEN00000 /* FontGeneratorView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = FontGeneratorView.swift; sourceTree = "<group>"; };
 /* End PBXFileReference section */
 
 /* Begin PBXFileSystemSynchronizedRootGroup section */
@@ -325,6 +414,7 @@
 				EE000002SHINECOMPILE0000 /* shine_compile.c */,
 				EE000003STBIMAGEIMPL0000 /* stb_image_impl.c */,
 				EE000006STBIMGWRITE0000 /* stb_image_write_impl.c */,
+				EEF7FFFFFREETYPEGROUP000 /* freetype */,
 			);
 			path = Vendor;
 			sourceTree = "<group>";
@@ -353,6 +443,8 @@
 			children = (
 				EE6186682F82969000EB6D27 /* CIFArchive.hpp */,
 				EE6186692F82969000EB6D27 /* CIFArchive.cpp */,
+				EEBF00000BMFONTGEN00000 /* BitmapFontGenerator.cpp */,
+				EEBF00001BMFONTGEN00000 /* BitmapFontGenerator.hpp */,
 				EE61866A2F82969000EB6D27 /* CiftreeArchive.hpp */,
 				EE61866B2F82969000EB6D27 /* CiftreeArchive.cpp */,
 				EE000004LEGACYCIFARCH0002 /* LegacyCIFArchive.hpp */,
@@ -452,6 +544,7 @@
 			isa = PBXGroup;
 			children = (
 				EE77C5622FEA85DB00965EC2 /* ContentView.swift */,
+				EEBF00002BMFONTGEN00000 /* FontGeneratorView.swift */,
 				EE01A001DEADBEEF00000001 /* Models.swift */,
 				EE01A002DEADBEEF00000001 /* AppViewModel.swift */,
 				EE01A003DEADBEEF00000001 /* DataHelpers.swift */,
@@ -476,6 +569,55 @@
 				EEBIK0002DEADBEEF00000001 /* BIKPreviewView.swift */,
 			);
 			path = Preview;
+			sourceTree = "<group>";
+		};
+		EEF7FFFFFREETYPEGROUP000 /* freetype */ = {
+			isa = PBXGroup;
+			children = (
+				EEF70000FREETYPE00000000 /* ft_autofit_autofit.c */,
+				EEF70001FREETYPE00000000 /* ft_base_ftbase.c */,
+				EEF70002FREETYPE00000000 /* ft_base_ftbbox.c */,
+				EEF70003FREETYPE00000000 /* ft_base_ftbdf.c */,
+				EEF70004FREETYPE00000000 /* ft_base_ftbitmap.c */,
+				EEF70005FREETYPE00000000 /* ft_base_ftcid.c */,
+				EEF70006FREETYPE00000000 /* ft_base_ftdebug.c */,
+				EEF70007FREETYPE00000000 /* ft_base_ftfstype.c */,
+				EEF70008FREETYPE00000000 /* ft_base_ftgasp.c */,
+				EEF70009FREETYPE00000000 /* ft_base_ftglyph.c */,
+				EEF70010FREETYPE00000000 /* ft_base_ftgxval.c */,
+				EEF70011FREETYPE00000000 /* ft_base_ftinit.c */,
+				EEF70012FREETYPE00000000 /* ft_base_ftmm.c */,
+				EEF70013FREETYPE00000000 /* ft_base_ftotval.c */,
+				EEF70014FREETYPE00000000 /* ft_base_ftpatent.c */,
+				EEF70015FREETYPE00000000 /* ft_base_ftpfr.c */,
+				EEF70016FREETYPE00000000 /* ft_base_ftstroke.c */,
+				EEF70017FREETYPE00000000 /* ft_base_ftsynth.c */,
+				EEF70018FREETYPE00000000 /* ft_base_ftsystem.c */,
+				EEF70019FREETYPE00000000 /* ft_base_fttype1.c */,
+				EEF70020FREETYPE00000000 /* ft_base_ftwinfnt.c */,
+				EEF70021FREETYPE00000000 /* ft_bdf_bdf.c */,
+				EEF70022FREETYPE00000000 /* ft_bzip2_ftbzip2.c */,
+				EEF70023FREETYPE00000000 /* ft_cache_ftcache.c */,
+				EEF70024FREETYPE00000000 /* ft_cff_cff.c */,
+				EEF70025FREETYPE00000000 /* ft_cid_type1cid.c */,
+				EEF70026FREETYPE00000000 /* ft_gzip_ftgzip.c */,
+				EEF70027FREETYPE00000000 /* ft_lzw_ftlzw.c */,
+				EEF70028FREETYPE00000000 /* ft_pcf_pcf.c */,
+				EEF70029FREETYPE00000000 /* ft_pfr_pfr.c */,
+				EEF70030FREETYPE00000000 /* ft_psaux_psaux.c */,
+				EEF70031FREETYPE00000000 /* ft_pshinter_pshinter.c */,
+				EEF70032FREETYPE00000000 /* ft_psnames_psnames.c */,
+				EEF70033FREETYPE00000000 /* ft_raster_raster.c */,
+				EEF70034FREETYPE00000000 /* ft_sdf_sdf.c */,
+				EEF70035FREETYPE00000000 /* ft_sfnt_sfnt.c */,
+				EEF70036FREETYPE00000000 /* ft_smooth_smooth.c */,
+				EEF70037FREETYPE00000000 /* ft_svg_svg.c */,
+				EEF70038FREETYPE00000000 /* ft_truetype_truetype.c */,
+				EEF70039FREETYPE00000000 /* ft_type1_type1.c */,
+				EEF70040FREETYPE00000000 /* ft_type42_type42.c */,
+				EEF70041FREETYPE00000000 /* ft_winfonts_winfnt.c */,
+			);
+			name = freetype;
 			sourceTree = "<group>";
 		};
 /* End PBXGroup section */
@@ -600,6 +742,50 @@
 			buildActionMask = 2147483647;
 			files = (
 				EE6186742F82969000EB6D27 /* CIFArchive.cpp in Sources */,
+				EEBF00000BMFONTGEN00001 /* BitmapFontGenerator.cpp in Sources */,
+				EEBF00002BMFONTGEN00001 /* FontGeneratorView.swift in Sources */,
+				EEF70000FREETYPE00000001 /* ft_autofit_autofit.c in Sources */,
+				EEF70001FREETYPE00000001 /* ft_base_ftbase.c in Sources */,
+				EEF70002FREETYPE00000001 /* ft_base_ftbbox.c in Sources */,
+				EEF70003FREETYPE00000001 /* ft_base_ftbdf.c in Sources */,
+				EEF70004FREETYPE00000001 /* ft_base_ftbitmap.c in Sources */,
+				EEF70005FREETYPE00000001 /* ft_base_ftcid.c in Sources */,
+				EEF70006FREETYPE00000001 /* ft_base_ftdebug.c in Sources */,
+				EEF70007FREETYPE00000001 /* ft_base_ftfstype.c in Sources */,
+				EEF70008FREETYPE00000001 /* ft_base_ftgasp.c in Sources */,
+				EEF70009FREETYPE00000001 /* ft_base_ftglyph.c in Sources */,
+				EEF70010FREETYPE00000001 /* ft_base_ftgxval.c in Sources */,
+				EEF70011FREETYPE00000001 /* ft_base_ftinit.c in Sources */,
+				EEF70012FREETYPE00000001 /* ft_base_ftmm.c in Sources */,
+				EEF70013FREETYPE00000001 /* ft_base_ftotval.c in Sources */,
+				EEF70014FREETYPE00000001 /* ft_base_ftpatent.c in Sources */,
+				EEF70015FREETYPE00000001 /* ft_base_ftpfr.c in Sources */,
+				EEF70016FREETYPE00000001 /* ft_base_ftstroke.c in Sources */,
+				EEF70017FREETYPE00000001 /* ft_base_ftsynth.c in Sources */,
+				EEF70018FREETYPE00000001 /* ft_base_ftsystem.c in Sources */,
+				EEF70019FREETYPE00000001 /* ft_base_fttype1.c in Sources */,
+				EEF70020FREETYPE00000001 /* ft_base_ftwinfnt.c in Sources */,
+				EEF70021FREETYPE00000001 /* ft_bdf_bdf.c in Sources */,
+				EEF70022FREETYPE00000001 /* ft_bzip2_ftbzip2.c in Sources */,
+				EEF70023FREETYPE00000001 /* ft_cache_ftcache.c in Sources */,
+				EEF70024FREETYPE00000001 /* ft_cff_cff.c in Sources */,
+				EEF70025FREETYPE00000001 /* ft_cid_type1cid.c in Sources */,
+				EEF70026FREETYPE00000001 /* ft_gzip_ftgzip.c in Sources */,
+				EEF70027FREETYPE00000001 /* ft_lzw_ftlzw.c in Sources */,
+				EEF70028FREETYPE00000001 /* ft_pcf_pcf.c in Sources */,
+				EEF70029FREETYPE00000001 /* ft_pfr_pfr.c in Sources */,
+				EEF70030FREETYPE00000001 /* ft_psaux_psaux.c in Sources */,
+				EEF70031FREETYPE00000001 /* ft_pshinter_pshinter.c in Sources */,
+				EEF70032FREETYPE00000001 /* ft_psnames_psnames.c in Sources */,
+				EEF70033FREETYPE00000001 /* ft_raster_raster.c in Sources */,
+				EEF70034FREETYPE00000001 /* ft_sdf_sdf.c in Sources */,
+				EEF70035FREETYPE00000001 /* ft_sfnt_sfnt.c in Sources */,
+				EEF70036FREETYPE00000001 /* ft_smooth_smooth.c in Sources */,
+				EEF70037FREETYPE00000001 /* ft_svg_svg.c in Sources */,
+				EEF70038FREETYPE00000001 /* ft_truetype_truetype.c in Sources */,
+				EEF70039FREETYPE00000001 /* ft_type1_type1.c in Sources */,
+				EEF70040FREETYPE00000001 /* ft_type42_type42.c in Sources */,
+				EEF70041FREETYPE00000001 /* ft_winfonts_winfnt.c in Sources */,
 				EE6186752F82969000EB6D27 /* CiftreeArchive.cpp in Sources */,
 				EE000004LEGACYCIFARCH0001 /* LegacyCIFArchive.cpp in Sources */,
 				EE000005LEGACYCIFTREE0001 /* LegacyCiftreeArchive.cpp in Sources */,
@@ -903,6 +1089,7 @@
 					"$(SRCROOT)/Vendor/libvorbis/include",
 					"$(SRCROOT)/Vendor/libvorbis/src",
 					"$(SRCROOT)/Vendor/libshine/src",
+					"$(SRCROOT)/Vendor/freetype/include",
 				);
 				INFOPLIST_FILE = Sources/App/macOS/Info.plist;
 				INFOPLIST_KEY_CFBundleDisplayName = "HIP Toolkit";
@@ -966,6 +1153,7 @@
 					"$(SRCROOT)/Vendor/libvorbis/include",
 					"$(SRCROOT)/Vendor/libvorbis/src",
 					"$(SRCROOT)/Vendor/libshine/src",
+					"$(SRCROOT)/Vendor/freetype/include",
 				);
 				INFOPLIST_FILE = Sources/App/macOS/Info.plist;
 				INFOPLIST_KEY_CFBundleDisplayName = "HIP Toolkit";
