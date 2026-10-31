@@ -158,6 +158,25 @@ NS_ASSUME_NONNULL_BEGIN
 + (nullable NSData *)xsheetFromJson:(NSString *)json
     NS_SWIFT_NAME(xsheetFromJson(_:));
 
+// ── CVTX conversation text ─────────────────────────────────────────────
+
+/// YES if a decoded type-3 body is a DATA/TEXT/CVTX table, not Lua.
++ (BOOL)isCVTXBody:(NSData *)body NS_SWIFT_NAME(isCVTXBody(_:));
+
+/// CVTX body → CSV file bytes (UTF-8 with BOM, CRLF, comma-separated).
+/// Columns: name, "text (<code page>)" — the detected game code page is
+/// recorded in the header so the table opens cleanly in Excel / Sheets.
++ (nullable NSData *)cvtxBodyToCsv:(NSData *)body
+                             error:(NSError **)error
+    NS_SWIFT_NAME(cvtxBodyToCsv(_:));
+
+/// CVTX CSV → complete CIF file (type 3). Accepts ',' or ';' separators,
+/// UTF-8 (with/without BOM) or the header's code page (Excel "CSV" save).
+/// Fails on characters the code page cannot represent.
++ (nullable NSData *)cvtxFromCsv:(NSData *)csv
+                           error:(NSError **)error
+    NS_SWIFT_NAME(cvtxFromCsv(_:));
+
 // ── HIS audio ───────────────────────────────────────────────────────────
 
 /// OGG / WAV / MP3 → HIS.

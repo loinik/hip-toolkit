@@ -77,6 +77,13 @@ static int luaDumpWriter(lua_State* /*L*/, const void* p, size_t sz, void* ud) {
     return 0;
 }
 
+// UTF-8 form of a path; path::string() throws on Windows for characters
+// outside the ANSI code page (Cyrillic folders). Same bytes for ASCII.
+std::string pathUtf8(const std::filesystem::path& p) {
+    const auto u8 = p.u8string();
+    return std::string(u8.begin(), u8.end());
+}
+
 } // anonymous namespace
 
 
@@ -84,21 +91,21 @@ static int luaDumpWriter(lua_State* /*L*/, const void* p, size_t sz, void* ud) {
 
 std::vector<uint8_t> readFile(const std::filesystem::path& path) {
     std::ifstream f(path, std::ios::binary | std::ios::ate);
-    if (!f) throw std::runtime_error("CIF: cannot open: " + path.string());
+    if (!f) throw std::runtime_error("CIF: cannot open: " + pathUtf8(path));
     auto size = f.tellg();
     f.seekg(0);
     std::vector<uint8_t> data(static_cast<size_t>(size));
     if (!f.read(reinterpret_cast<char*>(data.data()), size))
-        throw std::runtime_error("CIF: read error: " + path.string());
+        throw std::runtime_error("CIF: read error: " + pathUtf8(path));
     return data;
 }
 
 void writeFile(const std::filesystem::path& path, const std::vector<uint8_t>& data) {
     std::ofstream f(path, std::ios::binary);
-    if (!f) throw std::runtime_error("CIF: cannot create: " + path.string());
+    if (!f) throw std::runtime_error("CIF: cannot create: " + pathUtf8(path));
     if (!f.write(reinterpret_cast<const char*>(data.data()),
                  static_cast<std::streamsize>(data.size())))
-        throw std::runtime_error("CIF: write error: " + path.string());
+        throw std::runtime_error("CIF: write error: " + pathUtf8(path));
 }
 
 bool isCompiledLua(const std::vector<uint8_t>& data) {
@@ -212,9 +219,11 @@ std::vector<uint8_t> encodeLua(const std::filesystem::path& luaPath, bool compil
 
     // Normalize UTF-8 source down to the engine's single-byte encoding before
     // storing or compiling (no-op for ASCII or already-single-byte files).
-    if (!isCompiledLua(body)) body = utf8ToEngineBytes(body);
+    // A CVTX text table (raw AUTOTEXT body saved as .lua) is binary: keep as-is.
+    const bool raw = isCompiledLua(body) || isCVTXBody(body);
+    if (!raw) body = utf8ToEngineBytes(body);
 
-    if (compileLua && !isCompiledLua(body)) {
+    if (compileLua && !raw) {
         lua_State* L = luaL_newstate();
         if (!L) {
             throw std::runtime_error("CIF: failed to create Lua state");
@@ -222,7 +231,7 @@ std::vector<uint8_t> encodeLua(const std::filesystem::path& luaPath, bool compil
         std::vector<uint8_t> bytecode;
         // Load from the (transcoded) buffer; chunk name "@<path>" matches what
         // luaL_loadfile would embed, so ASCII output stays byte-identical.
-        const std::string chunkName = "@" + luaPath.string();
+        const std::string chunkName = "@" + pathUtf8(luaPath);
         if (luaL_loadbuffer(L, reinterpret_cast<const char*>(body.data()),
                             body.size(), chunkName.c_str()) == 0) {
             lua_dump(L, luaDumpWriter, &bytecode);
@@ -291,6 +300,82 @@ std::vector<uint8_t> decodeFromBytes(const std::vector<uint8_t>& data) {
     if (std::memcmp(data.data(), MAGIC.data(), MAGIC.size()) != 0)
         throw std::runtime_error("CIF: invalid magic");
     return std::vector<uint8_t>(data.begin() + HEADER_SIZE, data.end());
+}
+
+
+// -- CVTX conversation text --------------------------------------------------
+
+static constexpr size_t CVTX_NAME_SIZE = 33;
+
+bool isCVTXBody(const std::vector<uint8_t>& body) {
+    return body.size() >= 22 &&
+           std::memcmp(body.data(),     "DATA", 4) == 0 &&
+           std::memcmp(body.data() + 8, "TEXTCVTX", 8) == 0;
+}
+
+std::vector<CVTXEntry> parseCVTX(const std::vector<uint8_t>& body) {
+    if (!isCVTXBody(body)) throw std::runtime_error("CVTX: not a DATA/TEXT/CVTX body");
+    const size_t end = std::min(body.size(), size_t(20) + readBE32(body.data() + 16));
+    const uint8_t* d = body.data();
+    size_t p = 20;
+    const uint16_t count = uint16_t(d[p] | d[p+1] << 8);
+    p += 2;
+
+    std::vector<CVTXEntry> entries;
+    entries.reserve(count);
+    for (uint16_t i = 0; i < count; ++i) {
+        if (p + CVTX_NAME_SIZE + 2 > end)
+            throw std::runtime_error("CVTX: truncated at entry " + std::to_string(i));
+        const char* name = reinterpret_cast<const char*>(d + p);
+        CVTXEntry e;
+        e.name.assign(name, strnlen(name, CVTX_NAME_SIZE));
+        p += CVTX_NAME_SIZE;
+        const size_t len = d[p] | d[p+1] << 8;
+        p += 2;
+        if (p + len > end)
+            throw std::runtime_error("CVTX: text overruns chunk at \"" + e.name + "\"");
+        e.text.assign(reinterpret_cast<const char*>(d + p), len);
+        p += len;
+        entries.push_back(std::move(e));
+    }
+    return entries;
+}
+
+std::vector<uint8_t> buildCVTX(const std::vector<CVTXEntry>& entries) {
+    if (entries.size() > 0xFFFF) throw std::runtime_error("CVTX: too many entries (max 65535)");
+    auto putBE32 = [](std::vector<uint8_t>& v, uint32_t x) {
+        v.insert(v.end(), {uint8_t(x>>24), uint8_t(x>>16), uint8_t(x>>8), uint8_t(x)});
+    };
+    std::vector<uint8_t> payload;
+    payload.push_back(uint8_t(entries.size()));
+    payload.push_back(uint8_t(entries.size() >> 8));
+    for (const auto& e : entries) {
+        if (e.name.size() >= CVTX_NAME_SIZE)
+            throw std::runtime_error("CVTX: name longer than 32 bytes: \"" + e.name + "\"");
+        if (e.text.size() > 0xFFFF)
+            throw std::runtime_error("CVTX: text longer than 65535 bytes at \"" + e.name + "\"");
+        const size_t at = payload.size();
+        payload.resize(at + CVTX_NAME_SIZE, 0x00);
+        std::memcpy(payload.data() + at, e.name.data(), e.name.size());
+        payload.push_back(uint8_t(e.text.size()));
+        payload.push_back(uint8_t(e.text.size() >> 8));
+        payload.insert(payload.end(), e.text.begin(), e.text.end());
+    }
+    std::vector<uint8_t> body;
+    body.reserve(payload.size() + 20);
+    body.insert(body.end(), {'D','A','T','A'});
+    putBE32(body, uint32_t(payload.size() + 12));
+    body.insert(body.end(), {'T','E','X','T','C','V','T','X'});
+    putBE32(body, uint32_t(payload.size()));
+    body.insert(body.end(), payload.begin(), payload.end());
+    return body;
+}
+
+std::vector<uint8_t> encodeCVTX(const std::vector<CVTXEntry>& entries) {
+    auto body = buildCVTX(entries);
+    auto out  = buildHeader(FileType::Lua, 0, 0, uint32_t(body.size()));
+    out.insert(out.end(), body.begin(), body.end());
+    return out;
 }
 
 

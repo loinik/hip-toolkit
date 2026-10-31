@@ -411,6 +411,8 @@ final class AppViewModel: ObservableObject {
                                                 compileLua: compileLua) as Data
             case "xsheet":
                 data = try HIPWrapper.encodeXSheet(atPath: url.path) as Data
+            case "csv":
+                data = try HIPWrapper.cvtxFromCsv(try Data(contentsOf: url)) as Data
             case "json":
                 guard let jsonData = try? Data(contentsOf: url),
                       let jsonStr = String(data: jsonData, encoding: .utf8),
@@ -424,7 +426,7 @@ final class AppViewModel: ObservableObject {
                 defer { try? FileManager.default.removeItem(at: tmp) }
                 data = try HIPWrapper.encodeXSheet(atPath: tmp.path) as Data
             default:
-                return fail(name, "Unsupported: .\(ext)  (accepted: png jpg jpeg lua xsheet json)")
+                return fail(name, "Unsupported: .\(ext)  (accepted: png jpg jpeg lua xsheet json csv)")
             }
             let out = url.deletingPathExtension().appendingPathExtension("cif")
             try data.write(to: out)
@@ -438,6 +440,7 @@ final class AppViewModel: ObservableObject {
                 detail += wasCompiled ? " · pre-compiled" : " · source"
             }
             if ext == "xsheet" || ext == "json" { detail += " · XSheet" }
+            if ext == "csv" { detail += " · CVTX text" }
             if ["png","jpg","jpeg"].contains(ext) && useType4PNG { detail += " · type 4 OVL" }
             return ok(name, detail)
         } catch { return fail(name, error.localizedDescription) }
@@ -471,6 +474,13 @@ final class AppViewModel: ObservableObject {
                 }
                 try jsonData.write(to: outURL)
                 return [ok(name, "→ .json  \(sizeStr(jsonData.count)) · XSheet")]
+            }
+
+            if info.isLua && HIPWrapper.isCVTXBody(data) {
+                let csvURL = url.deletingPathExtension().appendingPathExtension("csv")
+                let csv = try HIPWrapper.cvtxBodyToCsv(data) as Data
+                try csv.write(to: csvURL)
+                return [ok(name, "→ .csv  \(sizeStr(csv.count)) · CVTX text")]
             }
 
             if info.isLua {
@@ -551,6 +561,8 @@ final class AppViewModel: ObservableObject {
                         atPath: file.path, compileLua: compileLua) as Data))
                 case "xsheet":
                     cifEntries.append((entryName, try HIPWrapper.encodeXSheet(atPath: file.path) as Data))
+                case "csv":
+                    cifEntries.append((entryName, try HIPWrapper.cvtxFromCsv(try Data(contentsOf: file)) as Data))
                 case "json":
                     if let jd = try? Data(contentsOf: file),
                        let jsonStr = String(data: jd, encoding: .utf8),

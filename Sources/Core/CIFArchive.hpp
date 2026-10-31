@@ -112,6 +112,34 @@ std::string luaDecompiledToReadable(const std::string& src);
 //  returned unchanged, so existing files are never altered.
 std::vector<uint8_t> utf8ToEngineBytes(const std::vector<uint8_t>& src);
 
+// -- CVTX conversation text (AUTOTEXT.cif and friends) -----------------------
+//
+//  Some type-3 CIFs carry an IFF text table instead of Lua:
+//
+//    "DATA" BE32 size
+//      "TEXT" "CVTX" BE32 size        (size counts bytes after it)
+//        LE16 count
+//        count × { char name[33] (NUL-padded); LE16 len; char text[len] }
+//
+//  Text bytes are kept as-is (single-byte game code page).
+struct CVTXEntry {
+    std::string name;
+    std::string text;
+};
+
+/// True if a decoded CIF body starts with "DATA....TEXTCVTX".
+bool isCVTXBody(const std::vector<uint8_t>& body);
+
+/// Parse a CVTX body. Throws on truncated or malformed data.
+std::vector<CVTXEntry> parseCVTX(const std::vector<uint8_t>& body);
+
+/// Entries → CVTX body. Inverse of parseCVTX (byte-identical round trip).
+/// Throws if a name exceeds 32 bytes or a text exceeds 65535 bytes.
+std::vector<uint8_t> buildCVTX(const std::vector<CVTXEntry>& entries);
+
+/// Entries → complete CIF file (type 3, CVTX body).
+std::vector<uint8_t> encodeCVTX(const std::vector<CVTXEntry>& entries);
+
 // -- Utilities ---------------------------------------------------------------
 
 bool isCompiledLua(const std::vector<uint8_t>& data);

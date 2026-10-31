@@ -175,6 +175,7 @@ public sealed partial class MainWindow : Window
         picker.FileTypeFilter.Add(".lua");
         picker.FileTypeFilter.Add(".ogg");
         picker.FileTypeFilter.Add(".xsheet");
+        picker.FileTypeFilter.Add(".csv");
         picker.FileTypeFilter.Add(".png");
         picker.FileTypeFilter.Add(".jpg");
         picker.FileTypeFilter.Add(".jpeg");
@@ -220,6 +221,7 @@ public sealed partial class MainWindow : Window
                     picker.FileTypeFilter.Add(".jpeg");
                     picker.FileTypeFilter.Add(".lua");
                     picker.FileTypeFilter.Add(".xsheet");
+                    picker.FileTypeFilter.Add(".csv");
                     break;
                 case AppMode.CifDecode:
                     picker.FileTypeFilter.Add(".cif");

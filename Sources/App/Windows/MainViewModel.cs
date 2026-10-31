@@ -167,6 +167,7 @@ public sealed class MainViewModel : INotifyPropertyChanged
             ".mp3"  => (AppCategory.HIS, AppDirection.Forward),
             ".xsheet" => (AppCategory.CIF, AppDirection.Forward),
             ".json" => (AppCategory.CIF, AppDirection.Forward),
+            ".csv"  => (AppCategory.CIF, AppDirection.Forward),
             _ when isDir => (AppCategory.Ciftree, AppDirection.Forward),
             _ => null
         };
@@ -357,6 +358,9 @@ public sealed class MainViewModel : INotifyPropertyChanged
                 case ".xsheet":
                     data = HIPInterop.EncodeXSheet(path);
                     break;
+                case ".csv":
+                    data = Cvtx.CsvToCif(File.ReadAllBytes(path));
+                    break;
                 case ".json":
                 {
                     var body = HIPInterop.XSheetJsonToBody(File.ReadAllText(path));
@@ -390,6 +394,7 @@ public sealed class MainViewModel : INotifyPropertyChanged
                 detail += HIPInterop.IsCompiledLua(path) ? " · pre-compiled" : " · source";
             }
             if (ext is ".xsheet" or ".json") detail += " · XSheet";
+            if (ext == ".csv") detail += " · CVTX text";
 
             return [Ok(name, detail)];
         }
@@ -417,6 +422,14 @@ public sealed class MainViewModel : INotifyPropertyChanged
             };
 
             var outPath = Path.ChangeExtension(path, outExt);
+
+            // ── CVTX text table (type 3, but not Lua) → CSV ──
+            if (info.IsLua && Cvtx.IsBody(data))
+            {
+                var csv = Cvtx.BodyToCsv(data);
+                File.WriteAllBytes(Path.ChangeExtension(path, ".csv"), csv);
+                return [Ok(name, $"→ .csv  {FormatSize(csv.Length)} · CVTX text")];
+            }
 
             // ── Lua ──
             if (info.IsLua)
@@ -481,8 +494,25 @@ public sealed class MainViewModel : INotifyPropertyChanged
             // Pack on background thread; progress callback already dispatches to UI via DispatcherQueue
             var data = await Task.Run(() =>
             {
-                return HIPInterop.PackFolder(folderPath, CapitalizeNames, CompileLua, UseType4PNG,
-                    (cur, tot) => { if (!token.IsCancellationRequested) onProgress?.Invoke(cur, tot); });
+                // The native packer has no CSV support: stage each CVTX .csv as a
+                // sibling .cif for the duration of the pack, then remove it.
+                var staged = new List<string>();
+                try
+                {
+                    foreach (var csv in Directory.GetFiles(folderPath, "*.csv", SearchOption.TopDirectoryOnly))
+                    {
+                        var cifPath = Path.ChangeExtension(csv, ".cif");
+                        if (File.Exists(cifPath)) continue;   // an explicit .cif wins
+                        File.WriteAllBytes(cifPath, Cvtx.CsvToCif(File.ReadAllBytes(csv)));
+                        staged.Add(cifPath);
+                    }
+                    return HIPInterop.PackFolder(folderPath, CapitalizeNames, CompileLua, UseType4PNG,
+                        (cur, tot) => { if (!token.IsCancellationRequested) onProgress?.Invoke(cur, tot); });
+                }
+                finally
+                {
+                    foreach (var f in staged) try { File.Delete(f); } catch { }
+                }
             }, token);
 
             if (token.IsCancellationRequested) return [];
@@ -564,6 +594,18 @@ public sealed class MainViewModel : INotifyPropertyChanged
                             File.Delete(file);
                         }
                         catch { /* leave .xsheet as-is on error */ }
+                    }
+                    // CVTX text tables come out as .lua (type 3) — turn them into .csv
+                    foreach (var file in Directory.GetFiles(outDir, "*.lua", SearchOption.TopDirectoryOnly))
+                    {
+                        try
+                        {
+                            var bytes = File.ReadAllBytes(file);
+                            if (!Cvtx.IsBody(bytes)) continue;
+                            File.WriteAllBytes(Path.ChangeExtension(file, ".csv"), Cvtx.BodyToCsv(bytes));
+                            File.Delete(file);
+                        }
+                        catch { /* leave .lua as-is on error */ }
                     }
                     // Refresh file list after xsheet→json conversion
                     files = Directory.GetFiles(outDir, "*", SearchOption.TopDirectoryOnly);

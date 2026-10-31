@@ -398,11 +398,20 @@ internal static class HIPInterop
     private static int ScoreDecoded(string text, string encName)
     {
         int cyrillic = 0, western = 0, polish = 0, greek = 0, turkish = 0, control = 0;
+        // Cyrillic glued to an ASCII letter ("Vцgel") is Latin-1 text misread as
+        // cp1251; genuine Russian almost never mixes scripts inside a word.
+        int mixed = 0;
+        static bool IsAsciiLetter(char ch) => (ch | 0x20) is >= 'a' and <= 'z';
         int limit = Math.Min(text.Length, 4000);
         for (int i = 0; i < limit; i++)
         {
             char c = text[i];
-            if      (c >= 0x0400 && c <= 0x04FF) cyrillic++;
+            if      (c >= 0x0400 && c <= 0x04FF)
+            {
+                cyrillic++;
+                if ((i > 0 && IsAsciiLetter(text[i - 1])) ||
+                    (i + 1 < text.Length && IsAsciiLetter(text[i + 1]))) mixed++;
+            }
             else if (c >= 0x0391 && c <= 0x03C9) greek++;
             else if (c is 'ą' or 'Ą' or 'ę' or 'Ę' or 'ś' or 'Ś' or 'ł' or 'Ł' or
                         'ź' or 'Ź' or 'ż' or 'Ż' or 'ć' or 'Ć' or 'ń' or 'Ń') polish++;
@@ -413,7 +422,7 @@ internal static class HIPInterop
         if (control > 2) return -1000;
         return encName switch
         {
-            "windows-1251" => cyrillic * 4 - western       - greek * 2 - polish * 3,
+            "windows-1251" => cyrillic * 4 - mixed * 8 - western - greek * 2 - polish * 3,
             "windows-1252" => (western - polish) * 3 - cyrillic * 4 - greek * 2,
             "windows-1250" => (western + polish * 4) * 2  - cyrillic * 4 - greek * 2,
             "windows-1253" => greek * 4 - cyrillic * 2 - western,

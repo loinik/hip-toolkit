@@ -75,7 +75,7 @@ enum BIKOutputFormat: String, CaseIterable, Identifiable {
 // MARK: - File-kind detection
 
 enum HIPFileKind {
-    case cif, his, dat, lua, image, ogg, wav, mp3, xsheet, json, bik, folder, unknown
+    case cif, his, dat, lua, image, ogg, wav, mp3, xsheet, json, csv, bik, folder, unknown
 
     static func from(_ url: URL) -> HIPFileKind {
         if url.hasDirectoryPath { return .folder }
@@ -90,6 +90,7 @@ enum HIPFileKind {
         case "mp3":                return .mp3
         case "xsheet":             return .xsheet
         case "json":               return .json
+        case "csv":                return .csv
         case "bik":                return .bik
         default:                   return .unknown
         }
@@ -106,6 +107,7 @@ enum HIPFileKind {
         case .folder:  return (.ciftree, .forward)
         case .xsheet:  return (.cif,     .forward)
         case .json:    return (.cif,     .forward)
+        case .csv:     return (.cif,     .forward)
         case .bik:     return (.video,   .forward)
         case .unknown: return nil
         }

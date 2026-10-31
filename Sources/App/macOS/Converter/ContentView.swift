@@ -162,6 +162,7 @@ struct ContentView: View {
                 UTType(filenameExtension: "lua")    ?? .data,
                 UTType(filenameExtension: "xsheet") ?? .data,
                 .json,
+                .commaSeparatedText,
             ]
         case .cifDecode:
             panel.allowedContentTypes = [UTType(filenameExtension: "cif") ?? .data]

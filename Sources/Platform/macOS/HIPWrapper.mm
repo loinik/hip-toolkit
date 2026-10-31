@@ -39,10 +39,18 @@ static NSArray<NSNumber *> *luaEncodingCandidates(void) {
 // Positive = likely correct, negative = likely wrong encoding.
 static int scoreDecodedForEncoding(NSString *str, NSStringEncoding enc) {
     int cyrillic = 0, western = 0, polish = 0, greek = 0, turkish = 0, control = 0;
+    // Cyrillic glued to an ASCII letter ("Vцgel") is Latin-1 text misread as
+    // cp1251; genuine Russian almost never mixes scripts inside a word.
+    int mixed = 0;
+    auto isAsciiLetter = [](unichar ch) { return (ch|0x20) >= 'a' && (ch|0x20) <= 'z'; };
     NSUInteger n = MIN(str.length, 4000);
     for (NSUInteger i = 0; i < n; i++) {
         unichar c = [str characterAtIndex:i];
-        if      (c >= 0x0400 && c <= 0x04FF) cyrillic++;
+        if      (c >= 0x0400 && c <= 0x04FF) {
+            cyrillic++;
+            if ((i > 0 && isAsciiLetter([str characterAtIndex:i-1])) ||
+                (i + 1 < str.length && isAsciiLetter([str characterAtIndex:i+1]))) mixed++;
+        }
         else if (c >= 0x0391 && c <= 0x03C9) greek++;
         else if (c==0x0105||c==0x0104||c==0x0119||c==0x0118||c==0x015B||c==0x015A||
                  c==0x0142||c==0x0141||c==0x017A||c==0x0179||c==0x017C||c==0x017B||
@@ -53,7 +61,7 @@ static int scoreDecodedForEncoding(NSString *str, NSStringEncoding enc) {
     }
     if (control > 2) return -1000;
     switch (enc) {
-        case NSWindowsCP1251StringEncoding: return cyrillic*4 - western   - greek*2 - polish*3;
+        case NSWindowsCP1251StringEncoding: return cyrillic*4 - mixed*8 - western - greek*2 - polish*3;
         case NSWindowsCP1252StringEncoding: return (western-polish)*3 - cyrillic*4 - greek*2;
         case NSWindowsCP1250StringEncoding: return (western+polish*4)*2  - cyrillic*4 - greek*2;
         case NSWindowsCP1253StringEncoding: return greek*4  - cyrillic*2 - western;
@@ -718,6 +726,143 @@ extern "C" int stb_vorbis_decode_memory(const unsigned char *mem, int len,
     auto body = XSheet::fromJson(s);
     if (body.empty()) return nil;
     return [NSData dataWithBytes:body.data() length:body.size()];
+}
+
+// ── CVTX conversation text ─────────────────────────────────────────────
+
++ (BOOL)isCVTXBody:(NSData *)body {
+    std::vector<uint8_t> vec(static_cast<const uint8_t*>(body.bytes),
+                              static_cast<const uint8_t*>(body.bytes) + body.length);
+    return CIF::isCVTXBody(vec);
+}
+
+static NSError *cvtxError(NSString *msg) {
+    return [NSError errorWithDomain:@"HIPWrapper" code:1
+                           userInfo:@{NSLocalizedDescriptionKey: msg}];
+}
+
+static NSString *csvField(NSString *s) {
+    if ([s rangeOfCharacterFromSet:[NSCharacterSet characterSetWithCharactersInString:@",;\"\r\n"]].location == NSNotFound)
+        return s;
+    return [NSString stringWithFormat:@"\"%@\"", [s stringByReplacingOccurrencesOfString:@"\"" withString:@"\"\""]];
+}
+
+// RFC 4180 rows; quoted fields may hold separators, "" and line breaks.
+static NSArray<NSArray<NSString *> *> *csvRows(NSString *src, unichar sep) {
+    NSMutableArray *rows = [NSMutableArray array];
+    NSMutableArray *row = [NSMutableArray array];
+    NSMutableString *field = [NSMutableString string];
+    BOOL quoted = NO;
+    const NSUInteger n = src.length;
+    for (NSUInteger i = 0; i < n; i++) {
+        unichar c = [src characterAtIndex:i];
+        if (quoted) {
+            if (c == '"') {
+                if (i + 1 < n && [src characterAtIndex:i+1] == '"') { [field appendString:@"\""]; i++; }
+                else quoted = NO;
+            } else [field appendFormat:@"%C", c];
+        } else if (c == '"') quoted = YES;
+        else if (c == sep) { [row addObject:[field copy]]; [field setString:@""]; }
+        else if (c == '\r' || c == '\n') {
+            if (c == '\r' && i + 1 < n && [src characterAtIndex:i+1] == '\n') i++;
+            [row addObject:[field copy]]; [field setString:@""];
+            [rows addObject:row]; row = [NSMutableArray array];
+        } else [field appendFormat:@"%C", c];
+    }
+    if (field.length || row.count) { [row addObject:field]; [rows addObject:row]; }
+    return rows;
+}
+
++ (nullable NSData *)cvtxBodyToCsv:(NSData *)body error:(NSError **)error {
+    std::vector<uint8_t> vec(static_cast<const uint8_t*>(body.bytes),
+                              static_cast<const uint8_t*>(body.bytes) + body.length);
+    std::vector<CIF::CVTXEntry> entries;
+    try {
+        entries = CIF::parseCVTX(vec);
+    } catch (const std::exception& e) {
+        if (error) *error = cvtxError(@(e.what()));
+        return nil;
+    }
+
+    // Detect the code page once over all text, then decode each entry with it.
+    std::string all;
+    for (const auto& e : entries) all += e.text;
+    NSData *allData = [NSData dataWithBytes:all.data() length:all.size()];
+    NSArray<NSNumber *> *candidates = nil;
+    NSStringEncoding enc = [self detectSingleByteEncoding:allData decoded:nil candidates:&candidates];
+    if (enc == 0) enc = candidates.firstObject.unsignedLongValue ?: NSWindowsCP1252StringEncoding;
+    if (enc == NSUTF8StringEncoding) enc = NSWindowsCP1252StringEncoding;  // pure ASCII
+
+    NSMutableString *csv = [NSMutableString stringWithFormat:@"﻿name,text (%@)\r\n", [self nameForEncoding:enc]];
+    for (const auto& e : entries) {
+        NSString *name = [[NSString alloc] initWithBytes:e.name.data() length:e.name.size()
+                                                encoding:NSWindowsCP1252StringEncoding] ?: @"";
+        NSString *text = [[NSString alloc] initWithBytes:e.text.data() length:e.text.size()
+                                                encoding:enc]
+            ?: [[NSString alloc] initWithBytes:e.text.data() length:e.text.size()
+                                      encoding:NSISOLatin1StringEncoding];
+        [csv appendFormat:@"%@,%@\r\n", csvField(name), csvField(text ?: @"")];
+    }
+    return [csv dataUsingEncoding:NSUTF8StringEncoding];
+}
+
++ (nullable NSData *)cvtxFromCsv:(NSData *)csv error:(NSError **)error {
+    auto fail = [error](NSString *msg) -> NSData * {
+        if (error) *error = cvtxError(msg);
+        return nil;
+    };
+
+    // Header is ASCII apart from the BOM, so read it before choosing a decoder.
+    const uint8_t *bytes = static_cast<const uint8_t *>(csv.bytes);
+    const NSUInteger bom = (csv.length >= 3 && bytes[0] == 0xEF && bytes[1] == 0xBB && bytes[2] == 0xBF) ? 3 : 0;
+    NSUInteger eol = bom;
+    while (eol < csv.length && bytes[eol] != '\r' && bytes[eol] != '\n') eol++;
+    NSString *header = [[NSString alloc] initWithBytes:bytes + bom length:eol - bom
+                                              encoding:NSISOLatin1StringEncoding] ?: @"";
+    const unichar sep = ([header rangeOfString:@";"].location != NSNotFound &&
+                         [header rangeOfString:@","].location == NSNotFound) ? ';' : ',';
+    NSArray<NSString *> *cols = csvRows(header, sep).firstObject;
+    if (cols.count < 2 || ![cols[0].lowercaseString isEqualToString:@"name"] ||
+        ![cols[1].lowercaseString hasPrefix:@"text"])
+        return fail(@"Not a CVTX CSV: expected header \"name,text (windows-1252)\"");
+
+    NSString *encName = @"windows-1252";
+    NSRange open = [cols[1] rangeOfString:@"("], close = [cols[1] rangeOfString:@")" options:NSBackwardsSearch];
+    if (open.location != NSNotFound && close.location != NSNotFound && close.location > open.location)
+        encName = [[cols[1] substringWithRange:NSMakeRange(NSMaxRange(open), close.location - NSMaxRange(open))]
+                   stringByTrimmingCharactersInSet:NSCharacterSet.whitespaceCharacterSet];
+    CFStringEncoding cfEnc = CFStringConvertIANACharSetNameToEncoding((__bridge CFStringRef)encName);
+    if (cfEnc == kCFStringEncodingInvalidId) return fail([NSString stringWithFormat:@"CVTX CSV: unknown encoding \"%@\"", encName]);
+    NSStringEncoding enc = CFStringConvertEncodingToNSStringEncoding(cfEnc);
+
+    // UTF-8 ("CSV UTF-8" in Excel, Numbers, Sheets) or, failing that, the
+    // game code page itself (Excel's plain "CSV" saves in the ANSI page).
+    NSData *rest = [csv subdataWithRange:NSMakeRange(bom, csv.length - bom)];
+    NSString *src = [[NSString alloc] initWithData:rest encoding:NSUTF8StringEncoding]
+                 ?: [[NSString alloc] initWithData:rest encoding:enc];
+    if (!src) return fail([NSString stringWithFormat:@"CVTX CSV: file is neither UTF-8 nor %@", encName]);
+
+    NSArray *rows = csvRows(src, sep);
+    std::vector<CIF::CVTXEntry> entries;
+    entries.reserve(rows.count);
+    for (NSUInteger r = 1; r < rows.count; r++) {
+        NSArray<NSString *> *row = rows[r];
+        if (row.count == 1 && row[0].length == 0) continue;   // blank line
+        NSString *name = row[0];
+        NSString *text = row.count > 1 ? row[1] : @"";
+        NSData *nameBytes = [name dataUsingEncoding:NSWindowsCP1252StringEncoding allowLossyConversion:NO];
+        NSData *textBytes = [text dataUsingEncoding:enc allowLossyConversion:NO];
+        if (!nameBytes) return fail([NSString stringWithFormat:@"CVTX CSV row %lu: name \"%@\" is not plain Latin text", (unsigned long)r + 1, name]);
+        if (!textBytes) return fail([NSString stringWithFormat:@"CVTX CSV row %lu (\"%@\"): characters not representable in %@", (unsigned long)r + 1, name, encName]);
+        entries.push_back({std::string(static_cast<const char*>(nameBytes.bytes), nameBytes.length),
+                           std::string(static_cast<const char*>(textBytes.bytes), textBytes.length)});
+    }
+    try {
+        auto cif = CIF::encodeCVTX(entries);
+        return [NSData dataWithBytes:cif.data() length:cif.size()];
+    } catch (const std::exception& e) {
+        return fail(@(e.what()));
+    }
 }
 
 @end

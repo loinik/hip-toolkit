@@ -22,6 +22,9 @@ public partial class App : Application
 
     public App()
     {
+        // .NET 8 ships only UTF/ASCII/Latin-1; the game code pages (1250–1254)
+        // used by encoding detection and CVTX text come from this provider.
+        System.Text.Encoding.RegisterProvider(System.Text.CodePagesEncodingProvider.Instance);
         InitializeComponent();
     }
 
